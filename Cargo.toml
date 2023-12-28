@@ -1,0 +1,17 @@
+[package]
+name = "starnext-import"
+version = "0.1.0"
+edition = "2021"
+authors = ["Kris Warner <kdwarn@protonmail.com>"]
+license = "GPL-3.0-or-later"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4.31" 
+crossbeam = "0.8.2"
+csv = "1.3.0"
+dotenvy = "0.15.7"
+oracle = "0.5.7"
+log = "0.4.20"
+simplelog = "0.12.1"
