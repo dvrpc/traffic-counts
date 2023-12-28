@@ -1,9 +1,9 @@
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 use std::env;
-use std::fs::OpenOptions;
+use std::fs::{self, File, OpenOptions};
 
 use chrono::{NaiveDate, NaiveTime};
-use log::{error, LevelFilter};
+use log::{debug, error, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
@@ -115,4 +115,31 @@ fn main() {
             return;
         }
     };
+
+    // For now, just walk directory and print out data
+    for entry in fs::read_dir(data_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if !path.is_file() || path.file_name().unwrap().to_str() == Some("log.txt") {
+            continue;
+        }
+        println!("{:?}", path);
+        let data_file = match File::open(&path) {
+            Ok(v) => v,
+            Err(_) => {
+                debug!("Unable to open {:?}.", path);
+                continue;
+            }
+        };
+        // Create CSV reader over file, verify header is what we expect it to be.
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_reader(data_file);
+
+        // skip header and print data rows
+        for row in rdr.records().skip(8).take(5) {
+            println!("{:?}", row);
+        }
+    }
 }
