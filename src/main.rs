@@ -1,6 +1,12 @@
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
+use std::env;
+use std::fs::OpenOptions;
 
 use chrono::{NaiveDate, NaiveTime};
+use log::{error, LevelFilter};
+use simplelog::{
+    ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
+};
 
 /* Not sure if this will be needed, but these are the names of the 15 classifications from the FWA.
    See:
@@ -52,6 +58,61 @@ struct FifteenMinuteClassedVolumeCount {
     counts: [usize; 14],
 }
 
+// The first 8 lines of CSVs contain metadata.
+// (They are followed by a blankline, the header, and then data.)
+#[derive(Debug, Clone)]
+struct CountMetadata {
+    filename: String,
+    start_date: NaiveDate,
+    start_time: NaiveTime,
+    site_code: usize,
+    station_id: Option<usize>,
+    location_2: Option<usize>,
+    latitude: Option<f32>,
+    longitude: Option<f32>,
+}
+
 fn main() {
-    println!("Hello, world!");
+    // Load file containing environment variables, panic if it doesn't exist.
+    dotenvy::dotenv().expect("Unable to load .env file.");
+
+    // Get env var for path where CSVs will be, panic if it doesn't exist.
+    let data_dir = env::var("DATA_DIR").expect("Unable to data directory path from .env file.");
+
+    // Set up logging, panic if it fails.
+    let config = ConfigBuilder::new().set_time_format_rfc3339().build();
+    CombinedLogger::init(vec![
+        TermLogger::new(
+            LevelFilter::Debug,
+            config.clone(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
+        WriteLogger::new(
+            LevelFilter::Info,
+            config,
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(format!("{data_dir}/log.txt"))
+                .expect("Could not open log file."),
+        ),
+    ])
+    .expect("Could not configure logging.");
+
+    // Oracle env vars
+    let username = match env::var("USERNAME") {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Unable to load username from .env file: {e}.");
+            return;
+        }
+    };
+    let password = match env::var("PASSWORD") {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Unable to load password from .env file: {e}.");
+            return;
+        }
+    };
 }
