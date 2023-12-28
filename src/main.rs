@@ -7,6 +7,7 @@ use log::{debug, error, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
+use time::macros::format_description;
 
 /* Not sure if this will be needed, but these are the names of the 15 classifications from the FWA.
    See:
@@ -41,12 +42,19 @@ struct FifteenMinuteVolumeCount {
 
 // Speed counts are volume counts by speed range
 // The CSV for this includes fields:
-// id,date,time,<counts for 14 speed ranges: 0-15, 5-mph increments to 75, more than 75>
+// id,date,time,<counts for 14 speed ranges: 0-15, 5-mph increments to 75, more than 75>jj
+// A file contains speed counts if it ends in a "-1" (North and East) or "-2" (South and West).
 #[derive(Debug, Clone)]
 struct FifteenMinuteSpeedCount {
     date: NaiveDate,
     time: NaiveTime,
     counts: [usize; 14],
+}
+
+impl FifteenMinuteSpeedCount {
+    fn new(date: NaiveDate, time: NaiveTime, counts: [usize; 14]) -> Self {
+        FifteenMinuteSpeedCount { date, time, counts }
+    }
 }
 
 // The CSV for this includes fields:
@@ -138,8 +146,19 @@ fn main() {
             .from_reader(data_file);
 
         // skip header and print data rows
-        for row in rdr.records().skip(8).take(5) {
-            println!("{:?}", row);
+        for row in rdr.records().skip(9) {
+            // Classed counts and speed counts have same fields for date/time
+
+            // Parse time.
+            let time_format =
+                format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
+            let time_col = &row.as_ref().unwrap()[2];
+            let count_time = time::Time::parse(time_col, &time_format);
+            println!("{:?}", count_time.unwrap());
+
+            // parse date
+
+            // println!("{:?}", row);
         }
     }
 }
