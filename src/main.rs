@@ -149,16 +149,19 @@ fn main() {
         for row in rdr.records().skip(9) {
             // Classed counts and speed counts have same fields for date/time
 
+            // Parse date.
+            // TODO: unsure if StarNext uses DD or D for month - waiting for sample. Until then, using DD>
+            let date_format = format_description!("[month]/[day padding:none]/[year]");
+            let date_col = &row.as_ref().unwrap()[1];
+            let count_date = time::Date::parse(date_col, &date_format);
+
             // Parse time.
             let time_format =
                 format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
             let time_col = &row.as_ref().unwrap()[2];
             let count_time = time::Time::parse(time_col, &time_format);
-            println!("{:?}", count_time.unwrap());
 
-            // parse date
-
-            // println!("{:?}", row);
+            println!("{:?} {:?}", count_time.unwrap(), count_date.unwrap());
         }
     }
 }
