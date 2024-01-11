@@ -9,6 +9,10 @@ use simplelog::{
 };
 use time::macros::format_description;
 
+const SPEED_COUNT_HEADER: &str = "Number,Date,Time,>0 to 15,>15 to 20,>20 to 25,>25 to 30,>30 to 35,>35 to 40,>40 to 45,>45 to 50,>50 to 55,>55 to 60,>60 to 65,>65 to 70,>70 to 75,>75";
+
+const CLASS_COUNT_HEADER: &str = "Number,Date,Time,Motorcycles,Cars & Trailers,2 Axle Long,Buses,2 Axle 6 Tire,3 Axle Single,4 Axle Single,<5 Axl Double,5 Axle Double,>6 Axl Double,<6 Axl Multi,6 Axle Multi,>6 Axl Multi,Not Classed";
+
 /* Not sure if this will be needed, but these are the names of the 15 classifications from the FWA.
    See:
     * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
@@ -139,14 +143,37 @@ fn main() {
                 continue;
             }
         };
-        // Create CSV reader over file, verify header is what we expect it to be.
+
+        // Create CSV reader over file,
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(false)
             .flexible(true)
             .from_reader(data_file);
 
-        // skip header and print data rows
-        for row in rdr.records().skip(9) {
+        // Determine what type of count this file contains, in two ways:
+        //   1. file directory location
+        //   2. the header of the file matches that type of count for that directory
+
+        // Get location.
+
+        // Get header.
+        let header: String = rdr
+            .records()
+            .skip(8)
+            .take(1)
+            .last()
+            .unwrap()
+            .unwrap()
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .join(",");
+        println!("header: {header}");
+
+        // Confirm header is correct for count type we expect in that directory
+
+        // the remaining rows are individual counts
+        for row in rdr.records() {
             // Classed counts and speed counts have same fields for date/time
 
             // Parse date.
@@ -162,6 +189,8 @@ fn main() {
             let count_time = time::Time::parse(time_col, &time_format);
 
             println!("{:?} {:?}", count_time.unwrap(), count_date.unwrap());
+
+            // put data into structs
         }
     }
 }
