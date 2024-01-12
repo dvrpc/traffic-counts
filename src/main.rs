@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveTime};
+use csv::{Reader, ReaderBuilder};
 use log::{debug, error, info, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
@@ -180,26 +181,9 @@ fn walk_dirs(dir: &PathBuf) {
 }
 
 fn extract_data(data_file: File, path: &Path) {
-    // Create CSV reader over file.
-    let mut rdr = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .flexible(true)
-        .from_reader(&data_file);
-
-    // Get header to confirm it matches the count type we expect in the file's parent dir.
-    let header: String = rdr
-        .records()
-        .skip(8)
-        .take(1)
-        .last()
-        .unwrap()
-        .unwrap()
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<String>>()
-        .join(",");
-
-    // Get count type.
+    // Create CSV reader over file, extract its header, determine count type of this file.
+    let rdr = create_reader(&data_file);
+    let (header, mut rdr) = extract_header(rdr);
     let count_type = match get_count_type(path, header) {
         Ok(v) => v,
         Err(e) => return error!("{e}"),
@@ -207,7 +191,7 @@ fn extract_data(data_file: File, path: &Path) {
 
     info!("Extracting data from {path:?}, a {count_type:?}.");
 
-    // the remaining rows are individual counts
+    // The remaining rows of `rdr` are individual counts.
     for row in rdr.records() {
         // Classed counts and speed counts have same fields for date/time
 
@@ -259,5 +243,78 @@ fn get_count_type(path: &Path, header: String) -> Result<CountType, String> {
         Err(format!("Error extracting data from {path:?}: count type appears to be {count_type_by_directory:?} from its location, but its header suggests a count type of {count_type_by_header:?}. This file was not processed."))
     } else {
         Ok(count_type_by_directory)
+    }
+}
+
+/// Create CSV reader from file.
+fn create_reader(file: &File) -> Reader<&File> {
+    ReaderBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(file)
+}
+
+/// Extract header from CSV Reader, returning both header and Reader (to continue using it).
+fn extract_header(mut rdr: Reader<&File>) -> (String, Reader<&File>) {
+    // Get header to confirm it matches the count type we expect in the file's parent dir.
+    let header = rdr
+        .records()
+        .skip(8)
+        .take(1)
+        .last()
+        .unwrap()
+        .unwrap()
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+
+    (header, rdr)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn count_type_15minspeed_mismatch_errs() {
+        let path = Path::new("test_files/15minutespeed/class_count.txt");
+        let file = File::open(path).unwrap();
+        let rdr = create_reader(&file);
+        let (header, _) = extract_header(rdr);
+        assert!(get_count_type(path, header).is_err());
+    }
+
+    #[test]
+    fn count_type_15minspeed_ok() {
+        let path = Path::new("test_files/15minutespeed/166905-2.txt");
+        let file = File::open(path).unwrap();
+        let rdr = create_reader(&file);
+        let (header, _) = extract_header(rdr);
+        assert!(matches!(
+            get_count_type(path, header).unwrap(),
+            CountType::FifteenMinuteSpeedCount
+        ));
+    }
+
+    #[test]
+    fn count_type_15minclassedvolume_mismatch_errs() {
+        let path = Path::new("test_files/15minuteclassedvolume/speed_count.txt");
+        let file = File::open(path).unwrap();
+        let rdr = create_reader(&file);
+        let (header, _) = extract_header(rdr);
+        assert!(get_count_type(path, header).is_err());
+    }
+
+    #[test]
+    fn count_type_15minclassedvolume_ok() {
+        let path = Path::new("test_files/15minuteclassedvolume/rc166905w.txt");
+        let file = File::open(path).unwrap();
+        let rdr = create_reader(&file);
+        let (header, _) = extract_header(rdr);
+        assert!(matches!(
+            get_count_type(path, header).unwrap(),
+            CountType::FifteenMinuteClassedVolumeCount
+        ));
     }
 }
