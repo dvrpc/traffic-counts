@@ -1,9 +1,11 @@
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 use std::env;
 use std::fs::{self, File, OpenOptions};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveTime};
-use log::{debug, error, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
@@ -34,6 +36,27 @@ enum VehicleClass {
     SixAxleMultiTrailerTrucks,          // 12
     SevenOrMoreAxleMultiTrailerTrucks,  // 13
     UnclassifiedVehicle,                // 15 (there is an "Unused" class group at 14)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum CountType {
+    FifteenMinuteVolumeCount,
+    FifteenMinuteSpeedCount,
+    FifteenMinuteClassedVolumeCount,
+}
+
+impl FromStr for CountType {
+    type Err = ();
+    fn from_str(input: &str) -> Result<CountType, Self::Err> {
+        match input {
+            "15minutevolume" => Ok(CountType::FifteenMinuteVolumeCount),
+            "15minutespeed" => Ok(CountType::FifteenMinuteSpeedCount),
+            "15minuteclassedvolume" => Ok(CountType::FifteenMinuteClassedVolumeCount),
+            SPEED_COUNT_HEADER => Ok(CountType::FifteenMinuteSpeedCount),
+            CLASS_COUNT_HEADER => Ok(CountType::FifteenMinuteClassedVolumeCount),
+            _ => Err(()),
+        }
+    }
 }
 
 // Volume counts - without modifiers - are simple totals of all vehicles counted in given interval
@@ -83,7 +106,6 @@ struct CountMetadata {
     latitude: Option<f32>,
     longitude: Option<f32>,
 }
-
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
     dotenvy::dotenv().expect("Unable to load .env file.");
@@ -128,69 +150,114 @@ fn main() {
         }
     };
 
+    walk_dirs(&data_dir.into())
+}
+
+fn walk_dirs(dir: &PathBuf) {
     // For now, just walk directory and print out data
-    for entry in fs::read_dir(data_dir).unwrap() {
+    for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        if !path.is_file() || path.file_name().unwrap().to_str() == Some("log.txt") {
+
+        // Ignore the log file.
+        if path.file_name().unwrap().to_str() == Some("log.txt") {
             continue;
         }
-        println!("{:?}", path);
-        let data_file = match File::open(&path) {
-            Ok(v) => v,
-            Err(_) => {
-                debug!("Unable to open {:?}.", path);
-                continue;
-            }
-        };
 
-        // Create CSV reader over file,
-        let mut rdr = csv::ReaderBuilder::new()
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(data_file);
-
-        // Determine what type of count this file contains, in two ways:
-        //   1. file directory location
-        //   2. the header of the file matches that type of count for that directory
-
-        // Get location.
-
-        // Get header.
-        let header: String = rdr
-            .records()
-            .skip(8)
-            .take(1)
-            .last()
-            .unwrap()
-            .unwrap()
-            .iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<String>>()
-            .join(",");
-        println!("header: {header}");
-
-        // Confirm header is correct for count type we expect in that directory
-
-        // the remaining rows are individual counts
-        for row in rdr.records() {
-            // Classed counts and speed counts have same fields for date/time
-
-            // Parse date.
-            // TODO: unsure if StarNext uses DD or D for month - waiting for sample. Until then, using DD>
-            let date_format = format_description!("[month]/[day padding:none]/[year]");
-            let date_col = &row.as_ref().unwrap()[1];
-            let count_date = time::Date::parse(date_col, &date_format);
-
-            // Parse time.
-            let time_format =
-                format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
-            let time_col = &row.as_ref().unwrap()[2];
-            let count_time = time::Time::parse(time_col, &time_format);
-
-            println!("{:?} {:?}", count_time.unwrap(), count_date.unwrap());
-
-            // put data into structs
+        if path.is_dir() {
+            walk_dirs(&path);
+        } else {
+            let data_file = match File::open(&path) {
+                Ok(v) => v,
+                Err(_) => {
+                    error!("Unable to open {path:?}. File not processed.");
+                    continue;
+                }
+            };
+            extract_data(data_file, &path)
         }
+    }
+}
+
+fn extract_data(data_file: File, path: &Path) {
+    // Create CSV reader over file.
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(&data_file);
+
+    // Get header to confirm it matches the count type we expect in the file's parent dir.
+    let header: String = rdr
+        .records()
+        .skip(8)
+        .take(1)
+        .last()
+        .unwrap()
+        .unwrap()
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+
+    // Check count types, set as variable for later use.
+    let count_type = match count_types_match(path, header) {
+        Ok(v) => v,
+        Err(e) => return error!("{e}"),
+    };
+
+    info!("Extracting data from {path:?}, a {count_type:?}.");
+
+    // the remaining rows are individual counts
+    for row in rdr.records() {
+        // Classed counts and speed counts have same fields for date/time
+
+        // Parse date.
+        // TODO: unsure if StarNext uses MM or M for month - waiting for sample. Until then, using MM
+        let date_format = format_description!("[month]/[day padding:none]/[year]");
+        let date_col = &row.as_ref().unwrap()[1];
+        let count_date = time::Date::parse(date_col, &date_format);
+
+        // Parse time.
+        let time_format =
+            format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
+        let time_col = &row.as_ref().unwrap()[2];
+        let count_time = time::Time::parse(time_col, &time_format);
+
+        println!("{:?} {:?}", count_time.unwrap(), count_date.unwrap());
+
+        // put data into structs
+        // match count_type {
+        //     CountType::FifteenMinuteVolumeCount => {}
+        //     CountType::FifteenMinuteClassedVolumeCount => {}
+        //     CountType::FifteenMinuteSpeedCount => {}
+        // }
+    }
+}
+
+// Check if count type based on directory and on header match.
+fn count_types_match(path: &Path, header: String) -> Result<CountType, String> {
+    let parent = path
+        .parent()
+        .unwrap()
+        .components()
+        .last()
+        .unwrap()
+        .as_os_str()
+        .to_str()
+        .unwrap();
+
+    let count_type_by_directory = match CountType::from_str(parent) {
+        Ok(v) => v,
+        Err(_) => return Err(format!("No matching count type for directory {parent:?}")),
+    };
+    let count_type_by_header = match CountType::from_str(&header) {
+        Ok(v) => v,
+        Err(_) => return Err(format!("No matching count type for header in {path:?}.")),
+    };
+
+    if count_type_by_directory != count_type_by_header {
+        Err(format!("Error extracting data from {path:?}: count type appears to be {count_type_by_directory:?} from its location, but its header suggests a count type of {count_type_by_header:?}. This file was not processed."))
+    } else {
+        Ok(count_type_by_directory)
     }
 }
