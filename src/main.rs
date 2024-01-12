@@ -199,8 +199,8 @@ fn extract_data(data_file: File, path: &Path) {
         .collect::<Vec<String>>()
         .join(",");
 
-    // Check count types, set as variable for later use.
-    let count_type = match count_types_match(path, header) {
+    // Get count type.
+    let count_type = match get_count_type(path, header) {
         Ok(v) => v,
         Err(e) => return error!("{e}"),
     };
@@ -234,8 +234,8 @@ fn extract_data(data_file: File, path: &Path) {
     }
 }
 
-// Check if count type based on directory and on header match.
-fn count_types_match(path: &Path, header: String) -> Result<CountType, String> {
+/// Get count type, based on directory and on header.
+fn get_count_type(path: &Path, header: String) -> Result<CountType, String> {
     let parent = path
         .parent()
         .unwrap()
