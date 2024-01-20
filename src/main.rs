@@ -3,7 +3,6 @@ use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 
-use chrono::{NaiveDate, NaiveTime};
 use csv::{Reader, ReaderBuilder};
 use log::{error, info, LevelFilter};
 use simplelog::{
@@ -11,10 +10,6 @@ use simplelog::{
 };
 use time::macros::format_description;
 
-const SPEED_COUNT_HEADER: &str = "Number,Date,Time,>0 to 15,>15 to 20,>20 to 25,>25 to 30,>30 to 35,>35 to 40,>40 to 45,>45 to 50,>50 to 55,>55 to 60,>60 to 65,>65 to 70,>70 to 75,>75";
-const CLASSED_VOLUME_COUNT_HEADER: &str = "Number,Date,Time,Motorcycles,Cars & Trailers,2 Axle Long,Buses,2 Axle 6 Tire,3 Axle Single,4 Axle Single,<5 Axl Double,5 Axle Double,>6 Axl Double,<6 Axl Multi,6 Axle Multi,>6 Axl Multi,Not Classed";
-const VOLUME_COUNT_HEADER1: &str = "Number,Date,Time,Channel 1";
-const VOLUME_COUNT_HEADER2: &str = "Number,Date,Time,Channel 2";
 const VEHICLE_COUNT_HEADER: &str = "Veh. No.,Date,Time,Channel,Class,Speed";
 
 const LOG: &str = "log.txt";
@@ -43,13 +38,31 @@ enum VehicleClass {
     UnclassifiedVehicle,                // 15 (there is an "Unused" class group at 14)
 }
 
-// 0 is unclassed from starnext "class" field
+impl VehicleClass {
+    fn from_num(num: u8) -> Result<Self, String> {
+        match num {
+            0 => Ok(VehicleClass::UnclassifiedVehicle), // TODO: verify this
+            1 => Ok(VehicleClass::Motorcycles),
+            2 => Ok(VehicleClass::PassengerCars),
+            3 => Ok(VehicleClass::OtherFourTireSingleUnitVehicles),
+            4 => Ok(VehicleClass::Buses),
+            5 => Ok(VehicleClass::TwoAxleSixTireSingleUnitTrucks),
+            6 => Ok(VehicleClass::ThreeAxleSingleUnitTrucks),
+            7 => Ok(VehicleClass::FourOrMoreAxleSingleUnitTrucks),
+            8 => Ok(VehicleClass::FourOrFewerAxleSingleTrailerTrucks),
+            9 => Ok(VehicleClass::FiveAxleSingleTrailerTrucks),
+            10 => Ok(VehicleClass::SixOrMoreAxleSingleTrailerTrucks),
+            11 => Ok(VehicleClass::FiveOrFewerAxleMultiTrailerTrucks),
+            12 => Ok(VehicleClass::SixAxleMultiTrailerTrucks),
+            13 => Ok(VehicleClass::SevenOrMoreAxleMultiTrailerTrucks),
+            14 => Ok(VehicleClass::UnclassifiedVehicle), // TODO: verify this
+            other => Err(format!("no such vehicle class '{other}'")),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum CountType {
-    FifteenMinuteVolume,
-    FifteenMinuteClassedVolume,
-    FifteenMinuteSpeed,
     FifteenMinuteBicycle,    // Eco-Counter
     FifteenMinutePedestrian, // Eco-Counter
     Vehicle, // this is the raw data that all of the other StarNext types get built from
@@ -69,9 +82,6 @@ impl CountType {
             .unwrap();
 
         match parent.to_lowercase().as_str() {
-            "15minutevolume" => Ok(CountType::FifteenMinuteVolume),
-            "15minutespeed" => Ok(CountType::FifteenMinuteSpeed),
-            "15minuteclassedvolume" => Ok(CountType::FifteenMinuteClassedVolume),
             "15minutebicycle" => Ok(CountType::FifteenMinuteBicycle),
             "15minutepedestrian" => Ok(CountType::FifteenMinutePedestrian),
             "vehicles" => Ok(CountType::Vehicle),
@@ -97,9 +107,6 @@ impl CountType {
             .join(",");
 
         match header.as_str() {
-            SPEED_COUNT_HEADER => Ok(CountType::FifteenMinuteSpeed),
-            CLASSED_VOLUME_COUNT_HEADER => Ok(CountType::FifteenMinuteClassedVolume),
-            VOLUME_COUNT_HEADER1 | VOLUME_COUNT_HEADER2 => Ok(CountType::FifteenMinuteVolume),
             VEHICLE_COUNT_HEADER => Ok(CountType::Vehicle),
             _ => Err(format!("No matching count type for header in {path:?}.")),
         }
@@ -109,60 +116,34 @@ impl CountType {
 // Vehicle Counts - the raw, unbinned data
 #[derive(Debug, Clone)]
 struct VehicleCount {
-    date: NaiveDate,
-    time: NaiveTime,
+    date: time::Date,
+    time: time::Time,
     channel: u8,
     class: VehicleClass,
     speed: f32,
 }
 
-// Volume counts - without modifiers - are simple totals of all vehicles counted in given interval
-#[derive(Debug, Clone)]
-struct FifteenMinuteVolumeCount {
-    date: NaiveDate,
-    time: NaiveTime,
-    count: usize,
-}
-
-// Speed counts are volume counts by speed range
-// The CSV for this includes fields:
-// id,date,time,<counts for 14 speed ranges: 0-15, 5-mph increments to 75, more than 75>jj
-// A file contains speed counts if it ends in a "-1" (North and East) or "-2" (South and West).
-#[derive(Debug, Clone)]
-struct FifteenMinuteSpeedCount {
-    date: NaiveDate,
-    time: NaiveTime,
-    counts: [usize; 14],
-}
-
-impl FifteenMinuteSpeedCount {
-    fn new(date: NaiveDate, time: NaiveTime, counts: [usize; 14]) -> Self {
-        FifteenMinuteSpeedCount { date, time, counts }
+impl VehicleCount {
+    fn new(date: time::Date, time: time::Time, channel: u8, class: u8, speed: f32) -> Self {
+        let class = VehicleClass::from_num(class).unwrap();
+        VehicleCount {
+            date,
+            time,
+            channel,
+            class,
+            speed,
+        }
     }
 }
 
-// The CSV for this includes fields:
-// id,date,time,<counts for each the 14 used classifications (see above)>
-#[derive(Debug, Clone)]
-struct FifteenMinuteClassedVolumeCount {
-    date: NaiveDate,
-    time: NaiveTime,
-    counts: [usize; 14],
-}
-
-// The first 8 lines of CSVs contain metadata.
-// (They are followed by a blankline, the header, and then data.)
+// The first few lines of CSVs contain metadata, then header, then data rows.
 #[derive(Debug, Clone)]
 struct CountMetadata {
-    filename: String,
-    start_date: NaiveDate,
-    start_time: NaiveTime,
+    start_datetime: time::PrimitiveDateTime,
     site_code: usize,
     station_id: Option<usize>,
-    location_2: Option<usize>,
-    latitude: Option<f32>,
-    longitude: Option<f32>,
 }
+
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
     dotenvy::dotenv().expect("Unable to load .env file.");
@@ -207,11 +188,41 @@ fn main() {
         }
     };
 
-    walk_dirs(&data_dir.into())
+    let paths = collect_paths(&data_dir.into(), vec![]);
+
+    // TODO: this will probably need to be wrapped in other type in order to accept both StarNext
+    // and EcoCounter counts
+    let mut counts = vec![];
+
+    for path in paths {
+        let data_file = match File::open(&path) {
+            Ok(v) => v,
+            Err(_) => {
+                error!("Unable to open {path:?}. File not processed.");
+                continue;
+            }
+        };
+
+        let count_type_from_location = CountType::from_location(&path).unwrap();
+        let count_type_from_header =
+            CountType::from_header(&path, count_type_from_location).unwrap();
+
+        if count_type_from_location != count_type_from_header {
+            error!("{path:?}: Mismatch in count types between the file location and the header in that file. File not processed.");
+        } else {
+            let file_counts = extract_counts(data_file, &path, count_type_from_location);
+            counts.extend(file_counts);
+        }
+    }
+
+    // mostly just debugging
+    for count in counts {
+        dbg!(&count);
+    }
 }
 
-fn walk_dirs(dir: &PathBuf) {
-    // For now, just walk directory and print out data
+/// Collect all the file paths to extract data from.
+fn collect_paths(dir: &PathBuf, mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
@@ -222,36 +233,23 @@ fn walk_dirs(dir: &PathBuf) {
         }
 
         if path.is_dir() {
-            walk_dirs(&path);
+            paths = collect_paths(&path, paths);
         } else {
-            let data_file = match File::open(&path) {
-                Ok(v) => v,
-                Err(_) => {
-                    error!("Unable to open {path:?}. File not processed.");
-                    continue;
-                }
-            };
-
-            let count_type_from_location = CountType::from_location(&path).unwrap();
-            let count_type_from_header =
-                CountType::from_header(&path, count_type_from_location).unwrap();
-
-            if count_type_from_location != count_type_from_header {
-                error!("{path:?}: Mismatch in count types between the file location and the header in that file. File not processed.");
-            } else {
-                extract_data(data_file, &path, count_type_from_location)
-            }
+            paths.push(path);
         }
     }
+    paths
 }
 
-fn extract_data(data_file: File, path: &Path, count_type: CountType) {
+/// Extract counts from a file.
+fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<VehicleCount> {
     // Create CSV reader over file
     let mut rdr = create_reader(&data_file);
 
     info!("Extracting data from {path:?}, a {count_type:?} count.");
 
-    // Iterate through data rows (skipping metadata rows + 1 for header)
+    // Iterate through data rows (skipping metadata rows + 1 for header).
+    let mut counts = vec![];
     for row in rdr
         .records()
         .skip(num_metadata_rows_to_skip(count_type) + 1)
@@ -259,23 +257,26 @@ fn extract_data(data_file: File, path: &Path, count_type: CountType) {
         // Parse date.
         let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
         let date_col = &row.as_ref().unwrap()[1];
-        let count_date = time::Date::parse(date_col, &date_format);
+        let count_date = time::Date::parse(date_col, &date_format).unwrap();
 
         // Parse time.
         let time_format =
             format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
         let time_col = &row.as_ref().unwrap()[2];
-        let count_time = time::Time::parse(time_col, &time_format);
+        let count_time = time::Time::parse(time_col, &time_format).unwrap();
 
-        println!("{:?} {:?}", count_time.unwrap(), count_date.unwrap());
-
-        // put data into structs
-        // match count_type {
-        //     CountType::FifteenMinuteVolumeCount => {}
-        //     CountType::FifteenMinuteClassedVolumeCount => {}
-        //     CountType::FifteenMinuteSpeedCount => {}
-        // }
+        if count_type == CountType::Vehicle {
+            let count = VehicleCount::new(
+                count_date,
+                count_time,
+                row.as_ref().unwrap()[3].parse().unwrap(),
+                row.as_ref().unwrap()[4].parse().unwrap(),
+                row.as_ref().unwrap()[5].parse().unwrap(),
+            );
+            counts.push(count);
+        }
     }
+    counts
 }
 
 /// Create CSV reader from file.
@@ -297,43 +298,6 @@ fn num_metadata_rows_to_skip(count_type: CountType) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn count_type_15minspeed_mismatch_errs() {
-        let path = Path::new("test_files/15minutespeed/class_count.txt");
-        let ct_from_location = CountType::from_location(path).unwrap();
-        let ct_from_header = CountType::from_header(path, ct_from_location).unwrap();
-        assert_ne!(ct_from_header, ct_from_location);
-    }
-
-    #[test]
-    fn count_type_15minspeed_ok() {
-        let path = Path::new("test_files/15minutespeed/166905-2.txt");
-        let ct_from_location = CountType::from_location(path).unwrap();
-        let ct_from_header = CountType::from_header(path, ct_from_location).unwrap();
-        assert_eq!(ct_from_header, ct_from_location);
-        assert!(matches!(ct_from_location, CountType::FifteenMinuteSpeed))
-    }
-
-    #[test]
-    fn count_type_15minclassedvolume_mismatch_errs() {
-        let path = Path::new("test_files/15minuteclassedvolume/speed_count.txt");
-        let ct_from_location = CountType::from_location(path).unwrap();
-        let ct_from_header = CountType::from_header(path, ct_from_location).unwrap();
-        assert_ne!(ct_from_location, ct_from_header);
-    }
-
-    #[test]
-    fn count_type_15minclassedvolume_ok() {
-        let path = Path::new("test_files/15minuteclassedvolume/rc166905w.txt");
-        let ct_from_location = CountType::from_location(path).unwrap();
-        let ct_from_header = CountType::from_header(path, ct_from_location).unwrap();
-        assert_eq!(ct_from_location, ct_from_header);
-        assert!(matches!(
-            ct_from_location,
-            CountType::FifteenMinuteClassedVolume
-        ))
-    }
 
     #[test]
     fn count_type_vehicle_ok() {
