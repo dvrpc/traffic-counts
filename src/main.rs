@@ -41,7 +41,6 @@ enum VehicleClass {
 impl VehicleClass {
     fn from_num(num: u8) -> Result<Self, String> {
         match num {
-            0 => Ok(VehicleClass::UnclassifiedVehicle), // TODO: verify this
             1 => Ok(VehicleClass::Motorcycles),
             2 => Ok(VehicleClass::PassengerCars),
             3 => Ok(VehicleClass::OtherFourTireSingleUnitVehicles),
@@ -55,7 +54,7 @@ impl VehicleClass {
             11 => Ok(VehicleClass::FiveOrFewerAxleMultiTrailerTrucks),
             12 => Ok(VehicleClass::SixAxleMultiTrailerTrucks),
             13 => Ok(VehicleClass::SevenOrMoreAxleMultiTrailerTrucks),
-            14 => Ok(VehicleClass::UnclassifiedVehicle), // TODO: verify this
+            0 | 14 => Ok(VehicleClass::UnclassifiedVehicle), // TODO: verify this
             other => Err(format!("no such vehicle class '{other}'")),
         }
     }
@@ -88,21 +87,22 @@ impl CountType {
             _ => Err(format!("No matching count type for directory {path:?}")),
         }
     }
-    fn from_header(path: &Path, expected_count_type: CountType) -> Result<CountType, String> {
-        // location_count_type is what we expect this file to be. We use this because the various
-        // counts have a variable number of metadata rows.
+
+    fn from_header(path: &Path, location_count_type: CountType) -> Result<CountType, String> {
+        // `location_count_type` is what we expect this file to be, based off its location. We use
+        // this because different types of counts can have a variable number of metadata rows.
 
         let file = File::open(path).unwrap();
         let mut rdr = create_reader(&file);
         let header = rdr
             .records()
-            .skip(num_metadata_rows_to_skip(expected_count_type))
+            .skip(num_metadata_rows_to_skip(location_count_type))
             .take(1)
             .last()
             .unwrap()
             .unwrap()
             .iter()
-            .map(|x| x.to_string())
+            .map(|x| x.trim().to_string())
             .collect::<Vec<String>>()
             .join(",");
 
