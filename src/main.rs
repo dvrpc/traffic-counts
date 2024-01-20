@@ -8,7 +8,7 @@ use log::{error, info, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
-use time::macros::format_description;
+use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
 const VEHICLE_COUNT_HEADER: &str = "Veh. No.,Date,Time,Channel,Class,Speed";
 
@@ -116,15 +116,15 @@ impl CountType {
 // Vehicle Counts - the raw, unbinned data
 #[derive(Debug, Clone)]
 struct VehicleCount {
-    date: time::Date,
-    time: time::Time,
+    date: Date,
+    time: Time,
     channel: u8,
     class: VehicleClass,
     speed: f32,
 }
 
 impl VehicleCount {
-    fn new(date: time::Date, time: time::Time, channel: u8, class: u8, speed: f32) -> Self {
+    fn new(date: Date, time: Time, channel: u8, class: u8, speed: f32) -> Self {
         let class = VehicleClass::from_num(class).unwrap();
         VehicleCount {
             date,
@@ -139,7 +139,7 @@ impl VehicleCount {
 // The first few lines of CSVs contain metadata, then header, then data rows.
 #[derive(Debug, Clone)]
 struct CountMetadata {
-    start_datetime: time::PrimitiveDateTime,
+    start_datetime: PrimitiveDateTime,
     site_code: usize,
     station_id: Option<usize>,
 }
@@ -257,13 +257,13 @@ fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<Ve
         // Parse date.
         let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
         let date_col = &row.as_ref().unwrap()[1];
-        let count_date = time::Date::parse(date_col, &date_format).unwrap();
+        let count_date = Date::parse(date_col, &date_format).unwrap();
 
         // Parse time.
         let time_format =
             format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
         let time_col = &row.as_ref().unwrap()[2];
-        let count_time = time::Time::parse(time_col, &time_format).unwrap();
+        let count_time = Time::parse(time_col, &time_format).unwrap();
 
         if count_type == CountType::Vehicle {
             let count = VehicleCount::new(
