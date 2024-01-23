@@ -208,24 +208,47 @@ impl SpeedRangeCount {
             return Err(format!("invalid speed '{speed}'"));
         }
 
-        let speed = speed as i32;
-        match speed {
-            0..=14 => self.s1 += 1,
-            15..=19 => self.s2 += 1,
-            20..=24 => self.s3 += 1,
-            25..=29 => self.s4 += 1,
-            30..=34 => self.s5 += 1,
-            35..=39 => self.s6 += 1,
-            40..=44 => self.s7 += 1,
-            45..=49 => self.s8 += 1,
-            50..=54 => self.s9 += 1,
-            55..=59 => self.s10 += 1,
-            60..=64 => self.s11 += 1,
-            65..=69 => self.s12 += 1,
-            70..=74 => self.s13 += 1,
-            75.. => self.s14 += 1,
-            other => return Err(format!("invalid speed '{other}'")),
+        // The end of the ranges are inclusive to the number's .0 decimal;
+        // that is:
+        // 0-15: 0.0 to 15.0
+        // >15-20: 15.1 to 20.0, etc.
+
+        // Unfortunately, using floats as tests in pattern matching will be an error in a future
+        // Rust release, so need to do if/else rather than match.
+        // <https://github.com/rust-lang/rust/issues/41620>
+
+        if (0.0..=15.0).contains(&speed) {
+            self.s1 += 1;
+        } else if (15.1..=20.0).contains(&speed) {
+            self.s2 += 1;
+        } else if (20.1..=25.0).contains(&speed) {
+            self.s3 += 1;
+        } else if (25.1..=30.0).contains(&speed) {
+            self.s4 += 1;
+        } else if (30.1..=35.0).contains(&speed) {
+            self.s5 += 1;
+        } else if (35.1..=40.0).contains(&speed) {
+            self.s6 += 1;
+        } else if (40.1..=45.0).contains(&speed) {
+            self.s7 += 1;
+        } else if (45.1..=50.0).contains(&speed) {
+            self.s8 += 1;
+        } else if (50.1..=55.0).contains(&speed) {
+            self.s9 += 1;
+        } else if (55.1..=60.0).contains(&speed) {
+            self.s10 += 1;
+        } else if (60.1..=65.0).contains(&speed) {
+            self.s11 += 1;
+        } else if (65.1..=70.0).contains(&speed) {
+            self.s12 += 1;
+        } else if (70.1..=75.0).contains(&speed) {
+            self.s13 += 1;
+        } else if (75.1..).contains(&speed) {
+            self.s14 += 1;
+        } else {
+            return Err(format!("invalid speed '{speed}'"));
         }
+
         self.total += 1;
         Ok(self)
     }
@@ -324,8 +347,8 @@ fn main() {
         }
 
         // let specific_dt = PrimitiveDateTime::new(
-        //     time::macros::date!(2023 - 11 - 08),
-        //     time::macros::time!(08:30:00),
+        //     time::macros::date!(2023 - 11 - 07),
+        //     time::macros::time!(17:30:00),
         // );
         // dbg!(&fifteen_min_speed_range_count.get(&specific_dt));
         dbg!(fifteen_min_speed_range_count.len());
@@ -502,34 +525,61 @@ mod tests {
         assert!(speed_count.insert(-0.1).is_err());
         assert!(speed_count.insert(-0.0).is_err());
 
+        // s1
         speed_count.insert(0.0).unwrap();
         speed_count.insert(0.1).unwrap();
-        speed_count.insert(14.9).unwrap();
         speed_count.insert(15.0).unwrap();
-        speed_count.insert(19.999).unwrap();
-        speed_count.insert(20.01).unwrap();
-        speed_count.insert(24.9).unwrap();
+
+        // s2
+        speed_count.insert(15.1).unwrap();
+        speed_count.insert(20.0).unwrap();
+
+        // s3
+        speed_count.insert(20.1).unwrap();
         speed_count.insert(25.0).unwrap();
-        speed_count.insert(29.9).unwrap();
+
+        // s4
+        speed_count.insert(25.1).unwrap();
         speed_count.insert(30.0).unwrap();
-        speed_count.insert(34.9).unwrap();
+
+        // s5
+        speed_count.insert(30.1).unwrap();
         speed_count.insert(35.0).unwrap();
-        speed_count.insert(39.9).unwrap();
+
+        // s6
+        speed_count.insert(35.1).unwrap();
         speed_count.insert(40.0).unwrap();
-        speed_count.insert(44.9).unwrap();
+
+        // s7
+        speed_count.insert(40.1).unwrap();
         speed_count.insert(45.0).unwrap();
-        speed_count.insert(49.9).unwrap();
+
+        // s8
+        speed_count.insert(45.1).unwrap();
         speed_count.insert(50.0).unwrap();
-        speed_count.insert(54.9).unwrap();
+
+        // s9
+        speed_count.insert(50.1).unwrap();
         speed_count.insert(55.0).unwrap();
-        speed_count.insert(59.0).unwrap();
+
+        // s10
+        speed_count.insert(55.1).unwrap();
         speed_count.insert(60.0).unwrap();
-        speed_count.insert(64.9).unwrap();
+
+        // s11
+        speed_count.insert(60.1).unwrap();
         speed_count.insert(65.0).unwrap();
-        speed_count.insert(69.9).unwrap();
+
+        // s12
+        speed_count.insert(65.1).unwrap();
         speed_count.insert(70.0).unwrap();
-        speed_count.insert(74.9).unwrap();
+
+        // s13
+        speed_count.insert(70.1).unwrap();
         speed_count.insert(75.0).unwrap();
+
+        // s14
+        speed_count.insert(75.1).unwrap();
         speed_count.insert(100.0).unwrap();
         speed_count.insert(120.0).unwrap();
 
