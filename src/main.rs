@@ -208,8 +208,6 @@ impl SpeedRangeCount {
             return Err(format!("invalid speed '{speed}'"));
         }
 
-        // TODO: This just rounds down to integer. May have to do proper rounding to nearest int.
-        // If so, will need to adjust tests.
         let speed = speed as i32;
         match speed {
             0..=14 => self.s1 += 1,
@@ -307,25 +305,29 @@ fn main() {
         if count_type_from_location != count_type_from_header {
             error!("{path:?}: Mismatch in count types between the file location and the header in that file. File not processed.");
         } else {
-            let file_counts = extract_counts(data_file, &path, count_type_from_location);
-            counts.extend(file_counts);
+            counts = extract_counts(data_file, &path, count_type_from_location);
         }
         let mut fifteen_min_speed_range_count: FifteenMinuteSpeedRangeCount = HashMap::new();
 
         for count in counts {
             let dt = PrimitiveDateTime::new(count.date, time_bin(count.time).unwrap());
 
-            fifteen_min_speed_range_count
-                .entry(dt)
-                .and_modify(|speed_range_count| {
-                    speed_range_count.insert(count.speed).unwrap();
-                })
-                .or_insert(SpeedRangeCount {
-                    dvrpc_num: Some(metadata.dvrpc_num),
-                    ..Default::default()
-                });
+            let speed_range_count =
+                fifteen_min_speed_range_count
+                    .entry(dt)
+                    .or_insert(SpeedRangeCount {
+                        dvrpc_num: Some(metadata.dvrpc_num),
+                        ..Default::default()
+                    });
+
+            *speed_range_count = *speed_range_count.insert(count.speed).unwrap();
         }
-        // dbg!(&fifteen_min_speed_range_count);
+
+        // let specific_dt = PrimitiveDateTime::new(
+        //     time::macros::date!(2023 - 11 - 08),
+        //     time::macros::time!(08:30:00),
+        // );
+        // dbg!(&fifteen_min_speed_range_count.get(&specific_dt));
         dbg!(fifteen_min_speed_range_count.len());
     }
 
@@ -389,6 +391,7 @@ fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<Ve
                 row.as_ref().unwrap()[5].parse().unwrap(),
                 metadata.dvrpc_num,
             );
+
             counts.push(count);
         }
     }
