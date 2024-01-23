@@ -15,11 +15,10 @@ const VEHICLE_COUNT_HEADER: &str = "Veh. No.,Date,Time,Channel,Class,Speed";
 
 const LOG: &str = "log.txt";
 
-/* Not sure if this will be needed, but these are the names of the 15 classifications from the FWA.
-   See:
-    * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
-    * <https://www.fhwa.dot.gov/policyinformation/tmguide/tmg_2013/vehicle-types.cfm>
-    * <https://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/13091/002.cfm>
+/* Names of the 15 classifications from the FWA. See:
+ * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
+ * <https://www.fhwa.dot.gov/policyinformation/tmguide/tmg_2013/vehicle-types.cfm>
+ * <https://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/13091/002.cfm>
 */
 #[derive(Debug, Clone)]
 enum VehicleClass {
@@ -179,12 +178,56 @@ impl<'a> VehicleCountMetadata<'a> {
 
 /// FifteenMinuteSpeedCount represents a row in the TC_SPECOUNT table, with the key of the HashMap
 /// containing the date and time fields as a datetime.
-type FifteenMinuteSpeedRangeCount = HashMap<PrimitiveDateTime, SpeedRangeCount>;
+type FifteenMinuteSpeedRangeCount = HashMap<SpeedRangeCountKey, SpeedRangeCount>;
+
+#[derive(PartialEq, Eq, Hash)]
+struct SpeedRangeCountKey {
+    datetime: PrimitiveDateTime,
+    channel: u8,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
+
+struct Directions {
+    direction1: Direction,
+    direction2: Option<Direction>,
+}
+
+impl Directions {
+    fn from_metadata(directions: &str) -> Result<Self, String> {
+        let (direction1, direction2) = match directions {
+            "ns" => (Direction::North, Some(Direction::South)),
+            "sn" => (Direction::South, Some(Direction::North)),
+            "ew" => (Direction::East, Some(Direction::West)),
+            "we" => (Direction::West, Some(Direction::East)),
+            "nn" => (Direction::North, Some(Direction::North)),
+            "ss" => (Direction::South, Some(Direction::South)),
+            "ee" => (Direction::East, Some(Direction::East)),
+            "ww" => (Direction::West, Some(Direction::West)),
+            "n" => (Direction::North, None),
+            "s" => (Direction::South, None),
+            "e" => (Direction::East, None),
+            "w" => (Direction::West, None),
+            other => return Err(format!("invalid direction {other}")),
+        };
+        Ok(Self {
+            direction1,
+            direction2,
+        })
+    }
+}
 
 /// Count of vehicles by speed range in some non-specific time period.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct SpeedRangeCount {
-    dvrpc_num: Option<i32>,
+    dvrpc_num: i32,
+    direction: Direction,
     s1: i32,
     s2: i32,
     s3: i32,
@@ -203,6 +246,27 @@ struct SpeedRangeCount {
 }
 
 impl SpeedRangeCount {
+    fn new(dvrpc_num: i32, direction: Direction) -> Self {
+        Self {
+            dvrpc_num,
+            direction,
+            s1: 0,
+            s2: 0,
+            s3: 0,
+            s4: 0,
+            s5: 0,
+            s6: 0,
+            s7: 0,
+            s8: 0,
+            s9: 0,
+            s10: 0,
+            s11: 0,
+            s12: 0,
+            s13: 0,
+            s14: 0,
+            total: 0,
+        }
+    }
     fn insert(&mut self, speed: f32) -> Result<&Self, String> {
         if speed.is_sign_negative() {
             return Err(format!("invalid speed '{speed}'"));
@@ -312,6 +376,8 @@ fn main() {
             }
         };
 
+        let directions = Directions::from_metadata(metadata.directions).unwrap();
+
         let mut counts = vec![];
         let data_file = match File::open(&path) {
             Ok(v) => v,
@@ -330,27 +396,44 @@ fn main() {
         } else {
             counts = extract_counts(data_file, &path, count_type_from_location);
         }
+
+        // Take the raw counts and group them in other ways to insert into the database.
         let mut fifteen_min_speed_range_count: FifteenMinuteSpeedRangeCount = HashMap::new();
 
         for count in counts {
-            let dt = PrimitiveDateTime::new(count.date, time_bin(count.time).unwrap());
+            // Get the direction from the channel of count/metadata of filename.
+            // Channel 1 is always the first direction, Channel 2 is the second (if any)
+            let direction = match count.channel {
+                1 => directions.direction1,
+                2 => directions.direction2.unwrap(),
+                _ => {
+                    error!("Unable to determine channel/direction.");
+                    continue;
+                }
+            };
 
-            let speed_range_count =
-                fifteen_min_speed_range_count
-                    .entry(dt)
-                    .or_insert(SpeedRangeCount {
-                        dvrpc_num: Some(metadata.dvrpc_num),
-                        ..Default::default()
-                    });
+            let key = SpeedRangeCountKey {
+                datetime: PrimitiveDateTime::new(count.date, time_bin(count.time).unwrap()),
+                channel: count.channel,
+            };
 
+            // Add new entry for this datetime/channel if necessary, then insert count's speed.
+            let speed_range_count = fifteen_min_speed_range_count
+                .entry(key)
+                .or_insert(SpeedRangeCount::new(metadata.dvrpc_num, direction));
             *speed_range_count = *speed_range_count.insert(count.speed).unwrap();
         }
 
-        // let specific_dt = PrimitiveDateTime::new(
-        //     time::macros::date!(2023 - 11 - 07),
-        //     time::macros::time!(17:30:00),
-        // );
-        // dbg!(&fifteen_min_speed_range_count.get(&specific_dt));
+        // some manual validating
+        let specific_dt = PrimitiveDateTime::new(
+            time::macros::date!(2023 - 11 - 07),
+            time::macros::time!(17:30:00),
+        );
+        let key = SpeedRangeCountKey {
+            datetime: specific_dt,
+            channel: 1,
+        };
+        dbg!(&fifteen_min_speed_range_count.get(&key));
         dbg!(fifteen_min_speed_range_count.len());
     }
 
@@ -520,7 +603,7 @@ mod tests {
 
     #[test]
     fn speed_binning_is_correct() {
-        let mut speed_count = SpeedRangeCount::default();
+        let mut speed_count = SpeedRangeCount::new(123, Direction::West);
 
         assert!(speed_count.insert(-0.1).is_err());
         assert!(speed_count.insert(-0.0).is_err());
