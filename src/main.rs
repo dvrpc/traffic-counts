@@ -1,4 +1,5 @@
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
+use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -8,7 +9,7 @@ use log::{error, info, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
-use time::{macros::format_description, Date, Month, PrimitiveDateTime, Time};
+use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
 const VEHICLE_COUNT_HEADER: &str = "Veh. No.,Date,Time,Channel,Class,Speed";
 
@@ -144,55 +145,6 @@ struct CountMetadata {
     station_id: Option<usize>,
 }
 
-// 14 speed ranges: 0-15, 5-mph increments to 75, more than 75
-// In the TC_SPECOUNT table, the fieldnames for this are S1 to S14.
-#[derive(Debug)]
-enum SpeedBins {
-    ZeroToFourteen,
-    FifteenToNineteen,
-    TwentyToTwentyFour,
-    TwentyFiveToTwentyNine,
-    ThirtyToThirtyFour,
-    ThirtyFiveToThirtyNine,
-    FourtyToFourtyFour,
-    FourtyFiveToFourtyNine,
-    FiftyToFiftyFour,
-    FiftyFiveToFiftyNine,
-    SixtyToSixtyFour,
-    SixtyFiveToSixtyNine,
-    SeventyToSeventyFour,
-    SeventyFivePlus,
-}
-
-impl SpeedBins {
-    fn bin(speed: f32) -> Result<Self, String> {
-        if speed.is_sign_negative() {
-            return Err(format!("invalid speed '{speed}'"));
-        }
-
-        // TODO: This just rounds down to integer. May have to do proper rounding to nearest int.
-        // If so, will need to adjust tests.
-        let speed = speed as i32;
-        match speed {
-            0..=14 => Ok(SpeedBins::ZeroToFourteen),
-            15..=19 => Ok(SpeedBins::FifteenToNineteen),
-            20..=24 => Ok(SpeedBins::TwentyToTwentyFour),
-            25..=29 => Ok(SpeedBins::TwentyFiveToTwentyNine),
-            30..=34 => Ok(SpeedBins::ThirtyToThirtyFour),
-            35..=39 => Ok(SpeedBins::ThirtyFiveToThirtyNine),
-            40..=44 => Ok(SpeedBins::FourtyToFourtyFour),
-            45..=49 => Ok(SpeedBins::FourtyFiveToFourtyNine),
-            50..=54 => Ok(SpeedBins::FiftyToFiftyFour),
-            55..=59 => Ok(SpeedBins::FiftyFiveToFiftyNine),
-            60..=64 => Ok(SpeedBins::SixtyToSixtyFour),
-            65..=69 => Ok(SpeedBins::SixtyFiveToSixtyNine),
-            70..=74 => Ok(SpeedBins::SeventyToSeventyFour),
-            75.. => Ok(SpeedBins::SeventyFivePlus),
-            other => Err(format!("invalid speed '{other}'")),
-        }
-    }
-}
-
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
     dotenvy::dotenv().expect("Unable to load .env file.");
@@ -241,9 +193,9 @@ fn main() {
 
     // TODO: this will probably need to be wrapped in other type in order to accept both StarNext
     // and EcoCounter counts
-    let mut counts = vec![];
 
     for path in paths {
+        let mut counts = vec![];
         let data_file = match File::open(&path) {
             Ok(v) => v,
             Err(_) => {
@@ -262,12 +214,88 @@ fn main() {
             let file_counts = extract_counts(data_file, &path, count_type_from_location);
             counts.extend(file_counts);
         }
+        create_15_min_speed_count(counts);
     }
 
     // mostly just debugging
-    for count in counts {
-        dbg!(&count);
+    // for count in counts {
+    //     dbg!(&count);
+    // }
+}
+
+/// FifteenMinuteSpeedCount represents a row in the TC_SPECOUNT table, with the key of the //HashMap
+/// containing the date and time fields as a datetime.
+// TODO: dvrpc_num is not yet included
+type FifteenMinuteSpeedRangeCount = HashMap<PrimitiveDateTime, SpeedRangeCount>;
+
+/// Count of vehicles by speed range in some non-specific time period.
+#[derive(Debug, Default, Clone, Copy)]
+struct SpeedRangeCount {
+    s1: i32,
+    s2: i32,
+    s3: i32,
+    s4: i32,
+    s5: i32,
+    s6: i32,
+    s7: i32,
+    s8: i32,
+    s9: i32,
+    s10: i32,
+    s11: i32,
+    s12: i32,
+    s13: i32,
+    s14: i32,
+    total: i32,
+}
+
+impl SpeedRangeCount {
+    fn insert(&mut self, speed: f32) -> Result<&Self, String> {
+        if speed.is_sign_negative() {
+            return Err(format!("invalid speed '{speed}'"));
+        }
+
+        // TODO: This just rounds down to integer. May have to do proper rounding to nearest int.
+        // If so, will need to adjust tests.
+        let speed = speed as i32;
+        match speed {
+            0..=14 => self.s1 += 1,
+            15..=19 => self.s2 += 1,
+            20..=24 => self.s3 += 1,
+            25..=29 => self.s4 += 1,
+            30..=34 => self.s5 += 1,
+            35..=39 => self.s6 += 1,
+            40..=44 => self.s7 += 1,
+            45..=49 => self.s8 += 1,
+            50..=54 => self.s9 += 1,
+            55..=59 => self.s10 += 1,
+            60..=64 => self.s11 += 1,
+            65..=69 => self.s12 += 1,
+            70..=74 => self.s13 += 1,
+            75.. => self.s14 += 1,
+            other => return Err(format!("invalid speed '{other}'")),
+        }
+        self.total += 1;
+        Ok(self)
     }
+}
+
+/// Iterate through counts, sum count by speed range in fifteen-minute bins.
+fn create_15_min_speed_count(counts: Vec<VehicleCount>) {
+    let mut fifteen_min_speed_count: FifteenMinuteSpeedRangeCount = HashMap::new();
+
+    for count in counts {
+        let dt = PrimitiveDateTime::new(count.date, time_bin(count.time).unwrap());
+
+        fifteen_min_speed_count
+            .entry(dt)
+            .and_modify(|speed_count| {
+                speed_count.insert(count.speed).unwrap();
+            })
+            .or_default();
+    }
+
+    // dbg!(&fifteen_min_speed_count);
+    dbg!(fifteen_min_speed_count.len());
 }
 
 /// Collect all the file paths to extract data from.
@@ -427,125 +455,56 @@ mod tests {
 
     #[test]
     fn speed_binning_is_correct() {
-        assert!(SpeedBins::bin(-0.1).is_err());
-        assert!(SpeedBins::bin(-0.0).is_err());
-        assert!(matches!(SpeedBins::bin(0.0), Ok(SpeedBins::ZeroToFourteen)));
-        assert!(matches!(SpeedBins::bin(0.1), Ok(SpeedBins::ZeroToFourteen)));
-        assert!(matches!(
-            SpeedBins::bin(14.9),
-            Ok(SpeedBins::ZeroToFourteen)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(15.0),
-            Ok(SpeedBins::FifteenToNineteen)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(19.9999),
-            Ok(SpeedBins::FifteenToNineteen)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(20.01),
-            Ok(SpeedBins::TwentyToTwentyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(24.9),
-            Ok(SpeedBins::TwentyToTwentyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(25.0),
-            Ok(SpeedBins::TwentyFiveToTwentyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(29.9),
-            Ok(SpeedBins::TwentyFiveToTwentyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(30.0),
-            Ok(SpeedBins::ThirtyToThirtyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(34.9),
-            Ok(SpeedBins::ThirtyToThirtyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(35.0),
-            Ok(SpeedBins::ThirtyFiveToThirtyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(39.9),
-            Ok(SpeedBins::ThirtyFiveToThirtyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(40.0),
-            Ok(SpeedBins::FourtyToFourtyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(44.9),
-            Ok(SpeedBins::FourtyToFourtyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(45.0),
-            Ok(SpeedBins::FourtyFiveToFourtyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(49.9),
-            Ok(SpeedBins::FourtyFiveToFourtyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(50.0),
-            Ok(SpeedBins::FiftyToFiftyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(54.9),
-            Ok(SpeedBins::FiftyToFiftyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(55.0),
-            Ok(SpeedBins::FiftyFiveToFiftyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(59.9),
-            Ok(SpeedBins::FiftyFiveToFiftyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(60.0),
-            Ok(SpeedBins::SixtyToSixtyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(64.9),
-            Ok(SpeedBins::SixtyToSixtyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(65.0),
-            Ok(SpeedBins::SixtyFiveToSixtyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(69.9),
-            Ok(SpeedBins::SixtyFiveToSixtyNine)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(70.0),
-            Ok(SpeedBins::SeventyToSeventyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(74.9),
-            Ok(SpeedBins::SeventyToSeventyFour)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(75.0),
-            Ok(SpeedBins::SeventyFivePlus)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(75.9),
-            Ok(SpeedBins::SeventyFivePlus)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(100.0),
-            Ok(SpeedBins::SeventyFivePlus)
-        ));
-        assert!(matches!(
-            SpeedBins::bin(120.0),
-            Ok(SpeedBins::SeventyFivePlus)
-        ));
+        let mut speed_count = SpeedRangeCount::default();
+
+        assert!(speed_count.insert(-0.1).is_err());
+        assert!(speed_count.insert(-0.0).is_err());
+
+        speed_count.insert(0.0).unwrap();
+        speed_count.insert(0.1).unwrap();
+        speed_count.insert(14.9).unwrap();
+        speed_count.insert(15.0).unwrap();
+        speed_count.insert(19.999).unwrap();
+        speed_count.insert(20.01).unwrap();
+        speed_count.insert(24.9).unwrap();
+        speed_count.insert(25.0).unwrap();
+        speed_count.insert(29.9).unwrap();
+        speed_count.insert(30.0).unwrap();
+        speed_count.insert(34.9).unwrap();
+        speed_count.insert(35.0).unwrap();
+        speed_count.insert(39.9).unwrap();
+        speed_count.insert(40.0).unwrap();
+        speed_count.insert(44.9).unwrap();
+        speed_count.insert(45.0).unwrap();
+        speed_count.insert(49.9).unwrap();
+        speed_count.insert(50.0).unwrap();
+        speed_count.insert(54.9).unwrap();
+        speed_count.insert(55.0).unwrap();
+        speed_count.insert(59.0).unwrap();
+        speed_count.insert(60.0).unwrap();
+        speed_count.insert(64.9).unwrap();
+        speed_count.insert(65.0).unwrap();
+        speed_count.insert(69.9).unwrap();
+        speed_count.insert(70.0).unwrap();
+        speed_count.insert(74.9).unwrap();
+        speed_count.insert(75.0).unwrap();
+        speed_count.insert(100.0).unwrap();
+        speed_count.insert(120.0).unwrap();
+
+        assert_eq!(speed_count.s1, 3);
+        assert_eq!(speed_count.s2, 2);
+        assert_eq!(speed_count.s3, 2);
+        assert_eq!(speed_count.s4, 2);
+        assert_eq!(speed_count.s5, 2);
+        assert_eq!(speed_count.s6, 2);
+        assert_eq!(speed_count.s7, 2);
+        assert_eq!(speed_count.s8, 2);
+        assert_eq!(speed_count.s9, 2);
+        assert_eq!(speed_count.s10, 2);
+        assert_eq!(speed_count.s11, 2);
+        assert_eq!(speed_count.s12, 2);
+        assert_eq!(speed_count.s13, 2);
+        assert_eq!(speed_count.s14, 3);
+        assert_eq!(speed_count.total, 30);
     }
 }
