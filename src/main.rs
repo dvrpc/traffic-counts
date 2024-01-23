@@ -177,6 +177,62 @@ impl<'a> VehicleCountMetadata<'a> {
     }
 }
 
+/// FifteenMinuteSpeedCount represents a row in the TC_SPECOUNT table, with the key of the HashMap
+/// containing the date and time fields as a datetime.
+type FifteenMinuteSpeedRangeCount = HashMap<PrimitiveDateTime, SpeedRangeCount>;
+
+/// Count of vehicles by speed range in some non-specific time period.
+#[derive(Debug, Default, Clone, Copy)]
+struct SpeedRangeCount {
+    dvrpc_num: Option<i32>,
+    s1: i32,
+    s2: i32,
+    s3: i32,
+    s4: i32,
+    s5: i32,
+    s6: i32,
+    s7: i32,
+    s8: i32,
+    s9: i32,
+    s10: i32,
+    s11: i32,
+    s12: i32,
+    s13: i32,
+    s14: i32,
+    total: i32,
+}
+
+impl SpeedRangeCount {
+    fn insert(&mut self, speed: f32) -> Result<&Self, String> {
+        if speed.is_sign_negative() {
+            return Err(format!("invalid speed '{speed}'"));
+        }
+
+        // TODO: This just rounds down to integer. May have to do proper rounding to nearest int.
+        // If so, will need to adjust tests.
+        let speed = speed as i32;
+        match speed {
+            0..=14 => self.s1 += 1,
+            15..=19 => self.s2 += 1,
+            20..=24 => self.s3 += 1,
+            25..=29 => self.s4 += 1,
+            30..=34 => self.s5 += 1,
+            35..=39 => self.s6 += 1,
+            40..=44 => self.s7 += 1,
+            45..=49 => self.s8 += 1,
+            50..=54 => self.s9 += 1,
+            55..=59 => self.s10 += 1,
+            60..=64 => self.s11 += 1,
+            65..=69 => self.s12 += 1,
+            70..=74 => self.s13 += 1,
+            75.. => self.s14 += 1,
+            other => return Err(format!("invalid speed '{other}'")),
+        }
+        self.total += 1;
+        Ok(self)
+    }
+}
+
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
     dotenvy::dotenv().expect("Unable to load .env file.");
@@ -277,62 +333,6 @@ fn main() {
     // for count in counts {
     //     dbg!(&count);
     // }
-}
-
-/// FifteenMinuteSpeedCount represents a row in the TC_SPECOUNT table, with the key of the //HashMap
-/// containing the date and time fields as a datetime.
-type FifteenMinuteSpeedRangeCount = HashMap<PrimitiveDateTime, SpeedRangeCount>;
-
-/// Count of vehicles by speed range in some non-specific time period.
-#[derive(Debug, Default, Clone, Copy)]
-struct SpeedRangeCount {
-    dvrpc_num: Option<i32>,
-    s1: i32,
-    s2: i32,
-    s3: i32,
-    s4: i32,
-    s5: i32,
-    s6: i32,
-    s7: i32,
-    s8: i32,
-    s9: i32,
-    s10: i32,
-    s11: i32,
-    s12: i32,
-    s13: i32,
-    s14: i32,
-    total: i32,
-}
-
-impl SpeedRangeCount {
-    fn insert(&mut self, speed: f32) -> Result<&Self, String> {
-        if speed.is_sign_negative() {
-            return Err(format!("invalid speed '{speed}'"));
-        }
-
-        // TODO: This just rounds down to integer. May have to do proper rounding to nearest int.
-        // If so, will need to adjust tests.
-        let speed = speed as i32;
-        match speed {
-            0..=14 => self.s1 += 1,
-            15..=19 => self.s2 += 1,
-            20..=24 => self.s3 += 1,
-            25..=29 => self.s4 += 1,
-            30..=34 => self.s5 += 1,
-            35..=39 => self.s6 += 1,
-            40..=44 => self.s7 += 1,
-            45..=49 => self.s8 += 1,
-            50..=54 => self.s9 += 1,
-            55..=59 => self.s10 += 1,
-            60..=64 => self.s11 += 1,
-            65..=69 => self.s12 += 1,
-            70..=74 => self.s13 += 1,
-            75.. => self.s14 += 1,
-            other => return Err(format!("invalid speed '{other}'")),
-        }
-        self.total += 1;
-        Ok(self)
-    }
 }
 
 /// Collect all the file paths to extract data from.
