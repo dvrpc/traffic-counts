@@ -8,7 +8,7 @@ use log::{error, info, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
-use time::{macros::format_description, Date, PrimitiveDateTime, Time};
+use time::{macros::format_description, Date, Month, PrimitiveDateTime, Time};
 
 const VEHICLE_COUNT_HEADER: &str = "Veh. No.,Date,Time,Channel,Class,Speed";
 
@@ -142,6 +142,55 @@ struct CountMetadata {
     start_datetime: PrimitiveDateTime,
     site_code: usize,
     station_id: Option<usize>,
+}
+
+// 14 speed ranges: 0-15, 5-mph increments to 75, more than 75
+// In the TC_SPECOUNT table, the fieldnames for this are S1 to S14.
+#[derive(Debug)]
+enum SpeedBins {
+    ZeroToFourteen,
+    FifteenToNineteen,
+    TwentyToTwentyFour,
+    TwentyFiveToTwentyNine,
+    ThirtyToThirtyFour,
+    ThirtyFiveToThirtyNine,
+    FourtyToFourtyFour,
+    FourtyFiveToFourtyNine,
+    FiftyToFiftyFour,
+    FiftyFiveToFiftyNine,
+    SixtyToSixtyFour,
+    SixtyFiveToSixtyNine,
+    SeventyToSeventyFour,
+    SeventyFivePlus,
+}
+
+impl SpeedBins {
+    fn bin(speed: f32) -> Result<Self, String> {
+        if speed.is_sign_negative() {
+            return Err(format!("invalid speed '{speed}'"));
+        }
+
+        // TODO: This just rounds down to integer. May have to do proper rounding to nearest int.
+        // If so, will need to adjust tests.
+        let speed = speed as i32;
+        match speed {
+            0..=14 => Ok(SpeedBins::ZeroToFourteen),
+            15..=19 => Ok(SpeedBins::FifteenToNineteen),
+            20..=24 => Ok(SpeedBins::TwentyToTwentyFour),
+            25..=29 => Ok(SpeedBins::TwentyFiveToTwentyNine),
+            30..=34 => Ok(SpeedBins::ThirtyToThirtyFour),
+            35..=39 => Ok(SpeedBins::ThirtyFiveToThirtyNine),
+            40..=44 => Ok(SpeedBins::FourtyToFourtyFour),
+            45..=49 => Ok(SpeedBins::FourtyFiveToFourtyNine),
+            50..=54 => Ok(SpeedBins::FiftyToFiftyFour),
+            55..=59 => Ok(SpeedBins::FiftyFiveToFiftyNine),
+            60..=64 => Ok(SpeedBins::SixtyToSixtyFour),
+            65..=69 => Ok(SpeedBins::SixtyFiveToSixtyNine),
+            70..=74 => Ok(SpeedBins::SeventyToSeventyFour),
+            75.. => Ok(SpeedBins::SeventyFivePlus),
+            other => Err(format!("invalid speed '{other}'")),
+        }
+    }
 }
 
 fn main() {
@@ -279,6 +328,18 @@ fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<Ve
     counts
 }
 
+/// Put time into four bins per hour.
+fn time_bin(time: Time) -> Result<Time, String> {
+    let time = time.replace_second(0).unwrap();
+    match time.minute() {
+        0..=14 => Ok(time.replace_minute(0).unwrap()),
+        15..=29 => Ok(time.replace_minute(15).unwrap()),
+        30..=44 => Ok(time.replace_minute(30).unwrap()),
+        45..=59 => Ok(time.replace_minute(45).unwrap()),
+        _ => Err("Invalid minute".to_string()),
+    }
+}
+
 /// Create CSV reader from file.
 fn create_reader(file: &File) -> Reader<&File> {
     ReaderBuilder::new()
@@ -306,5 +367,185 @@ mod tests {
         let ct_from_header = CountType::from_header(path, ct_from_location).unwrap();
         assert_eq!(&ct_from_location, &ct_from_header);
         assert_eq!(ct_from_location, CountType::Vehicle);
+    }
+
+    #[test]
+    fn extract_counts_gets_correct_number_of_counts() {
+        let path = Path::new("test_files/vehicles/rc-166905-ew-40972-35.txt");
+        let ct_from_location = CountType::from_location(path).unwrap();
+        let data_file = File::open(path).unwrap();
+        let counts = extract_counts(data_file, path, ct_from_location);
+        assert_eq!(counts.len(), 8706);
+    }
+
+    #[test]
+    fn time_binning_is_correct() {
+        // 1st 15-minute bin
+        let time = Time::from_hms(10, 0, 0).unwrap();
+
+        let binned = time_bin(time).unwrap();
+        assert_eq!(binned, Time::from_hms(10, 0, 0).unwrap());
+        assert_ne!(binned, Time::from_hms(10, 10, 0).unwrap());
+
+        let time = Time::from_hms(10, 14, 00).unwrap();
+        let binned = time_bin(time).unwrap();
+        assert_eq!(binned, Time::from_hms(10, 0, 0).unwrap());
+
+        // 2nd 15-minute bin
+        let time = Time::from_hms(10, 25, 00).unwrap();
+
+        let binned = time_bin(time).unwrap();
+        assert_eq!(binned, Time::from_hms(10, 15, 0).unwrap());
+
+        let time = Time::from_hms(10, 29, 00).unwrap();
+
+        let binned = time_bin(time).unwrap();
+        assert_eq!(binned, Time::from_hms(10, 15, 0).unwrap());
+
+        // 3rd 15-minute bin
+        let time = Time::from_hms(10, 31, 00).unwrap();
+
+        let binned = time_bin(time).unwrap();
+        assert_eq!(binned, Time::from_hms(10, 30, 0).unwrap());
+
+        let time = Time::from_hms(10, 44, 00).unwrap();
+
+        let binned = time_bin(time).unwrap();
+        assert_eq!(binned, Time::from_hms(10, 30, 0).unwrap());
+
+        // 4th 15-minute bin
+        let time = Time::from_hms(10, 45, 00).unwrap();
+
+        let binned = time_bin(time).unwrap();
+        assert_eq!(binned, Time::from_hms(10, 45, 0).unwrap());
+
+        let time = Time::from_hms(10, 59, 00).unwrap();
+
+        let binned = time_bin(time).unwrap();
+        assert_eq!(binned, Time::from_hms(10, 45, 0).unwrap());
+    }
+
+    #[test]
+    fn speed_binning_is_correct() {
+        assert!(SpeedBins::bin(-0.1).is_err());
+        assert!(SpeedBins::bin(-0.0).is_err());
+        assert!(matches!(SpeedBins::bin(0.0), Ok(SpeedBins::ZeroToFourteen)));
+        assert!(matches!(SpeedBins::bin(0.1), Ok(SpeedBins::ZeroToFourteen)));
+        assert!(matches!(
+            SpeedBins::bin(14.9),
+            Ok(SpeedBins::ZeroToFourteen)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(15.0),
+            Ok(SpeedBins::FifteenToNineteen)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(19.9999),
+            Ok(SpeedBins::FifteenToNineteen)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(20.01),
+            Ok(SpeedBins::TwentyToTwentyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(24.9),
+            Ok(SpeedBins::TwentyToTwentyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(25.0),
+            Ok(SpeedBins::TwentyFiveToTwentyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(29.9),
+            Ok(SpeedBins::TwentyFiveToTwentyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(30.0),
+            Ok(SpeedBins::ThirtyToThirtyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(34.9),
+            Ok(SpeedBins::ThirtyToThirtyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(35.0),
+            Ok(SpeedBins::ThirtyFiveToThirtyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(39.9),
+            Ok(SpeedBins::ThirtyFiveToThirtyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(40.0),
+            Ok(SpeedBins::FourtyToFourtyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(44.9),
+            Ok(SpeedBins::FourtyToFourtyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(45.0),
+            Ok(SpeedBins::FourtyFiveToFourtyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(49.9),
+            Ok(SpeedBins::FourtyFiveToFourtyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(50.0),
+            Ok(SpeedBins::FiftyToFiftyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(54.9),
+            Ok(SpeedBins::FiftyToFiftyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(55.0),
+            Ok(SpeedBins::FiftyFiveToFiftyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(59.9),
+            Ok(SpeedBins::FiftyFiveToFiftyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(60.0),
+            Ok(SpeedBins::SixtyToSixtyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(64.9),
+            Ok(SpeedBins::SixtyToSixtyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(65.0),
+            Ok(SpeedBins::SixtyFiveToSixtyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(69.9),
+            Ok(SpeedBins::SixtyFiveToSixtyNine)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(70.0),
+            Ok(SpeedBins::SeventyToSeventyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(74.9),
+            Ok(SpeedBins::SeventyToSeventyFour)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(75.0),
+            Ok(SpeedBins::SeventyFivePlus)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(75.9),
+            Ok(SpeedBins::SeventyFivePlus)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(100.0),
+            Ok(SpeedBins::SeventyFivePlus)
+        ));
+        assert!(matches!(
+            SpeedBins::bin(120.0),
+            Ok(SpeedBins::SeventyFivePlus)
+        ));
     }
 }
