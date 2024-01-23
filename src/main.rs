@@ -122,10 +122,11 @@ struct VehicleCount {
     channel: u8,
     class: VehicleClass,
     speed: f32,
+    dvrpc_num: i32,
 }
 
 impl VehicleCount {
-    fn new(date: Date, time: Time, channel: u8, class: u8, speed: f32) -> Self {
+    fn new(date: Date, time: Time, channel: u8, class: u8, speed: f32, dvrpc_num: i32) -> Self {
         let class = VehicleClass::from_num(class).unwrap();
         VehicleCount {
             date,
@@ -133,16 +134,47 @@ impl VehicleCount {
             channel,
             class,
             speed,
+            dvrpc_num,
         }
     }
 }
 
-// The first few lines of CSVs contain metadata, then header, then data rows.
-#[derive(Debug, Clone)]
-struct CountMetadata {
-    start_datetime: PrimitiveDateTime,
-    site_code: usize,
-    station_id: Option<usize>,
+#[derive(Debug, Clone, PartialEq)]
+struct VehicleCountMetadata<'a> {
+    technician: &'a str,
+    dvrpc_num: i32,
+    directions: &'a str,
+    counter_id: i32,
+    speed_limit: i32,
+    // start_datetime: PrimitiveDateTime,
+    // site_code: usize,
+    // station_id: Option<usize>,
+}
+
+impl<'a> VehicleCountMetadata<'a> {
+    fn new(path: &'a Path) -> Result<Self, String> {
+        let parts: Vec<&str> = path
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split('-')
+            .collect();
+
+        if parts.len() != 5 {
+            return Err("filename is not to specification".to_string());
+        }
+
+        let metadata = Self {
+            technician: parts[0],
+            dvrpc_num: parts[1].parse().unwrap(),
+            directions: parts[2],
+            counter_id: parts[3].parse().unwrap(),
+            speed_limit: parts[4].parse().unwrap(),
+        };
+
+        Ok(metadata)
+    }
 }
 
 fn main() {
@@ -195,6 +227,14 @@ fn main() {
     // and EcoCounter counts
 
     for path in paths {
+        let metadata = match VehicleCountMetadata::new(&path) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("{path:?} not processed: {e}");
+                continue;
+            }
+        };
+
         let mut counts = vec![];
         let data_file = match File::open(&path) {
             Ok(v) => v,
@@ -214,7 +254,23 @@ fn main() {
             let file_counts = extract_counts(data_file, &path, count_type_from_location);
             counts.extend(file_counts);
         }
-        create_15_min_speed_count(counts);
+        let mut fifteen_min_speed_range_count: FifteenMinuteSpeedRangeCount = HashMap::new();
+
+        for count in counts {
+            let dt = PrimitiveDateTime::new(count.date, time_bin(count.time).unwrap());
+
+            fifteen_min_speed_range_count
+                .entry(dt)
+                .and_modify(|speed_range_count| {
+                    speed_range_count.insert(count.speed).unwrap();
+                })
+                .or_insert(SpeedRangeCount {
+                    dvrpc_num: Some(metadata.dvrpc_num),
+                    ..Default::default()
+                });
+        }
+        // dbg!(&fifteen_min_speed_range_count);
+        dbg!(fifteen_min_speed_range_count.len());
     }
 
     // mostly just debugging
@@ -225,12 +281,12 @@ fn main() {
 
 /// FifteenMinuteSpeedCount represents a row in the TC_SPECOUNT table, with the key of the //HashMap
 /// containing the date and time fields as a datetime.
-// TODO: dvrpc_num is not yet included
 type FifteenMinuteSpeedRangeCount = HashMap<PrimitiveDateTime, SpeedRangeCount>;
 
 /// Count of vehicles by speed range in some non-specific time period.
 #[derive(Debug, Default, Clone, Copy)]
 struct SpeedRangeCount {
+    dvrpc_num: Option<i32>,
     s1: i32,
     s2: i32,
     s3: i32,
@@ -279,25 +335,6 @@ impl SpeedRangeCount {
     }
 }
 
-/// Iterate through counts, sum count by speed range in fifteen-minute bins.
-fn create_15_min_speed_count(counts: Vec<VehicleCount>) {
-    let mut fifteen_min_speed_count: FifteenMinuteSpeedRangeCount = HashMap::new();
-
-    for count in counts {
-        let dt = PrimitiveDateTime::new(count.date, time_bin(count.time).unwrap());
-
-        fifteen_min_speed_count
-            .entry(dt)
-            .and_modify(|speed_count| {
-                speed_count.insert(count.speed).unwrap();
-            })
-            .or_default();
-    }
-
-    // dbg!(&fifteen_min_speed_count);
-    dbg!(fifteen_min_speed_count.len());
-}
-
 /// Collect all the file paths to extract data from.
 fn collect_paths(dir: &PathBuf, mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
     for entry in fs::read_dir(dir).unwrap() {
@@ -320,6 +357,7 @@ fn collect_paths(dir: &PathBuf, mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
 
 /// Extract counts from a file.
 fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<VehicleCount> {
+    let metadata = VehicleCountMetadata::new(path).unwrap();
     // Create CSV reader over file
     let mut rdr = create_reader(&data_file);
 
@@ -349,6 +387,7 @@ fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<Ve
                 row.as_ref().unwrap()[3].parse().unwrap(),
                 row.as_ref().unwrap()[4].parse().unwrap(),
                 row.as_ref().unwrap()[5].parse().unwrap(),
+                metadata.dvrpc_num,
             );
             counts.push(count);
         }
@@ -506,5 +545,33 @@ mod tests {
         assert_eq!(speed_count.s13, 2);
         assert_eq!(speed_count.s14, 3);
         assert_eq!(speed_count.total, 30);
+    }
+
+    #[test]
+    fn metadata_parse_from_path_ok() {
+        let path = Path::new("test_files/vehicles/rc-166905-ew-40972-35.txt");
+        let metadata = VehicleCountMetadata::new(path).unwrap();
+        let expected_metadata = {
+            VehicleCountMetadata {
+                technician: "rc",
+                dvrpc_num: 166905,
+                directions: "ew",
+                counter_id: 40972,
+                speed_limit: 35,
+            }
+        };
+        assert_eq!(metadata, expected_metadata)
+    }
+
+    #[test]
+    fn metadata_parse_from_path_errs_if_too_few_parts() {
+        let path = Path::new("test_files/vehicles/rc-166905-ew-40972.txt");
+        assert!(VehicleCountMetadata::new(path).is_err())
+    }
+
+    #[test]
+    fn metadata_parse_from_path_errs_if_too_many_parts() {
+        let path = Path::new("test_files/vehicles/rc-166905-ew-40972-35-extra.txt");
+        assert!(VehicleCountMetadata::new(path).is_err())
     }
 }
