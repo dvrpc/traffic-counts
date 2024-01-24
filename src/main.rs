@@ -1,4 +1,8 @@
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
+//! Naming convention in this program:
+//!  - "CountedVehicle" is the individual vehicle that got counted
+//!    "VehicleCount" is the overall count spanning multiple days
+
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -113,33 +117,31 @@ impl CountType {
     }
 }
 
-// Vehicle Counts - the raw, unbinned data
+// CountedVehicle - the raw, unbinned data
 #[derive(Debug, Clone)]
-struct VehicleCount {
+struct CountedVehicle {
     date: Date,
     time: Time,
     channel: u8,
     class: VehicleClass,
     speed: f32,
-    dvrpc_num: i32,
 }
 
-impl VehicleCount {
-    fn new(date: Date, time: Time, channel: u8, class: u8, speed: f32, dvrpc_num: i32) -> Self {
+impl CountedVehicle {
+    fn new(date: Date, time: Time, channel: u8, class: u8, speed: f32) -> Self {
         let class = VehicleClass::from_num(class).unwrap();
-        VehicleCount {
+        Self {
             date,
             time,
             channel,
             class,
             speed,
-            dvrpc_num,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct VehicleCountMetadata<'a> {
+struct CountMetadata<'a> {
     technician: &'a str,
     dvrpc_num: i32,
     directions: &'a str,
@@ -150,7 +152,7 @@ struct VehicleCountMetadata<'a> {
     // station_id: Option<usize>,
 }
 
-impl<'a> VehicleCountMetadata<'a> {
+impl<'a> CountMetadata<'a> {
     fn new(path: &'a Path) -> Result<Self, String> {
         let parts: Vec<&str> = path
             .file_stem()
@@ -178,10 +180,11 @@ impl<'a> VehicleCountMetadata<'a> {
 
 /// FifteenMinuteSpeedCount represents a row in the TC_SPECOUNT table, with the key of the HashMap
 /// containing the date and time fields as a datetime.
-type FifteenMinuteSpeedRangeCount = HashMap<SpeedRangeCountKey, SpeedRangeCount>;
+type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
+type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
 
-#[derive(PartialEq, Eq, Hash)]
-struct SpeedRangeCountKey {
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+struct BinnedCountKey {
     datetime: PrimitiveDateTime,
     channel: u8,
 }
@@ -194,6 +197,7 @@ enum Direction {
     West,
 }
 
+#[derive(Debug)]
 struct Directions {
     direction1: Direction,
     direction2: Option<Direction>,
@@ -220,6 +224,75 @@ impl Directions {
             direction1,
             direction2,
         })
+    }
+}
+
+/// Count of vehicles by vehicle class in some non-specific time period.
+#[derive(Debug, Clone, Copy)]
+struct VehicleClassCount {
+    dvrpc_num: i32,
+    direction: Direction,
+    c1: i32,
+    c2: i32,
+    c3: i32,
+    c4: i32,
+    c5: i32,
+    c6: i32,
+    c7: i32,
+    c8: i32,
+    c9: i32,
+    c10: i32,
+    c11: i32,
+    c12: i32,
+    c13: i32,
+    total: i32,
+}
+
+impl VehicleClassCount {
+    fn new(dvrpc_num: i32, direction: Direction) -> Self {
+        Self {
+            dvrpc_num,
+            direction,
+            c1: 0,
+            c2: 0,
+            c3: 0,
+            c4: 0,
+            c5: 0,
+            c6: 0,
+            c7: 0,
+            c8: 0,
+            c9: 0,
+            c10: 0,
+            c11: 0,
+            c12: 0,
+            c13: 0,
+            total: 0,
+        }
+    }
+    fn insert(&mut self, class: VehicleClass) -> Result<&Self, String> {
+        match class {
+            VehicleClass::Motorcycles => self.c1 += 1,
+            VehicleClass::PassengerCars => self.c2 += 1,
+            VehicleClass::OtherFourTireSingleUnitVehicles => self.c3 += 1,
+            VehicleClass::Buses => self.c4 += 1,
+            VehicleClass::TwoAxleSixTireSingleUnitTrucks => self.c5 += 1,
+            VehicleClass::ThreeAxleSingleUnitTrucks => self.c6 += 1,
+            VehicleClass::FourOrMoreAxleSingleUnitTrucks => self.c7 += 1,
+            VehicleClass::FourOrFewerAxleSingleTrailerTrucks => self.c8 += 1,
+            VehicleClass::FiveAxleSingleTrailerTrucks => self.c9 += 1,
+            VehicleClass::SixOrMoreAxleSingleTrailerTrucks => self.c10 += 1,
+            VehicleClass::FiveOrFewerAxleMultiTrailerTrucks => self.c11 += 1,
+            VehicleClass::SixAxleMultiTrailerTrucks => self.c12 += 1,
+            VehicleClass::SevenOrMoreAxleMultiTrailerTrucks => self.c13 += 1,
+            _ => (),
+        }
+
+        // TODO: determine how to handle unclassed vehicles, and also how they should be
+        // reflected in total. Most accurate representation would be to not reclass unclassed,
+        // while still including in total.
+
+        self.total += 1;
+        Ok(self)
     }
 }
 
@@ -368,17 +441,15 @@ fn main() {
     // and EcoCounter counts
 
     for path in paths {
-        let metadata = match VehicleCountMetadata::new(&path) {
+        let metadata = match CountMetadata::new(&path) {
             Ok(v) => v,
             Err(e) => {
                 error!("{path:?} not processed: {e}");
                 continue;
             }
         };
-
         let directions = Directions::from_metadata(metadata.directions).unwrap();
 
-        let mut counts = vec![];
         let data_file = match File::open(&path) {
             Ok(v) => v,
             Err(_) => {
@@ -393,16 +464,18 @@ fn main() {
 
         if count_type_from_location != count_type_from_header {
             error!("{path:?}: Mismatch in count types between the file location and the header in that file. File not processed.");
-        } else {
-            counts = extract_counts(data_file, &path, count_type_from_location);
+            continue;
         }
 
-        // Take the raw counts and group them in other ways to insert into the database.
+        let counts = extract_counts(data_file, &path, count_type_from_location);
+        // Created variously binned counts (by time period, speed range, vehicle class) from
+        // counts of individual vehicles.
         let mut fifteen_min_speed_range_count: FifteenMinuteSpeedRangeCount = HashMap::new();
+        let mut fifteen_min_vehicle_class_count: FifteenMinuteVehicleClassCount = HashMap::new();
 
         for count in counts {
             // Get the direction from the channel of count/metadata of filename.
-            // Channel 1 is always the first direction, Channel 2 is the second (if any)
+            // Channel 1 is first direction, Channel 2 is the second (if any)
             let direction = match count.channel {
                 1 => directions.direction1,
                 2 => directions.direction2.unwrap(),
@@ -412,29 +485,46 @@ fn main() {
                 }
             };
 
-            let key = SpeedRangeCountKey {
+            // create a key for the Hashmap for 15-minute periods
+            let key = BinnedCountKey {
                 datetime: PrimitiveDateTime::new(count.date, time_bin(count.time).unwrap()),
                 channel: count.channel,
             };
 
-            // Add new entry for this datetime/channel if necessary, then insert count's speed.
+            // Add new entry to 15-min speed range count if necessary, then insert count's speed.
             let speed_range_count = fifteen_min_speed_range_count
                 .entry(key)
                 .or_insert(SpeedRangeCount::new(metadata.dvrpc_num, direction));
             *speed_range_count = *speed_range_count.insert(count.speed).unwrap();
+
+            // Add new entry to 15-min vehicle class count if necessary, then insert count's class.
+            let vehicle_class_count = fifteen_min_vehicle_class_count
+                .entry(key)
+                .or_insert(VehicleClassCount::new(metadata.dvrpc_num, direction));
+            *vehicle_class_count = *vehicle_class_count.insert(count.class).unwrap();
         }
 
         // some manual validating
         let specific_dt = PrimitiveDateTime::new(
-            time::macros::date!(2023 - 11 - 07),
-            time::macros::time!(17:30:00),
+            time::macros::date!(2023 - 11 - 06),
+            time::macros::time!(11:00:00),
         );
-        let key = SpeedRangeCountKey {
+        let channel1_key = BinnedCountKey {
             datetime: specific_dt,
             channel: 1,
         };
-        dbg!(&fifteen_min_speed_range_count.get(&key));
-        dbg!(fifteen_min_speed_range_count.len());
+        let channel2_key = BinnedCountKey {
+            datetime: specific_dt,
+            channel: 2,
+        };
+        dbg!(&fifteen_min_speed_range_count.get(&channel1_key));
+        dbg!(&fifteen_min_speed_range_count.get(&channel2_key));
+
+        dbg!(&fifteen_min_vehicle_class_count.get(&channel1_key));
+        dbg!(&fifteen_min_vehicle_class_count.get(&channel2_key));
+
+        // dbg!(&fifteen_min_speed_range_count);
+        // dbg!(fifteen_min_speed_range_count.len());
     }
 
     // mostly just debugging
@@ -464,8 +554,7 @@ fn collect_paths(dir: &PathBuf, mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 /// Extract counts from a file.
-fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<VehicleCount> {
-    let metadata = VehicleCountMetadata::new(path).unwrap();
+fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<CountedVehicle> {
     // Create CSV reader over file
     let mut rdr = create_reader(&data_file);
 
@@ -489,13 +578,12 @@ fn extract_counts(data_file: File, path: &Path, count_type: CountType) -> Vec<Ve
         let count_time = Time::parse(time_col, &time_format).unwrap();
 
         if count_type == CountType::Vehicle {
-            let count = VehicleCount::new(
+            let count = CountedVehicle::new(
                 count_date,
                 count_time,
                 row.as_ref().unwrap()[3].parse().unwrap(),
                 row.as_ref().unwrap()[4].parse().unwrap(),
                 row.as_ref().unwrap()[5].parse().unwrap(),
-                metadata.dvrpc_num,
             );
 
             counts.push(count);
@@ -686,9 +774,9 @@ mod tests {
     #[test]
     fn metadata_parse_from_path_ok() {
         let path = Path::new("test_files/vehicles/rc-166905-ew-40972-35.txt");
-        let metadata = VehicleCountMetadata::new(path).unwrap();
+        let metadata = CountMetadata::new(path).unwrap();
         let expected_metadata = {
-            VehicleCountMetadata {
+            CountMetadata {
                 technician: "rc",
                 dvrpc_num: 166905,
                 directions: "ew",
@@ -702,12 +790,12 @@ mod tests {
     #[test]
     fn metadata_parse_from_path_errs_if_too_few_parts() {
         let path = Path::new("test_files/vehicles/rc-166905-ew-40972.txt");
-        assert!(VehicleCountMetadata::new(path).is_err())
+        assert!(CountMetadata::new(path).is_err())
     }
 
     #[test]
     fn metadata_parse_from_path_errs_if_too_many_parts() {
         let path = Path::new("test_files/vehicles/rc-166905-ew-40972-35-extra.txt");
-        assert!(VehicleCountMetadata::new(path).is_err())
+        assert!(CountMetadata::new(path).is_err())
     }
 }
