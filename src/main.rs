@@ -292,17 +292,6 @@ impl CountMetadata {
     }
 }
 
-/// Represents a row in TC_SPECOUNT table
-type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
-/// Represents a row in TC_CLACOUNT table
-type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-struct BinnedCountKey {
-    datetime: PrimitiveDateTime,
-    channel: u8,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Direction {
     North,
@@ -324,6 +313,17 @@ impl Directions {
             direction2,
         }
     }
+}
+
+/// Represents a row in TC_CLACOUNT table
+type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
+/// Represents a row in TC_SPECOUNT table
+type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+struct BinnedCountKey {
+    datetime: PrimitiveDateTime,
+    channel: u8,
 }
 
 /// Count of vehicles by vehicle class in some non-specific time period.
