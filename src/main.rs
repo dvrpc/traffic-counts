@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io;
-use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
 
 use csv::{Reader, ReaderBuilder};
@@ -28,20 +27,34 @@ enum CountError<'a> {
     BadPath(&'a Path),
     #[error("unable to open file `{0}`")]
     CannotOpenFile(#[from] io::Error),
-    #[error("the filename '{0}' is not to specification")] // TODO: put in specs or point to them
-    FileNameSpecification(&'a Path),
-    #[error("the filename '{0}' is not to specification")]
-    FileNamePartNotInt(#[from] ParseIntError),
+    #[error("the filename at {path:?} is not to specification: {problem:?}")]
+    InvalidFileName {
+        problem: FileNameProblem,
+        path: &'a Path,
+    },
     #[error("no matching count type for directory `{0}`")]
     LocationCountMisMatch(String),
     #[error("no matching count type for header in `{0}`")]
     HeaderCounterMisMatch(&'a Path),
     #[error("no such vehicle class '{0}'")]
     BadVehicleClass(u8),
+    #[error("invalid speed '{0}'")]
+    InvalidSpeed(f32),
     #[error("cannot locate header in '{0}'")]
     MissingHeader(&'a Path),
     #[error("error converting header row to string")]
     HeadertoStringRecordError(#[from] csv::Error),
+}
+
+#[derive(Debug)]
+enum FileNameProblem {
+    TooManyParts,
+    TooFewParts,
+    InvalidTech,
+    InvalidRecordNum,
+    InvalidDirections,
+    InvalidCounterID,
+    InvalidSpeedLimit,
 }
 
 /* Names of the 15 classifications from the FWA. See:
@@ -172,10 +185,10 @@ impl CountedVehicle {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct CountMetadata<'a> {
-    technician: &'a str,
+struct CountMetadata {
+    technician: String,
     dvrpc_num: i32,
-    directions: &'a str,
+    directions: Directions,
     counter_id: i32,
     speed_limit: i32,
     // start_datetime: PrimitiveDateTime,
@@ -183,8 +196,8 @@ struct CountMetadata<'a> {
     // station_id: Option<usize>,
 }
 
-impl<'a> CountMetadata<'a> {
-    fn new(path: &'a Path) -> Result<Self, CountError> {
+impl CountMetadata {
+    fn new(path: &Path) -> Result<Self, CountError> {
         let parts: Vec<&str> = path
             .file_stem()
             .ok_or(CountError::BadPath(path))?
@@ -193,16 +206,86 @@ impl<'a> CountMetadata<'a> {
             .split('-')
             .collect();
 
-        if parts.len() != 5 {
-            return Err(CountError::FileNameSpecification(path));
+        if parts.len() < 5 {
+            return Err(CountError::InvalidFileName {
+                problem: FileNameProblem::TooFewParts,
+                path,
+            });
+        }
+        if parts.len() > 5 {
+            return Err(CountError::InvalidFileName {
+                problem: FileNameProblem::TooManyParts,
+                path,
+            });
         }
 
+        // `technician` should be letters. If parseable as int, then they aren't letters.
+        if parts[0].parse::<i32>().is_ok() {
+            return Err(CountError::InvalidFileName {
+                problem: FileNameProblem::InvalidTech,
+                path,
+            });
+        }
+
+        let technician = parts[0].to_string();
+
+        let dvrpc_num = match parts[1].parse() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(CountError::InvalidFileName {
+                    problem: FileNameProblem::InvalidRecordNum,
+                    path,
+                })
+            }
+        };
+
+        let directions: Directions = match parts[2] {
+            "ns" => Directions::new(Direction::North, Some(Direction::South)),
+            "sn" => Directions::new(Direction::South, Some(Direction::North)),
+            "ew" => Directions::new(Direction::East, Some(Direction::West)),
+            "we" => Directions::new(Direction::West, Some(Direction::East)),
+            "nn" => Directions::new(Direction::North, Some(Direction::North)),
+            "ss" => Directions::new(Direction::South, Some(Direction::South)),
+            "ee" => Directions::new(Direction::East, Some(Direction::East)),
+            "ww" => Directions::new(Direction::West, Some(Direction::West)),
+            "n" => Directions::new(Direction::North, None),
+            "s" => Directions::new(Direction::South, None),
+            "e" => Directions::new(Direction::East, None),
+            "w" => Directions::new(Direction::West, None),
+            _ => {
+                return Err(CountError::InvalidFileName {
+                    problem: FileNameProblem::InvalidDirections,
+                    path,
+                })
+            }
+        };
+
+        let counter_id = match parts[3].parse() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(CountError::InvalidFileName {
+                    problem: FileNameProblem::InvalidCounterID,
+                    path,
+                })
+            }
+        };
+
+        let speed_limit = match parts[4].parse() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(CountError::InvalidFileName {
+                    problem: FileNameProblem::InvalidSpeedLimit,
+                    path,
+                })
+            }
+        };
+
         let metadata = Self {
-            technician: parts[0],
-            dvrpc_num: parts[1].parse()?,
-            directions: parts[2],
-            counter_id: parts[3].parse()?,
-            speed_limit: parts[4].parse()?,
+            technician,
+            dvrpc_num,
+            directions,
+            counter_id,
+            speed_limit,
         };
 
         Ok(metadata)
@@ -220,7 +303,7 @@ struct BinnedCountKey {
     channel: u8,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Direction {
     North,
     East,
@@ -228,33 +311,18 @@ enum Direction {
     West,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 struct Directions {
     direction1: Direction,
     direction2: Option<Direction>,
 }
 
 impl Directions {
-    fn from_metadata(directions: &str) -> Result<Self, String> {
-        let (direction1, direction2) = match directions {
-            "ns" => (Direction::North, Some(Direction::South)),
-            "sn" => (Direction::South, Some(Direction::North)),
-            "ew" => (Direction::East, Some(Direction::West)),
-            "we" => (Direction::West, Some(Direction::East)),
-            "nn" => (Direction::North, Some(Direction::North)),
-            "ss" => (Direction::South, Some(Direction::South)),
-            "ee" => (Direction::East, Some(Direction::East)),
-            "ww" => (Direction::West, Some(Direction::West)),
-            "n" => (Direction::North, None),
-            "s" => (Direction::South, None),
-            "e" => (Direction::East, None),
-            "w" => (Direction::West, None),
-            other => return Err(format!("invalid direction {other}")),
-        };
-        Ok(Self {
+    fn new(direction1: Direction, direction2: Option<Direction>) -> Self {
+        Self {
             direction1,
             direction2,
-        })
+        }
     }
 }
 
@@ -352,6 +420,7 @@ struct SpeedRangeCount {
 }
 
 impl SpeedRangeCount {
+    // Create a SpeedRangeCount with 0 count for all speed ranges.
     fn new(dvrpc_num: i32, direction: Direction) -> Self {
         Self {
             dvrpc_num,
@@ -373,9 +442,9 @@ impl SpeedRangeCount {
             total: 0,
         }
     }
-    fn insert(&mut self, speed: f32) -> Result<&Self, String> {
+    fn insert(&mut self, speed: f32) -> Result<&Self, CountError> {
         if speed.is_sign_negative() {
-            return Err(format!("invalid speed '{speed}'"));
+            return Err(CountError::InvalidSpeed(speed));
         }
 
         // The end of the ranges are inclusive to the number's .0 decimal;
@@ -416,7 +485,7 @@ impl SpeedRangeCount {
         } else if (75.1..).contains(&speed) {
             self.s14 += 1;
         } else {
-            return Err(format!("invalid speed '{speed}'"));
+            return Err(CountError::InvalidSpeed(speed));
         }
 
         self.total += 1;
@@ -483,14 +552,7 @@ fn main() {
         let metadata = match CountMetadata::new(path) {
             Ok(v) => v,
             Err(e) => {
-                error!("{path:?} not processed: {e}");
-                continue;
-            }
-        };
-        let directions = match Directions::from_metadata(metadata.directions) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("{e}");
+                error!("File not processed: {e}");
                 continue;
             }
         };
@@ -498,7 +560,7 @@ fn main() {
         let data_file = match File::open(&path) {
             Ok(v) => v,
             Err(_) => {
-                error!("Unable to open {path:?}. File not processed.");
+                error!("File not processed: unable to open {path:?}.");
                 continue;
             }
         };
@@ -506,20 +568,20 @@ fn main() {
         let count_type_from_location = match CountType::from_location(path) {
             Ok(v) => v,
             Err(e) => {
-                error!("{e}");
+                error!("File not processed: {e}");
                 continue;
             }
         };
         let count_type_from_header = match CountType::from_header(path, count_type_from_location) {
             Ok(v) => v,
             Err(e) => {
-                error!("{e}");
+                error!("File not processed: {e}");
                 continue;
             }
         };
 
         if count_type_from_location != count_type_from_header {
-            error!("{path:?}: Mismatch in count types between the file location and the header in that file. File not processed.");
+            error!("File not processed. {path:?}: Mismatch in count types between the file location and the header in that file.");
             continue;
         }
 
@@ -533,8 +595,8 @@ fn main() {
             // Get the direction from the channel of count/metadata of filename.
             // Channel 1 is first direction, Channel 2 is the second (if any)
             let direction = match count.channel {
-                1 => directions.direction1,
-                2 => directions.direction2.unwrap(),
+                1 => metadata.directions.direction1,
+                2 => metadata.directions.direction2.unwrap(),
                 _ => {
                     error!("Unable to determine channel/direction.");
                     continue;
@@ -713,6 +775,18 @@ mod tests {
     }
 
     #[test]
+    fn vehicle_class_from_bad_num_errs() {
+        assert!(VehicleClass::from_num(15).is_err());
+    }
+
+    #[test]
+    fn vehicle_class_from_0_14_ok() {
+        for i in 0..=14 {
+            assert!(VehicleClass::from_num(i).is_ok())
+        }
+    }
+
+    #[test]
     fn time_binning_is_correct() {
         // 1st 15-minute bin
         let time = Time::from_hms(10, 0, 0).unwrap();
@@ -843,13 +917,13 @@ mod tests {
 
     #[test]
     fn metadata_parse_from_path_ok() {
-        let path = Path::new("test_files/vehicles/rc-166905-ew-40972-35.txt");
+        let path = Path::new("some/path/rc-166905-ew-40972-35.txt");
         let metadata = CountMetadata::new(path).unwrap();
         let expected_metadata = {
             CountMetadata {
-                technician: "rc",
+                technician: "rc".to_string(),
                 dvrpc_num: 166905,
-                directions: "ew",
+                directions: Directions::new(Direction::East, Some(Direction::West)),
                 counter_id: 40972,
                 speed_limit: 35,
             }
@@ -859,31 +933,101 @@ mod tests {
 
     #[test]
     fn metadata_parse_from_path_errs_if_too_few_parts() {
-        let path = Path::new("test_files/vehicles/rc-166905-ew-40972.txt");
-        assert!(CountMetadata::new(path).is_err())
+        let path = Path::new("some/path/rc-166905-ew-40972.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::TooFewParts,
+                ..
+            })
+        ))
     }
 
     #[test]
     fn metadata_parse_from_path_errs_if_too_many_parts() {
-        let path = Path::new("test_files/vehicles/rc-166905-ew-40972-35-extra.txt");
-        assert!(CountMetadata::new(path).is_err())
+        let path = Path::new("some/path/rc-166905-ew-40972-35-extra.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::TooManyParts,
+                ..
+            })
+        ))
     }
 
     #[test]
-    fn metadata_parse_from_path_errs_if_part2_bad() {
-        let path = Path::new("test_files/vehicles/rc-letters-ew-40972-35.txt");
-        assert!(CountMetadata::new(path).is_err())
+    fn metadata_parse_from_path_errs_if_technician_bad() {
+        let path = Path::new("some/path/12-letters-ew-40972-35.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::InvalidTech,
+                ..
+            })
+        ))
     }
 
     #[test]
-    fn metadata_parse_from_path_errs_if_part4_bad() {
-        let path = Path::new("test_files/vehicles/rc-166905-ew-letters-35.txt");
-        assert!(CountMetadata::new(path).is_err())
+    fn metadata_parse_from_path_errs_if_dvrpcnum_bad() {
+        let path = Path::new("some/path/rc-letters-ew-40972-35.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::InvalidRecordNum,
+                ..
+            })
+        ))
     }
 
     #[test]
-    fn metadata_parse_from_path_errs_if_part5_bad() {
-        let path = Path::new("test_files/vehicles/rc-166905-ew-40972-letters.txt");
-        assert!(CountMetadata::new(path).is_err())
+    fn metadata_parse_from_path_errs_if_directions_bad() {
+        let path = Path::new("some/path/rc-166905-eb-letters-35.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::InvalidDirections,
+                ..
+            })
+        ));
+        let path = Path::new("some/path/rc-166905-be-letters-35.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::InvalidDirections,
+                ..
+            })
+        ));
+        let path = Path::new("some/path/rc-166905-cc-letters-35.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::InvalidDirections,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn metadata_parse_from_path_errs_if_counter_id_bad() {
+        let path = Path::new("some/path/rc-166905-ew-letters-35.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::InvalidCounterID,
+                ..
+            })
+        ))
+    }
+
+    #[test]
+    fn metadata_parse_from_path_errs_if_speedlimit_bad() {
+        let path = Path::new("some/path/rc-166905-ew-40972-letters.txt");
+        assert!(matches!(
+            CountMetadata::new(path),
+            Err(CountError::InvalidFileName {
+                problem: FileNameProblem::InvalidSpeedLimit,
+                ..
+            })
+        ))
     }
 }
