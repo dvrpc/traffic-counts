@@ -540,7 +540,8 @@ fn main() {
     dotenvy::dotenv().expect("Unable to load .env file.");
 
     // Get env var for path where CSVs will be, panic if it doesn't exist.
-    let data_dir = env::var("DATA_DIR").expect("Unable to data directory path from .env file.");
+    let data_dir =
+        env::var("DATA_DIR").expect("Unable to load data directory path from .env file.");
 
     // Set up logging, panic if it fails.
     let config = ConfigBuilder::new().set_time_format_rfc3339().build();
@@ -563,16 +564,16 @@ fn main() {
     ])
     .expect("Could not configure logging.");
 
-    // The Oracle env vars aren't needed for a while, but if they aren't available, return
+    // The database env vars aren't needed for a while, but if they aren't available, return
     // early before doing any work.
-    match env::var("USERNAME") {
+    match env::var("DB_USERNAME") {
         Ok(v) => v,
         Err(e) => {
             error!("Unable to load username from .env file: {e}.");
             return;
         }
     };
-    match env::var("PASSWORD") {
+    match env::var("DB_PASSWORD") {
         Ok(v) => v,
         Err(e) => {
             error!("Unable to load password from .env file: {e}.");
