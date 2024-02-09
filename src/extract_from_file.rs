@@ -213,9 +213,16 @@ mod tests {
     }
 
     #[test]
-    fn extract_counts_gets_correct_number_of_counts() {
+    fn extract_counted_vehicle_gets_correct_number_of_counts() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
         let counted_vehicles = CountedVehicle::extract(path).unwrap();
         assert_eq!(counted_vehicles.len(), 8706);
+    }
+
+    #[test]
+    fn extract_fifteen_min_vehicle_gets_correct_number_of_counts() {
+        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
+        assert_eq!(fifteen_min_volcount.len(), 384)
     }
 }
