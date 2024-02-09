@@ -62,6 +62,11 @@ enum FileNameProblem {
     InvalidCounterID,
     InvalidSpeedLimit,
 }
+trait Extract {
+    type Item;
+
+    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError>;
+}
 
 /* Names of the 15 classifications from the FWA. See:
  * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
@@ -194,6 +199,51 @@ impl CountedVehicle {
     }
 }
 
+/// Extract CountedVehicle records from a file.
+impl Extract for CountedVehicle {
+    type Item = CountedVehicle;
+
+    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+        let data_file = File::open(path)?;
+        let mut rdr = create_reader(&data_file);
+
+        // Iterate through data rows (skipping metadata rows + 1 for header).
+        let mut counts = vec![];
+        for row in rdr
+            .records()
+            .skip(num_metadata_rows_to_skip(CountType::IndividualVehicle) + 1)
+        {
+            // Parse date.
+            let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
+            let date_col = &row.as_ref().unwrap()[1];
+            let count_date = Date::parse(date_col, &date_format).unwrap();
+
+            // Parse time.
+            let time_format =
+                format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
+            let time_col = &row.as_ref().unwrap()[2];
+            let count_time = Time::parse(time_col, &time_format).unwrap();
+
+            let count = match CountedVehicle::new(
+                count_date,
+                count_time,
+                row.as_ref().unwrap()[3].parse().unwrap(),
+                row.as_ref().unwrap()[4].parse().unwrap(),
+                row.as_ref().unwrap()[5].parse().unwrap(),
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("{e}");
+                    continue;
+                }
+            };
+
+            counts.push(count);
+        }
+        Ok(counts)
+    }
+}
+
 ///  FifteenMinuteVehicle - pre-binned, simple volume counts in 15-minute intervals.
 #[derive(Debug, Clone)]
 struct FifteenMinuteVehicle {
@@ -216,6 +266,66 @@ impl FifteenMinuteVehicle {
             count,
             direction,
         })
+    }
+}
+
+/// Extract FifteenMinuteVehicle records from a file.
+impl Extract for FifteenMinuteVehicle {
+    type Item = FifteenMinuteVehicle;
+
+    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+        let data_file = File::open(path)?;
+        let mut rdr = create_reader(&data_file);
+        let directions = CountMetadata::new(path)?.directions;
+
+        // Iterate through data rows (skipping metadata rows + 1 for header).
+        let mut counts = vec![];
+        for row in rdr
+            .records()
+            .skip(num_metadata_rows_to_skip(CountType::FifteenMinuteVehicle) + 1)
+        {
+            // Parse date.
+            let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
+            let date_col = &row.as_ref().unwrap()[1];
+            let count_date = Date::parse(date_col, &date_format).unwrap();
+
+            // Parse time.
+            let time_format = format_description!("[hour padding:none repr:12]:[minute] [period]");
+            let time_col = &row.as_ref().unwrap()[2];
+            let count_time = Time::parse(time_col, &time_format).unwrap();
+
+            // There will always be at least one count per row.
+            // Extract the first (and perhaps only) direction.
+            match FifteenMinuteVehicle::new(
+                count_date,
+                count_time,
+                row.as_ref().unwrap()[3].parse().unwrap(),
+                directions.direction1,
+            ) {
+                Ok(v) => counts.push(v),
+                Err(e) => {
+                    error!("{e}");
+                    continue;
+                }
+            };
+
+            // There may also be a second count within the row.
+            if let Some(v) = directions.direction2 {
+                match FifteenMinuteVehicle::new(
+                    count_date,
+                    count_time,
+                    row.as_ref().unwrap()[4].parse().unwrap(),
+                    v,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
+                };
+            }
+        }
+        Ok(counts)
     }
 }
 
@@ -635,17 +745,14 @@ fn determine_count_type(path: &Path) -> Result<CountType, CountError> {
 fn process_count(path: &Path) -> Result<(), CountError> {
     // Get count type and metatadata from file; create CSV reader over it.
     let count_type = determine_count_type(path)?;
-    let metadata = CountMetadata::new(path)?;
-    let data_file = File::open(path)?;
-    let rdr = create_reader(&data_file);
-
     // Process the file according to CountType
     info!("Extracting data from {path:?}, a {count_type:?} count.");
     match count_type {
         CountType::IndividualVehicle => {
             // Extract data from CSV/text file
-            let counted_vehicles = extract_counted_vehicle(rdr);
+            let counted_vehicles = CountedVehicle::extract(path)?;
 
+            let metadata = CountMetadata::new(path)?;
             // Create two counts from this: 15-minute speed count and 15-minute class count
             let (speed_range_count, vehicle_class_count) =
                 create_speed_and_class_count(metadata, counted_vehicles);
@@ -653,7 +760,7 @@ fn process_count(path: &Path) -> Result<(), CountError> {
             // TODO: enter these into the database
         }
         CountType::FifteenMinuteVehicle => {
-            let fifteen_min_volcount = extract_fifteen_minute_vehicle(rdr, metadata);
+            let fifteen_min_volcount = FifteenMinuteVehicle::extract(path)?;
 
             // As they are already binned by 15-minute period, these need to further processing.
             // TODO: enter into database.
@@ -662,100 +769,6 @@ fn process_count(path: &Path) -> Result<(), CountError> {
         CountType::FifteenMinutePedestrian => (),
     }
     Ok(())
-}
-
-/// Extract FifteenMinuteVehicle records from a file.
-fn extract_fifteen_minute_vehicle(
-    mut rdr: Reader<&File>,
-    count_metadata: CountMetadata,
-) -> Vec<FifteenMinuteVehicle> {
-    // Iterate through data rows (skipping metadata rows + 1 for header).
-    let mut counts = vec![];
-    let directions = count_metadata.directions;
-    for row in rdr
-        .records()
-        .skip(num_metadata_rows_to_skip(CountType::FifteenMinuteVehicle) + 1)
-    {
-        // Parse date.
-        let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
-        let date_col = &row.as_ref().unwrap()[1];
-        let count_date = Date::parse(date_col, &date_format).unwrap();
-
-        // Parse time.
-        let time_format = format_description!("[hour padding:none repr:12]:[minute] [period]");
-        let time_col = &row.as_ref().unwrap()[2];
-        let count_time = Time::parse(time_col, &time_format).unwrap();
-
-        // There will always be at least one count per record.
-        // Extract the first (and perhaps only) direction.
-        match FifteenMinuteVehicle::new(
-            count_date,
-            count_time,
-            row.as_ref().unwrap()[3].parse().unwrap(),
-            directions.direction1,
-        ) {
-            Ok(v) => counts.push(v),
-            Err(e) => {
-                error!("{e}");
-                continue;
-            }
-        };
-
-        // There may also be a second count within the record.
-        if let Some(v) = directions.direction2 {
-            match FifteenMinuteVehicle::new(
-                count_date,
-                count_time,
-                row.as_ref().unwrap()[4].parse().unwrap(),
-                v,
-            ) {
-                Ok(v) => counts.push(v),
-                Err(e) => {
-                    error!("{e}");
-                    continue;
-                }
-            };
-        }
-    }
-    counts
-}
-
-/// Extract CountedVehicle records from a file.
-fn extract_counted_vehicle(mut rdr: Reader<&File>) -> Vec<CountedVehicle> {
-    // Iterate through data rows (skipping metadata rows + 1 for header).
-    let mut counts = vec![];
-    for row in rdr
-        .records()
-        .skip(num_metadata_rows_to_skip(CountType::IndividualVehicle) + 1)
-    {
-        // Parse date.
-        let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
-        let date_col = &row.as_ref().unwrap()[1];
-        let count_date = Date::parse(date_col, &date_format).unwrap();
-
-        // Parse time.
-        let time_format =
-            format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
-        let time_col = &row.as_ref().unwrap()[2];
-        let count_time = Time::parse(time_col, &time_format).unwrap();
-
-        let count = match CountedVehicle::new(
-            count_date,
-            count_time,
-            row.as_ref().unwrap()[3].parse().unwrap(),
-            row.as_ref().unwrap()[4].parse().unwrap(),
-            row.as_ref().unwrap()[5].parse().unwrap(),
-        ) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("{e}");
-                continue;
-            }
-        };
-
-        counts.push(count);
-    }
-    counts
 }
 
 fn create_speed_and_class_count(
@@ -859,9 +872,7 @@ mod tests {
     #[test]
     fn extract_counts_gets_correct_number_of_counts() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let data_file = File::open(path).unwrap();
-        let rdr = create_reader(&data_file);
-        let counted_vehicles = extract_counted_vehicle(rdr);
+        let counted_vehicles = CountedVehicle::extract(path).unwrap();
         assert_eq!(counted_vehicles.len(), 8706);
     }
 
