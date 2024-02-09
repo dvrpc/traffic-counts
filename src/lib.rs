@@ -4,29 +4,17 @@
 //!    "VehicleCount" is the overall count spanning multiple days
 
 use std::collections::HashMap;
-use std::env;
-use std::fs::{self, File, OpenOptions};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use csv::{Reader, ReaderBuilder};
-use log::{error, info, LevelFilter};
-use simplelog::{
-    ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
-};
+use log::error;
 use thiserror::Error;
-use time::{macros::format_description, Date, PrimitiveDateTime, Time};
+use time::{Date, PrimitiveDateTime, Time};
 
-const INDIVIDUAL_VEHICLE_COUNT_HEADER: &str = "Veh. No.,Date,Time,Channel,Class,Speed";
-const FIFTEEN_MINUTE_VEHICLE_COUNT_HEADER1: &str = "Number,Date,Time,Channel 1";
-const FIFTEEN_MINUTE_VEHICLE_COUNT_HEADER2: &str = "Number,Date,Time,Channel 1,Channel 2";
-const FIFTEEN_MINUTE_BICYCLE_COUNT_HEADER: &str = "";
-const FIFTEEN_MINUTE_PEDESTRIAN_COUNT_HEADER: &str = "";
-
-const LOG: &str = "log.txt";
+pub mod extract_from_file;
 
 #[derive(Debug, Error)]
-enum CountError<'a> {
+pub enum CountError<'a> {
     #[error("problem with file or directory path")]
     BadPath(&'a Path),
     #[error("unable to open file `{0}`")]
@@ -53,7 +41,7 @@ enum CountError<'a> {
 }
 
 #[derive(Debug)]
-enum FileNameProblem {
+pub enum FileNameProblem {
     TooManyParts,
     TooFewParts,
     InvalidTech,
@@ -62,11 +50,6 @@ enum FileNameProblem {
     InvalidCounterID,
     InvalidSpeedLimit,
 }
-trait Extract {
-    type Item;
-
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError>;
-}
 
 /* Names of the 15 classifications from the FWA. See:
  * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
@@ -74,7 +57,7 @@ trait Extract {
  * <https://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/13091/002.cfm>
 */
 #[derive(Debug, Clone)]
-enum VehicleClass {
+pub enum VehicleClass {
     Motorcycles,                        // 1
     PassengerCars,                      // 2
     OtherFourTireSingleUnitVehicles,    // 3
@@ -92,7 +75,7 @@ enum VehicleClass {
 }
 
 impl VehicleClass {
-    fn from_num(num: u8) -> Result<Self, CountError<'static>> {
+    pub fn from_num(num: u8) -> Result<Self, CountError<'static>> {
         match num {
             1 => Ok(VehicleClass::Motorcycles),
             2 => Ok(VehicleClass::PassengerCars),
@@ -114,74 +97,25 @@ impl VehicleClass {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum CountType {
+pub enum CountType {
     FifteenMinuteBicycle,    // Eco-Counter
     FifteenMinutePedestrian, // Eco-Counter
     FifteenMinuteVehicle,    // 15-min binned data for the simple volume counts from StarNext/Jamar
     IndividualVehicle,       // Individual vehicles from StarNext/Jamar prior to any binning
 }
 
-impl CountType {
-    fn from_location(path: &Path) -> Result<CountType, CountError> {
-        // Get the directory immediately above the file.
-        let parent = path
-            .parent()
-            .ok_or(CountError::BadPath(path))?
-            .components()
-            .last()
-            .ok_or(CountError::BadPath(path))?
-            .as_os_str()
-            .to_str()
-            .ok_or(CountError::BadPath(path))?;
-
-        match parent.to_lowercase().as_str() {
-            "15minutebicycle" => Ok(CountType::FifteenMinuteBicycle),
-            "15minutepedestrian" => Ok(CountType::FifteenMinutePedestrian),
-            "15minutevehicle" => Ok(CountType::FifteenMinuteVehicle),
-            "vehicle" => Ok(CountType::IndividualVehicle),
-            _ => Err(CountError::BadLocation(format!("{path:?}"))),
-        }
-    }
-
-    fn from_header(path: &Path, location_count_type: CountType) -> Result<CountType, CountError> {
-        // `location_count_type` is what we expect this file to be, based off its location. We use
-        // this because different types of counts can have a variable number of metadata rows.
-
-        let file = File::open(path)?;
-        let mut rdr = create_reader(&file);
-        let header = rdr
-            .records()
-            .skip(num_metadata_rows_to_skip(location_count_type))
-            .take(1)
-            .last()
-            .ok_or(CountError::MissingHeader(path))?
-            .map_err(CountError::HeadertoStringRecordError)?
-            .iter()
-            .map(|x| x.trim().to_string())
-            .collect::<Vec<String>>()
-            .join(",");
-
-        match header.as_str() {
-            v if v == INDIVIDUAL_VEHICLE_COUNT_HEADER => Ok(CountType::IndividualVehicle),
-            v if v == FIFTEEN_MINUTE_VEHICLE_COUNT_HEADER1 => Ok(CountType::FifteenMinuteVehicle),
-            v if v == FIFTEEN_MINUTE_VEHICLE_COUNT_HEADER2 => Ok(CountType::FifteenMinuteVehicle),
-            _ => Err(CountError::BadHeader(path)),
-        }
-    }
-}
-
 // CountedVehicle - the raw, unbinned data
 #[derive(Debug, Clone)]
-struct CountedVehicle {
-    date: Date,
-    time: Time,
-    channel: u8,
-    class: VehicleClass,
-    speed: f32,
+pub struct CountedVehicle {
+    pub date: Date,
+    pub time: Time,
+    pub channel: u8,
+    pub class: VehicleClass,
+    pub speed: f32,
 }
 
 impl CountedVehicle {
-    fn new(
+    pub fn new(
         date: Date,
         time: Time,
         channel: u8,
@@ -199,62 +133,17 @@ impl CountedVehicle {
     }
 }
 
-/// Extract CountedVehicle records from a file.
-impl Extract for CountedVehicle {
-    type Item = CountedVehicle;
-
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
-        let data_file = File::open(path)?;
-        let mut rdr = create_reader(&data_file);
-
-        // Iterate through data rows (skipping metadata rows + 1 for header).
-        let mut counts = vec![];
-        for row in rdr
-            .records()
-            .skip(num_metadata_rows_to_skip(CountType::IndividualVehicle) + 1)
-        {
-            // Parse date.
-            let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
-            let date_col = &row.as_ref().unwrap()[1];
-            let count_date = Date::parse(date_col, &date_format).unwrap();
-
-            // Parse time.
-            let time_format =
-                format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
-            let time_col = &row.as_ref().unwrap()[2];
-            let count_time = Time::parse(time_col, &time_format).unwrap();
-
-            let count = match CountedVehicle::new(
-                count_date,
-                count_time,
-                row.as_ref().unwrap()[3].parse().unwrap(),
-                row.as_ref().unwrap()[4].parse().unwrap(),
-                row.as_ref().unwrap()[5].parse().unwrap(),
-            ) {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("{e}");
-                    continue;
-                }
-            };
-
-            counts.push(count);
-        }
-        Ok(counts)
-    }
-}
-
 ///  FifteenMinuteVehicle - pre-binned, simple volume counts in 15-minute intervals.
 #[derive(Debug, Clone)]
-struct FifteenMinuteVehicle {
-    date: Date,
-    time: Time,
-    count: u8,
-    direction: Direction,
+pub struct FifteenMinuteVehicle {
+    pub date: Date,
+    pub time: Time,
+    pub count: u8,
+    pub direction: Direction,
 }
 
 impl FifteenMinuteVehicle {
-    fn new(
+    pub fn new(
         date: Date,
         time: Time,
         count: u8,
@@ -269,83 +158,24 @@ impl FifteenMinuteVehicle {
     }
 }
 
-/// Extract FifteenMinuteVehicle records from a file.
-impl Extract for FifteenMinuteVehicle {
-    type Item = FifteenMinuteVehicle;
-
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
-        let data_file = File::open(path)?;
-        let mut rdr = create_reader(&data_file);
-        let directions = CountMetadata::new(path)?.directions;
-
-        // Iterate through data rows (skipping metadata rows + 1 for header).
-        let mut counts = vec![];
-        for row in rdr
-            .records()
-            .skip(num_metadata_rows_to_skip(CountType::FifteenMinuteVehicle) + 1)
-        {
-            // Parse date.
-            let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
-            let date_col = &row.as_ref().unwrap()[1];
-            let count_date = Date::parse(date_col, &date_format).unwrap();
-
-            // Parse time.
-            let time_format = format_description!("[hour padding:none repr:12]:[minute] [period]");
-            let time_col = &row.as_ref().unwrap()[2];
-            let count_time = Time::parse(time_col, &time_format).unwrap();
-
-            // There will always be at least one count per row.
-            // Extract the first (and perhaps only) direction.
-            match FifteenMinuteVehicle::new(
-                count_date,
-                count_time,
-                row.as_ref().unwrap()[3].parse().unwrap(),
-                directions.direction1,
-            ) {
-                Ok(v) => counts.push(v),
-                Err(e) => {
-                    error!("{e}");
-                    continue;
-                }
-            };
-
-            // There may also be a second count within the row.
-            if let Some(v) = directions.direction2 {
-                match FifteenMinuteVehicle::new(
-                    count_date,
-                    count_time,
-                    row.as_ref().unwrap()[4].parse().unwrap(),
-                    v,
-                ) {
-                    Ok(v) => counts.push(v),
-                    Err(e) => {
-                        error!("{e}");
-                        continue;
-                    }
-                };
-            }
-        }
-        Ok(counts)
-    }
-}
-
-/// A count's metadata is contained within its filename. Each part is separate by a dash (-).
-/// technician-dvrpc_num-directions-counter_id-speed_limit.csv/txt
-/// e.g. rc-166905-ew-40972-35.txt
+// The metadata of a count.
 #[derive(Debug, Clone, PartialEq)]
-struct CountMetadata {
-    technician: String, // initials
-    dvrpc_num: i32,
-    directions: Directions,
-    counter_id: i32,
-    speed_limit: Option<i32>,
+pub struct CountMetadata {
+    pub technician: String, // initials
+    pub dvrpc_num: i32,
+    pub directions: Directions,
+    pub counter_id: i32,
+    pub speed_limit: Option<i32>,
     // start_datetime: PrimitiveDateTime,
     // site_code: usize,
     // station_id: Option<usize>,
 }
 
+/// A count's metadata is contained within its filename. Each part is separate by a dash (-).
+/// technician-dvrpc_num-directions-counter_id-speed_limit.csv/txt
+/// e.g. rc-166905-ew-40972-35.txt
 impl CountMetadata {
-    fn new(path: &Path) -> Result<Self, CountError> {
+    pub fn from_path(path: &Path) -> Result<Self, CountError> {
         let parts: Vec<&str> = path
             .file_stem()
             .ok_or(CountError::BadPath(path))?
@@ -445,7 +275,7 @@ impl CountMetadata {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Direction {
+pub enum Direction {
     North,
     East,
     South,
@@ -453,13 +283,13 @@ enum Direction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Directions {
-    direction1: Direction,
-    direction2: Option<Direction>,
+pub struct Directions {
+    pub direction1: Direction,
+    pub direction2: Option<Direction>,
 }
 
 impl Directions {
-    fn new(direction1: Direction, direction2: Option<Direction>) -> Self {
+    pub fn new(direction1: Direction, direction2: Option<Direction>) -> Self {
         Self {
             direction1,
             direction2,
@@ -468,40 +298,40 @@ impl Directions {
 }
 
 /// Represents a row in TC_CLACOUNT table
-type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
+pub type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
 /// Represents a row in TC_SPECOUNT table
-type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
+pub type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-struct BinnedCountKey {
-    datetime: PrimitiveDateTime,
-    channel: u8,
+pub struct BinnedCountKey {
+    pub datetime: PrimitiveDateTime,
+    pub channel: u8,
 }
 
 /// Count of vehicles by vehicle class in some non-specific time period.
 #[derive(Debug, Clone, Copy)]
-struct VehicleClassCount {
-    dvrpc_num: i32,
-    direction: Direction,
-    c1: i32,
-    c2: i32,
-    c3: i32,
-    c4: i32,
-    c5: i32,
-    c6: i32,
-    c7: i32,
-    c8: i32,
-    c9: i32,
-    c10: i32,
-    c11: i32,
-    c12: i32,
-    c13: i32,
-    c15: i32,
-    total: i32,
+pub struct VehicleClassCount {
+    pub dvrpc_num: i32,
+    pub direction: Direction,
+    pub c1: i32,
+    pub c2: i32,
+    pub c3: i32,
+    pub c4: i32,
+    pub c5: i32,
+    pub c6: i32,
+    pub c7: i32,
+    pub c8: i32,
+    pub c9: i32,
+    pub c10: i32,
+    pub c11: i32,
+    pub c12: i32,
+    pub c13: i32,
+    pub c15: i32,
+    pub total: i32,
 }
 
 impl VehicleClassCount {
-    fn new(dvrpc_num: i32, direction: Direction) -> Self {
+    pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
         Self {
             dvrpc_num,
             direction,
@@ -522,7 +352,7 @@ impl VehicleClassCount {
             total: 0,
         }
     }
-    fn insert(&mut self, class: VehicleClass) -> &Self {
+    pub fn insert(&mut self, class: VehicleClass) -> &Self {
         match class {
             VehicleClass::Motorcycles => self.c1 += 1,
             VehicleClass::PassengerCars => self.c2 += 1,
@@ -551,29 +381,29 @@ impl VehicleClassCount {
 
 /// Count of vehicles by speed range in some non-specific time period.
 #[derive(Debug, Clone, Copy)]
-struct SpeedRangeCount {
-    dvrpc_num: i32,
-    direction: Direction,
-    s1: i32,
-    s2: i32,
-    s3: i32,
-    s4: i32,
-    s5: i32,
-    s6: i32,
-    s7: i32,
-    s8: i32,
-    s9: i32,
-    s10: i32,
-    s11: i32,
-    s12: i32,
-    s13: i32,
-    s14: i32,
-    total: i32,
+pub struct SpeedRangeCount {
+    pub dvrpc_num: i32,
+    pub direction: Direction,
+    pub s1: i32,
+    pub s2: i32,
+    pub s3: i32,
+    pub s4: i32,
+    pub s5: i32,
+    pub s6: i32,
+    pub s7: i32,
+    pub s8: i32,
+    pub s9: i32,
+    pub s10: i32,
+    pub s11: i32,
+    pub s12: i32,
+    pub s13: i32,
+    pub s14: i32,
+    pub total: i32,
 }
 
 impl SpeedRangeCount {
     // Create a SpeedRangeCount with 0 count for all speed ranges.
-    fn new(dvrpc_num: i32, direction: Direction) -> Self {
+    pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
         Self {
             dvrpc_num,
             direction,
@@ -594,7 +424,7 @@ impl SpeedRangeCount {
             total: 0,
         }
     }
-    fn insert(&mut self, speed: f32) -> Result<&Self, CountError> {
+    pub fn insert(&mut self, speed: f32) -> Result<&Self, CountError> {
         if speed.is_sign_negative() {
             return Err(CountError::InvalidSpeed(speed));
         }
@@ -645,133 +475,7 @@ impl SpeedRangeCount {
     }
 }
 
-fn main() {
-    // Load file containing environment variables, panic if it doesn't exist.
-    dotenvy::dotenv().expect("Unable to load .env file.");
-
-    // Get env var for path where CSVs will be, panic if it doesn't exist.
-    let data_dir =
-        env::var("DATA_DIR").expect("Unable to load data directory path from .env file.");
-
-    // Set up logging, panic if it fails.
-    let config = ConfigBuilder::new().set_time_format_rfc3339().build();
-    CombinedLogger::init(vec![
-        TermLogger::new(
-            LevelFilter::Debug,
-            config.clone(),
-            TerminalMode::Mixed,
-            ColorChoice::Auto,
-        ),
-        WriteLogger::new(
-            LevelFilter::Info,
-            config,
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(format!("{data_dir}/{LOG}"))
-                .expect("Could not open log file."),
-        ),
-    ])
-    .expect("Could not configure logging.");
-
-    // The database env vars aren't needed for a while, but if they aren't available, return
-    // early before doing any work.
-    match env::var("DB_USERNAME") {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Unable to load username from .env file: {e}.");
-            return;
-        }
-    };
-    match env::var("DB_PASSWORD") {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Unable to load password from .env file: {e}.");
-            return;
-        }
-    };
-
-    // Get all the paths of the files that need to be processed.
-    let mut paths = vec![];
-    let paths = match collect_paths(data_dir.into(), &mut paths) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("{e}");
-            return;
-        }
-    };
-
-    // Iterate through all paths, extacting the data from the files, transforming it into the
-    // desired shape, and loading it into the database.
-    // Exactly how the data is processed depends on what `CountType` it is.
-    for path in paths {
-        match process_count(path) {
-            Ok(()) => (),
-            // If there's an error, log it and continue to next file.
-            Err(e) => {
-                error!("{path:?} not processed: {e}");
-                continue;
-            }
-        }
-    }
-}
-
-/// Collect all the file paths to extract data from.
-fn collect_paths(dir: PathBuf, paths: &mut Vec<PathBuf>) -> io::Result<&mut Vec<PathBuf>> {
-    for entry in fs::read_dir(dir)? {
-        let path = entry?.path();
-
-        if path.is_dir() {
-            collect_paths(path, paths)?;
-        } else if let Some(v) = path.file_name() {
-            if v != LOG {
-                paths.push(path)
-            }
-        }
-    }
-    Ok(paths)
-}
-
-fn determine_count_type(path: &Path) -> Result<CountType, CountError> {
-    let count_type_from_location = CountType::from_location(path)?;
-    let count_type_from_header = CountType::from_header(path, count_type_from_location)?;
-    if count_type_from_location != count_type_from_header {
-        return Err(CountError::LocationHeaderMisMatch(path));
-    }
-    Ok(count_type_from_location)
-}
-
-/// Process count - extract from file, transform, load into database.
-fn process_count(path: &Path) -> Result<(), CountError> {
-    // Get count type and metatadata from file; create CSV reader over it.
-    let count_type = determine_count_type(path)?;
-    // Process the file according to CountType
-    info!("Extracting data from {path:?}, a {count_type:?} count.");
-    match count_type {
-        CountType::IndividualVehicle => {
-            // Extract data from CSV/text file
-            let counted_vehicles = CountedVehicle::extract(path)?;
-
-            let metadata = CountMetadata::new(path)?;
-            // Create two counts from this: 15-minute speed count and 15-minute class count
-            let (speed_range_count, vehicle_class_count) =
-                create_speed_and_class_count(metadata, counted_vehicles);
-
-            // TODO: enter these into the database
-        }
-        CountType::FifteenMinuteVehicle => {
-            let fifteen_min_volcount = FifteenMinuteVehicle::extract(path)?;
-
-            // As they are already binned by 15-minute period, these need to further processing.
-            // TODO: enter into database.
-        }
-        CountType::FifteenMinuteBicycle => (),
-        CountType::FifteenMinutePedestrian => (),
-    }
-    Ok(())
-}
-
-fn create_speed_and_class_count(
+pub fn create_speed_and_class_count(
     metadata: CountMetadata,
     counts: Vec<CountedVehicle>,
 ) -> (FifteenMinuteSpeedRangeCount, FifteenMinuteVehicleClassCount) {
@@ -829,7 +533,7 @@ fn create_speed_and_class_count(
 }
 
 /// Put time into four bins per hour.
-fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
+pub fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
     let time = time.replace_second(0)?;
     match time.minute() {
         0..=14 => Ok(time.replace_minute(0)?),
@@ -839,42 +543,9 @@ fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
     }
 }
 
-/// Create CSV reader from file.
-fn create_reader(file: &File) -> Reader<&File> {
-    ReaderBuilder::new()
-        .has_headers(false)
-        .trim(csv::Trim::All)
-        .flexible(true)
-        .from_reader(file)
-}
-
-fn num_metadata_rows_to_skip(count_type: CountType) -> usize {
-    match count_type {
-        CountType::IndividualVehicle => 3,
-        CountType::FifteenMinuteVehicle => 4,
-        _ => 8,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn count_type_vehicle_ok() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let ct_from_location = CountType::from_location(path).unwrap();
-        let ct_from_header = CountType::from_header(path, ct_from_location).unwrap();
-        assert_eq!(&ct_from_location, &ct_from_header);
-        assert_eq!(ct_from_location, CountType::IndividualVehicle);
-    }
-
-    #[test]
-    fn extract_counts_gets_correct_number_of_counts() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let counted_vehicles = CountedVehicle::extract(path).unwrap();
-        assert_eq!(counted_vehicles.len(), 8706);
-    }
 
     #[test]
     fn vehicle_class_from_bad_num_errs() {
@@ -1020,7 +691,7 @@ mod tests {
     #[test]
     fn metadata_parse_from_path_ok() {
         let path = Path::new("some/path/rc-166905-ew-40972-35.txt");
-        let metadata = CountMetadata::new(path).unwrap();
+        let metadata = CountMetadata::from_path(path).unwrap();
         let expected_metadata = {
             CountMetadata {
                 technician: "rc".to_string(),
@@ -1036,7 +707,7 @@ mod tests {
     #[test]
     fn metadata_parse_from_path_ok_with_na_speed_limit() {
         let path = Path::new("some/path/rc-166905-ew-40972-na.txt");
-        let metadata = CountMetadata::new(path).unwrap();
+        let metadata = CountMetadata::from_path(path).unwrap();
         let expected_metadata = {
             CountMetadata {
                 technician: "rc".to_string(),
@@ -1053,7 +724,7 @@ mod tests {
     fn metadata_parse_from_path_errs_if_too_few_parts() {
         let path = Path::new("some/path/rc-166905-ew-40972.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::TooFewParts,
                 ..
@@ -1065,7 +736,7 @@ mod tests {
     fn metadata_parse_from_path_errs_if_too_many_parts() {
         let path = Path::new("some/path/rc-166905-ew-40972-35-extra.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::TooManyParts,
                 ..
@@ -1077,7 +748,7 @@ mod tests {
     fn metadata_parse_from_path_errs_if_technician_bad() {
         let path = Path::new("some/path/12-letters-ew-40972-35.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidTech,
                 ..
@@ -1089,7 +760,7 @@ mod tests {
     fn metadata_parse_from_path_errs_if_dvrpcnum_bad() {
         let path = Path::new("some/path/rc-letters-ew-40972-35.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidRecordNum,
                 ..
@@ -1101,7 +772,7 @@ mod tests {
     fn metadata_parse_from_path_errs_if_directions_bad() {
         let path = Path::new("some/path/rc-166905-eb-letters-35.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidDirections,
                 ..
@@ -1109,7 +780,7 @@ mod tests {
         ));
         let path = Path::new("some/path/rc-166905-be-letters-35.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidDirections,
                 ..
@@ -1117,7 +788,7 @@ mod tests {
         ));
         let path = Path::new("some/path/rc-166905-cc-letters-35.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidDirections,
                 ..
@@ -1129,7 +800,7 @@ mod tests {
     fn metadata_parse_from_path_errs_if_counter_id_bad() {
         let path = Path::new("some/path/rc-166905-ew-letters-35.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidCounterID,
                 ..
@@ -1141,7 +812,7 @@ mod tests {
     fn metadata_parse_from_path_errs_if_speedlimit_bad() {
         let path = Path::new("some/path/rc-166905-ew-40972-abc.txt");
         assert!(matches!(
-            CountMetadata::new(path),
+            CountMetadata::from_path(path),
             Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidSpeedLimit,
                 ..
