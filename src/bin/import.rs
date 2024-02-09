@@ -123,7 +123,7 @@ fn process_count(path: &Path) -> Result<(), CountError> {
         CountType::FifteenMinuteVehicle => {
             let fifteen_min_volcount = FifteenMinuteVehicle::extract(path)?;
 
-            // As they are already binned by 15-minute period, these need to further processing.
+            // As they are already binned by 15-minute period, these need no further processing.
             // TODO: enter into database.
         }
         CountType::FifteenMinuteBicycle => (),

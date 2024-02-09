@@ -1,7 +1,4 @@
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
-//! Naming convention in this program:
-//!  - "CountedVehicle" is the individual vehicle that got counted
-//!    "VehicleCount" is the overall count spanning multiple days
 
 use std::collections::HashMap;
 use std::io;
@@ -40,6 +37,7 @@ pub enum CountError<'a> {
     HeadertoStringRecordError(#[from] csv::Error),
 }
 
+/// Identifying the problem when there's an error with a filename.
 #[derive(Debug)]
 pub enum FileNameProblem {
     TooManyParts,
@@ -51,11 +49,12 @@ pub enum FileNameProblem {
     InvalidSpeedLimit,
 }
 
-/* Names of the 15 classifications from the FWA. See:
- * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
- * <https://www.fhwa.dot.gov/policyinformation/tmguide/tmg_2013/vehicle-types.cfm>
- * <https://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/13091/002.cfm>
-*/
+/// Names of the 15 classifications from the FWA.
+///
+/// See:
+///  * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
+///  * <https://www.fhwa.dot.gov/policyinformation/tmguide/tmg_2013/vehicle-types.cfm>
+///  * <https://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/13091/002.cfm>
 #[derive(Debug, Clone)]
 pub enum VehicleClass {
     Motorcycles,                        // 1
@@ -75,6 +74,7 @@ pub enum VehicleClass {
 }
 
 impl VehicleClass {
+    /// Create a VehicleClass from a number.
     pub fn from_num(num: u8) -> Result<Self, CountError<'static>> {
         match num {
             1 => Ok(VehicleClass::Motorcycles),
@@ -104,7 +104,7 @@ pub enum CountType {
     IndividualVehicle,       // Individual vehicles from StarNext/Jamar prior to any binning
 }
 
-// CountedVehicle - the raw, unbinned data
+/// A vehicle that has been counted, with no binning applied to it.
 #[derive(Debug, Clone)]
 pub struct CountedVehicle {
     pub date: Date,
@@ -133,7 +133,7 @@ impl CountedVehicle {
     }
 }
 
-///  FifteenMinuteVehicle - pre-binned, simple volume counts in 15-minute intervals.
+///  Pre-binned, simple volume counts in 15-minute intervals.
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
     pub date: Date,
@@ -158,7 +158,7 @@ impl FifteenMinuteVehicle {
     }
 }
 
-// The metadata of a count.
+/// The metadata of a count.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CountMetadata {
     pub technician: String, // initials
@@ -166,15 +166,14 @@ pub struct CountMetadata {
     pub directions: Directions,
     pub counter_id: i32,
     pub speed_limit: Option<i32>,
-    // start_datetime: PrimitiveDateTime,
-    // site_code: usize,
-    // station_id: Option<usize>,
 }
 
-/// A count's metadata is contained within its filename. Each part is separate by a dash (-).
-/// technician-dvrpc_num-directions-counter_id-speed_limit.csv/txt
-/// e.g. rc-166905-ew-40972-35.txt
 impl CountMetadata {
+    /// Get a count's metadata from its path.
+    ///
+    /// In the filename, each field is separate by a dash (-).
+    /// technician-dvrpc_num-directions-counter_id-speed_limit.csv/txt
+    /// e.g. rc-166905-ew-40972-35.txt
     pub fn from_path(path: &Path) -> Result<Self, CountError> {
         let parts: Vec<&str> = path
             .file_stem()
@@ -274,6 +273,7 @@ impl CountMetadata {
     }
 }
 
+/// The direction of a lane.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
     North,
@@ -282,6 +282,7 @@ pub enum Direction {
     West,
 }
 
+/// The directions that a count could contain.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Directions {
     pub direction1: Direction,
@@ -297,18 +298,11 @@ impl Directions {
     }
 }
 
-/// Represents a row in TC_CLACOUNT table
-pub type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
-/// Represents a row in TC_SPECOUNT table
-pub type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct BinnedCountKey {
-    pub datetime: PrimitiveDateTime,
-    pub channel: u8,
-}
-
 /// Count of vehicles by vehicle class in some non-specific time period.
+///
+/// Note: unclassified vehicles are counted in `c15` field, but also are included in the `c2`
+/// (Passenger Cars). Thus, a simple sum of fields `c1` through `c15` would double-count
+/// unclassified vehicles.
 #[derive(Debug, Clone, Copy)]
 pub struct VehicleClassCount {
     pub dvrpc_num: i32,
@@ -331,6 +325,7 @@ pub struct VehicleClassCount {
 }
 
 impl VehicleClassCount {
+    /// Create a new, empty count.
     pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
         Self {
             dvrpc_num,
@@ -352,6 +347,7 @@ impl VehicleClassCount {
             total: 0,
         }
     }
+    /// Insert individual counted vehicles into count.
     pub fn insert(&mut self, class: VehicleClass) -> &Self {
         match class {
             VehicleClass::Motorcycles => self.c1 += 1,
@@ -402,7 +398,7 @@ pub struct SpeedRangeCount {
 }
 
 impl SpeedRangeCount {
-    // Create a SpeedRangeCount with 0 count for all speed ranges.
+    /// Create a SpeedRangeCount with 0 count for all speed ranges.
     pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
         Self {
             dvrpc_num,
@@ -424,6 +420,7 @@ impl SpeedRangeCount {
             total: 0,
         }
     }
+    /// Insert individual vehicle into count.
     pub fn insert(&mut self, speed: f32) -> Result<&Self, CountError> {
         if speed.is_sign_negative() {
             return Err(CountError::InvalidSpeed(speed));
@@ -475,6 +472,20 @@ impl SpeedRangeCount {
     }
 }
 
+type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
+type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
+
+/// Identifies the time and lane for binning vehicle class/speeds.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct BinnedCountKey {
+    pub datetime: PrimitiveDateTime,
+    pub channel: u8,
+}
+
+/// Create the 15-minute binned class and speed counts.
+///
+/// `FifteenMinuteVehicleClassCount` corresponds to a row in the TC_CLACOUNT table.
+/// `FifteenMinuteSpeedRangeCount` corresponds to a row in the TC_SPECOUNT table.
 pub fn create_speed_and_class_count(
     metadata: CountMetadata,
     counts: Vec<CountedVehicle>,
