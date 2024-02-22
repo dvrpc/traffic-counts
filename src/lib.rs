@@ -138,7 +138,7 @@ impl CountedVehicle {
 pub struct FifteenMinuteVehicle {
     pub date: Date,
     pub time: Time,
-    pub count: u8,
+    pub count: u16,
     pub direction: Direction,
 }
 
@@ -146,7 +146,7 @@ impl FifteenMinuteVehicle {
     pub fn new(
         date: Date,
         time: Time,
-        count: u8,
+        count: u16,
         direction: Direction,
     ) -> Result<Self, CountError<'static>> {
         Ok(Self {
@@ -274,7 +274,7 @@ impl CountMetadata {
 }
 
 /// The direction of a lane.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
     North,
     East,
@@ -541,6 +541,286 @@ pub fn create_speed_and_class_count(
         fifteen_min_speed_range_count,
         fifteen_min_vehicle_class_count,
     )
+}
+
+/// Represents a row in the TC_VOLCOUNT table, which does not have hour fields normalized, but a
+/// different field for each hour of the day.
+type NonNormalVolCount = HashMap<NonNormalVolCountKey, NonNormalVolCountValue>;
+
+/// Identifies the primary key for records of the TC_VOLCOUNT table.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct NonNormalVolCountKey {
+    pub dvrpc_num: i32,
+    pub date: Date,
+    pub direction: Direction,
+}
+
+/// Possible weather values.
+// TODO: needs fixed - this is just a guess
+// TODO: eventually how weather is entered needs overhauled
+#[derive(Debug, Clone, Copy)]
+pub enum Weather {
+    Fair,
+    Rain,
+    Sunny,
+}
+
+/// The rest of the fields in the TC_VOLCOUNT table.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NonNormalVolCountValue {
+    pub setflag: Option<i32>,
+    pub totalcount: Option<i32>,
+    pub weather: Option<Weather>,
+    pub am12: Option<i32>,
+    pub am1: Option<i32>,
+    pub am2: Option<i32>,
+    pub am3: Option<i32>,
+    pub am4: Option<i32>,
+    pub am5: Option<i32>,
+    pub am6: Option<i32>,
+    pub am7: Option<i32>,
+    pub am8: Option<i32>,
+    pub am9: Option<i32>,
+    pub am10: Option<i32>,
+    pub am11: Option<i32>,
+    pub pm12: Option<i32>,
+    pub pm1: Option<i32>,
+    pub pm2: Option<i32>,
+    pub pm3: Option<i32>,
+    pub pm4: Option<i32>,
+    pub pm5: Option<i32>,
+    pub pm6: Option<i32>,
+    pub pm7: Option<i32>,
+    pub pm8: Option<i32>,
+    pub pm9: Option<i32>,
+    pub pm10: Option<i32>,
+    pub pm11: Option<i32>,
+}
+
+impl NonNormalVolCountValue {
+    /// Create a NonNormalVolCountValue with `None` for everything except
+    /// the total and the first hour/count, which will be `Some(1)`.
+    pub fn new(hour: u8) -> Self {
+        let mut value = Self {
+            ..Default::default()
+        };
+
+        match hour {
+            0 => value.am12 = Some(1),
+            1 => value.am1 = Some(1),
+            2 => value.am2 = Some(1),
+            3 => value.am3 = Some(1),
+            4 => value.am4 = Some(1),
+            5 => value.am5 = Some(1),
+            6 => value.am6 = Some(1),
+            7 => value.am7 = Some(1),
+            8 => value.am8 = Some(1),
+            9 => value.am9 = Some(1),
+            10 => value.am10 = Some(1),
+            11 => value.am11 = Some(1),
+            12 => value.pm12 = Some(1),
+            13 => value.pm1 = Some(1),
+            14 => value.pm2 = Some(1),
+            15 => value.pm3 = Some(1),
+            16 => value.pm4 = Some(1),
+            17 => value.pm5 = Some(1),
+            18 => value.pm6 = Some(1),
+            19 => value.pm7 = Some(1),
+            20 => value.pm8 = Some(1),
+            21 => value.pm9 = Some(1),
+            22 => value.pm10 = Some(1),
+            23 => value.pm11 = Some(1),
+            _ => (), // ok, because time.hour() can only be 0-23
+        }
+        value
+    }
+}
+
+/// Aggregate `CountedVehicles` into the shape of the TC_VOLCOUNT table.
+pub fn create_non_normal_volcount(
+    metadata: CountMetadata,
+    counts: Vec<CountedVehicle>,
+) -> NonNormalVolCount {
+    let mut non_normal_vol_count: NonNormalVolCount = HashMap::new();
+
+    for count in counts {
+        // Get the direction from the channel of count/metadata of filename.
+        // Channel 1 is first direction, Channel 2 is the second (if any)
+        let direction = match count.channel {
+            1 => metadata.directions.direction1,
+            2 => metadata.directions.direction2.unwrap(),
+            _ => {
+                error!("Unable to determine channel/direction.");
+                continue;
+            }
+        };
+
+        let key = NonNormalVolCountKey {
+            dvrpc_num: metadata.dvrpc_num,
+            date: count.date,
+            direction,
+        };
+
+        // Add new entry if necessary, then insert data.
+        non_normal_vol_count
+            .entry(key)
+            .and_modify(|c| {
+                c.totalcount = match c.totalcount {
+                    Some(v) => Some(v + 1),
+                    None => Some(1),
+                };
+                match count.time.hour() {
+                    0 => {
+                        c.am12 = match c.am12 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    1 => {
+                        c.am1 = match c.am1 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    2 => {
+                        c.am2 = match c.am2 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    3 => {
+                        c.am3 = match c.am3 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    4 => {
+                        c.am4 = match c.am4 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    5 => {
+                        c.am5 = match c.am5 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    6 => {
+                        c.am6 = match c.am6 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    7 => {
+                        c.am7 = match c.am7 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    8 => {
+                        c.am8 = match c.am8 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    9 => {
+                        c.am9 = match c.am9 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    10 => {
+                        c.am10 = match c.am10 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    11 => {
+                        c.am11 = match c.am11 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    12 => {
+                        c.pm12 = match c.pm12 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    13 => {
+                        c.pm1 = match c.pm1 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    14 => {
+                        c.pm2 = match c.pm2 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    15 => {
+                        c.pm3 = match c.pm3 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    16 => {
+                        c.pm4 = match c.pm4 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    17 => {
+                        c.pm5 = match c.pm5 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    18 => {
+                        c.pm6 = match c.pm6 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    19 => {
+                        c.pm7 = match c.pm7 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    20 => {
+                        c.pm8 = match c.pm8 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    21 => {
+                        c.pm9 = match c.pm9 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    22 => {
+                        c.pm10 = match c.pm10 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    23 => {
+                        c.pm11 = match c.pm11 {
+                            Some(v) => Some(v + 1),
+                            None => Some(1),
+                        }
+                    }
+                    _ => (),
+                };
+            })
+            .or_insert(NonNormalVolCountValue::new(count.time.hour()));
+    }
+
+    non_normal_vol_count
 }
 
 /// Put time into four bins per hour.

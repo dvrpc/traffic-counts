@@ -114,9 +114,21 @@ fn process_count(path: &Path) -> Result<(), CountError> {
             let counted_vehicles = CountedVehicle::extract(path)?;
 
             let metadata = CountMetadata::from_path(path)?;
+
             // Create two counts from this: 15-minute speed count and 15-minute class count
+            // TODO: this could also be for other intervals - the function is probably too
+            // specific as is and should take desired interval as parameter
             let (speed_range_count, vehicle_class_count) =
-                create_speed_and_class_count(metadata, counted_vehicles);
+                create_speed_and_class_count(metadata.clone(), counted_vehicles.clone());
+
+            dbg!(vehicle_class_count);
+
+            // Create records for the non-normalized TC_VOLCOUNT table.
+            // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
+            // hour field and count)
+            let non_normal_volcount = create_non_normal_volcount(metadata, counted_vehicles);
+
+            dbg!(non_normal_volcount);
 
             // TODO: enter these into the database
         }
