@@ -650,14 +650,6 @@ pub fn create_non_normal_volcount(
     metadata: CountMetadata,
     counts: Vec<CountedVehicle>,
 ) -> NonNormalVolCount {
-    // Convenience fn to make the `and_modify` part below more concise.
-    fn increment_option_inner(field: Option<i32>) -> Option<i32> {
-        match field {
-            Some(v) => Some(v + 1),
-            None => Some(1),
-        }
-    }
-
     let mut non_normal_vol_count: NonNormalVolCount = HashMap::new();
 
     for count in counts {
@@ -682,32 +674,32 @@ pub fn create_non_normal_volcount(
         non_normal_vol_count
             .entry(key)
             .and_modify(|c| {
-                c.totalcount = increment_option_inner(c.totalcount);
+                c.totalcount = c.totalcount.map_or(Some(1), |c| Some(c + 1));
                 match count.time.hour() {
-                    0 => c.am12 = increment_option_inner(c.am12),
-                    1 => c.am1 = increment_option_inner(c.am1),
-                    2 => c.am2 = increment_option_inner(c.am2),
-                    3 => c.am3 = increment_option_inner(c.am3),
-                    4 => c.am4 = increment_option_inner(c.am4),
-                    5 => c.am5 = increment_option_inner(c.am5),
-                    6 => c.am6 = increment_option_inner(c.am6),
-                    7 => c.am7 = increment_option_inner(c.am7),
-                    8 => c.am8 = increment_option_inner(c.am8),
-                    9 => c.am9 = increment_option_inner(c.am9),
-                    10 => c.am10 = increment_option_inner(c.am10),
-                    11 => c.am11 = increment_option_inner(c.am11),
-                    12 => c.pm12 = increment_option_inner(c.pm12),
-                    13 => c.pm1 = increment_option_inner(c.pm1),
-                    14 => c.pm2 = increment_option_inner(c.pm2),
-                    15 => c.pm3 = increment_option_inner(c.pm3),
-                    16 => c.pm4 = increment_option_inner(c.pm4),
-                    17 => c.pm5 = increment_option_inner(c.pm5),
-                    18 => c.pm6 = increment_option_inner(c.pm6),
-                    19 => c.pm7 = increment_option_inner(c.pm7),
-                    20 => c.pm8 = increment_option_inner(c.pm8),
-                    21 => c.pm9 = increment_option_inner(c.pm9),
-                    22 => c.pm10 = increment_option_inner(c.pm10),
-                    23 => c.pm11 = increment_option_inner(c.pm11),
+                    0 => c.am12 = c.am12.map_or(Some(1), |c| Some(c + 1)),
+                    1 => c.am1 = c.am1.map_or(Some(1), |c| Some(c + 1)),
+                    2 => c.am2 = c.am2.map_or(Some(1), |c| Some(c + 1)),
+                    3 => c.am3 = c.am3.map_or(Some(1), |c| Some(c + 1)),
+                    4 => c.am4 = c.am4.map_or(Some(1), |c| Some(c + 1)),
+                    5 => c.am5 = c.am5.map_or(Some(1), |c| Some(c + 1)),
+                    6 => c.am6 = c.am6.map_or(Some(1), |c| Some(c + 1)),
+                    7 => c.am7 = c.am7.map_or(Some(1), |c| Some(c + 1)),
+                    8 => c.am8 = c.am8.map_or(Some(1), |c| Some(c + 1)),
+                    9 => c.am9 = c.am9.map_or(Some(1), |c| Some(c + 1)),
+                    10 => c.am10 = c.am10.map_or(Some(1), |c| Some(c + 1)),
+                    11 => c.am11 = c.am11.map_or(Some(1), |c| Some(c + 1)),
+                    12 => c.pm12 = c.pm12.map_or(Some(1), |c| Some(c + 1)),
+                    13 => c.pm1 = c.pm1.map_or(Some(1), |c| Some(c + 1)),
+                    14 => c.pm2 = c.pm2.map_or(Some(1), |c| Some(c + 1)),
+                    15 => c.pm3 = c.pm3.map_or(Some(1), |c| Some(c + 1)),
+                    16 => c.pm4 = c.pm4.map_or(Some(1), |c| Some(c + 1)),
+                    17 => c.pm5 = c.pm5.map_or(Some(1), |c| Some(c + 1)),
+                    18 => c.pm6 = c.pm6.map_or(Some(1), |c| Some(c + 1)),
+                    19 => c.pm7 = c.pm7.map_or(Some(1), |c| Some(c + 1)),
+                    20 => c.pm8 = c.pm8.map_or(Some(1), |c| Some(c + 1)),
+                    21 => c.pm9 = c.pm9.map_or(Some(1), |c| Some(c + 1)),
+                    22 => c.pm10 = c.pm10.map_or(Some(1), |c| Some(c + 1)),
+                    23 => c.pm11 = c.pm11.map_or(Some(1), |c| Some(c + 1)),
                     _ => (),
                 };
             })
