@@ -325,9 +325,9 @@ pub struct VehicleClassCount {
 }
 
 impl VehicleClassCount {
-    /// Create a new, empty count.
-    pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
-        Self {
+    /// Create a new count.
+    pub fn first(dvrpc_num: i32, direction: Direction, class: VehicleClass) -> Self {
+        let mut count = Self {
             dvrpc_num,
             direction,
             c1: 0,
@@ -344,11 +344,13 @@ impl VehicleClassCount {
             c12: 0,
             c13: 0,
             c15: 0,
-            total: 0,
-        }
+            total: 1,
+        };
+        count.insert(class);
+        count
     }
     /// Insert individual counted vehicles into count.
-    pub fn insert(&mut self, class: VehicleClass) -> &Self {
+    pub fn insert(&mut self, class: VehicleClass) {
         match class {
             VehicleClass::Motorcycles => self.c1 += 1,
             VehicleClass::PassengerCars => self.c2 += 1,
@@ -369,9 +371,6 @@ impl VehicleClassCount {
                 self.c15 += 1;
             }
         }
-
-        self.total += 1;
-        self
     }
 }
 
@@ -399,8 +398,8 @@ pub struct SpeedRangeCount {
 
 impl SpeedRangeCount {
     /// Create a SpeedRangeCount with 0 count for all speed ranges.
-    pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
-        Self {
+    pub fn first(dvrpc_num: i32, direction: Direction, speed: f32) -> Self {
+        let mut value = Self {
             dvrpc_num,
             direction,
             s1: 0,
@@ -418,14 +417,12 @@ impl SpeedRangeCount {
             s13: 0,
             s14: 0,
             total: 0,
-        }
+        };
+        value.insert(speed);
+        value
     }
     /// Insert individual vehicle into count.
-    pub fn insert(&mut self, speed: f32) -> Result<&Self, CountError> {
-        if speed.is_sign_negative() {
-            return Err(CountError::InvalidSpeed(speed));
-        }
-
+    pub fn insert(&mut self, speed: f32) {
         // The end of the ranges are inclusive to the number's .0 decimal;
         // that is:
         // 0-15: 0.0 to 15.0
@@ -434,8 +431,10 @@ impl SpeedRangeCount {
         // Unfortunately, using floats as tests in pattern matching will be an error in a future
         // Rust release, so need to do if/else rather than match.
         // <https://github.com/rust-lang/rust/issues/41620>
-
-        if (0.0..=15.0).contains(&speed) {
+        if speed.is_sign_negative() {
+            // This shouldn't be necessary, but I saw a -0.0 in one of the files.
+            self.s1 += 1
+        } else if (0.0..=15.0).contains(&speed) {
             self.s1 += 1;
         } else if (15.1..=20.0).contains(&speed) {
             self.s2 += 1;
@@ -463,16 +462,15 @@ impl SpeedRangeCount {
             self.s13 += 1;
         } else if (75.1..).contains(&speed) {
             self.s14 += 1;
-        } else {
-            return Err(CountError::InvalidSpeed(speed));
         }
-
         self.total += 1;
-        Ok(self)
     }
 }
 
+/// Represents a row in the TC_CLACOUNT table.
 type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
+
+/// Represents a row in the TC_SPECOUNT table.
 type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
 
 /// Identifies the time and lane for binning vehicle class/speeds.
@@ -483,9 +481,6 @@ pub struct BinnedCountKey {
 }
 
 /// Create the 15-minute binned class and speed counts.
-///
-/// `FifteenMinuteVehicleClassCount` corresponds to a row in the TC_CLACOUNT table.
-/// `FifteenMinuteSpeedRangeCount` corresponds to a row in the TC_SPECOUNT table.
 pub fn create_speed_and_class_count(
     metadata: CountMetadata,
     counts: Vec<CountedVehicle>,
@@ -518,23 +513,31 @@ pub fn create_speed_and_class_count(
             channel: count.channel,
         };
 
-        // Add new entry to 15-min speed range count if necessary, then insert count's speed.
-        let speed_range_count = fifteen_min_speed_range_count
+        // Add new entry to 15-min speed range count or increment existing one.
+        fifteen_min_speed_range_count
             .entry(key)
-            .or_insert(SpeedRangeCount::new(metadata.dvrpc_num, direction));
-        *speed_range_count = match speed_range_count.insert(count.speed) {
-            Ok(v) => *v,
-            Err(e) => {
-                error!("{e}");
-                continue;
-            }
-        };
+            .and_modify(|c| {
+                c.total += 1;
+                c.insert(count.speed)
+            })
+            .or_insert(SpeedRangeCount::first(
+                metadata.dvrpc_num,
+                direction,
+                count.speed,
+            ));
 
-        // Add new entry to 15-min vehicle class count if necessary, then insert count's class.
-        let vehicle_class_count = fifteen_min_vehicle_class_count
+        // Add new entry to 15-min vehicle class count or increment existing one.
+        fifteen_min_vehicle_class_count
             .entry(key)
-            .or_insert(VehicleClassCount::new(metadata.dvrpc_num, direction));
-        *vehicle_class_count = *vehicle_class_count.insert(count.class);
+            .and_modify(|c| {
+                c.total += 1;
+                c.insert(count.class.clone())
+            })
+            .or_insert(VehicleClassCount::first(
+                metadata.dvrpc_num,
+                direction,
+                count.class,
+            ));
     }
 
     (
@@ -566,6 +569,9 @@ pub enum Weather {
 }
 
 /// The rest of the fields in the TC_VOLCOUNT table.
+///
+/// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
+/// the following day - can start and stop at any time.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NonNormalVolCountValue {
     pub setflag: Option<i32>,
@@ -600,10 +606,13 @@ pub struct NonNormalVolCountValue {
 impl NonNormalVolCountValue {
     /// Create a NonNormalVolCountValue with `None` for everything except
     /// the total and the first hour/count, which will be `Some(1)`.
-    pub fn new(hour: u8) -> Self {
+    /// (For the first time a new key is created in a HashMap.)
+    pub fn first(hour: u8) -> Self {
         let mut value = Self {
             ..Default::default()
         };
+
+        value.totalcount = Some(1);
 
         match hour {
             0 => value.am12 = Some(1),
@@ -636,11 +645,19 @@ impl NonNormalVolCountValue {
     }
 }
 
-/// Aggregate `CountedVehicles` into the shape of the TC_VOLCOUNT table.
+/// Aggregate `CountedVehicle`s into the shape of the TC_VOLCOUNT table.
 pub fn create_non_normal_volcount(
     metadata: CountMetadata,
     counts: Vec<CountedVehicle>,
 ) -> NonNormalVolCount {
+    // Convenience fn to make the `and_modify` part below more concise.
+    fn increment_option_inner(field: Option<i32>) -> Option<i32> {
+        match field {
+            Some(v) => Some(v + 1),
+            None => Some(1),
+        }
+    }
+
     let mut non_normal_vol_count: NonNormalVolCount = HashMap::new();
 
     for count in counts {
@@ -665,161 +682,37 @@ pub fn create_non_normal_volcount(
         non_normal_vol_count
             .entry(key)
             .and_modify(|c| {
-                c.totalcount = match c.totalcount {
-                    Some(v) => Some(v + 1),
-                    None => Some(1),
-                };
+                c.totalcount = increment_option_inner(c.totalcount);
                 match count.time.hour() {
-                    0 => {
-                        c.am12 = match c.am12 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    1 => {
-                        c.am1 = match c.am1 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    2 => {
-                        c.am2 = match c.am2 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    3 => {
-                        c.am3 = match c.am3 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    4 => {
-                        c.am4 = match c.am4 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    5 => {
-                        c.am5 = match c.am5 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    6 => {
-                        c.am6 = match c.am6 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    7 => {
-                        c.am7 = match c.am7 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    8 => {
-                        c.am8 = match c.am8 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    9 => {
-                        c.am9 = match c.am9 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    10 => {
-                        c.am10 = match c.am10 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    11 => {
-                        c.am11 = match c.am11 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    12 => {
-                        c.pm12 = match c.pm12 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    13 => {
-                        c.pm1 = match c.pm1 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    14 => {
-                        c.pm2 = match c.pm2 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    15 => {
-                        c.pm3 = match c.pm3 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    16 => {
-                        c.pm4 = match c.pm4 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    17 => {
-                        c.pm5 = match c.pm5 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    18 => {
-                        c.pm6 = match c.pm6 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    19 => {
-                        c.pm7 = match c.pm7 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    20 => {
-                        c.pm8 = match c.pm8 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    21 => {
-                        c.pm9 = match c.pm9 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    22 => {
-                        c.pm10 = match c.pm10 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
-                    23 => {
-                        c.pm11 = match c.pm11 {
-                            Some(v) => Some(v + 1),
-                            None => Some(1),
-                        }
-                    }
+                    0 => c.am12 = increment_option_inner(c.am12),
+                    1 => c.am1 = increment_option_inner(c.am1),
+                    2 => c.am2 = increment_option_inner(c.am2),
+                    3 => c.am3 = increment_option_inner(c.am3),
+                    4 => c.am4 = increment_option_inner(c.am4),
+                    5 => c.am5 = increment_option_inner(c.am5),
+                    6 => c.am6 = increment_option_inner(c.am6),
+                    7 => c.am7 = increment_option_inner(c.am7),
+                    8 => c.am8 = increment_option_inner(c.am8),
+                    9 => c.am9 = increment_option_inner(c.am9),
+                    10 => c.am10 = increment_option_inner(c.am10),
+                    11 => c.am11 = increment_option_inner(c.am11),
+                    12 => c.pm12 = increment_option_inner(c.pm12),
+                    13 => c.pm1 = increment_option_inner(c.pm1),
+                    14 => c.pm2 = increment_option_inner(c.pm2),
+                    15 => c.pm3 = increment_option_inner(c.pm3),
+                    16 => c.pm4 = increment_option_inner(c.pm4),
+                    17 => c.pm5 = increment_option_inner(c.pm5),
+                    18 => c.pm6 = increment_option_inner(c.pm6),
+                    19 => c.pm7 = increment_option_inner(c.pm7),
+                    20 => c.pm8 = increment_option_inner(c.pm8),
+                    21 => c.pm9 = increment_option_inner(c.pm9),
+                    22 => c.pm10 = increment_option_inner(c.pm10),
+                    23 => c.pm11 = increment_option_inner(c.pm11),
                     _ => (),
                 };
             })
-            .or_insert(NonNormalVolCountValue::new(count.time.hour()));
+            .or_insert(NonNormalVolCountValue::first(count.time.hour()));
     }
-
     non_normal_vol_count
 }
 
@@ -899,70 +792,68 @@ mod tests {
 
     #[test]
     fn speed_binning_is_correct() {
-        let mut speed_count = SpeedRangeCount::new(123, Direction::West);
-
-        assert!(speed_count.insert(-0.1).is_err());
-        assert!(speed_count.insert(-0.0).is_err());
+        // Initialize count with the first speed of 0.0.
+        let mut speed_count = SpeedRangeCount::first(123, Direction::West, 0.0);
 
         // s1
-        speed_count.insert(0.0).unwrap();
-        speed_count.insert(0.1).unwrap();
-        speed_count.insert(15.0).unwrap();
+        speed_count.insert(-0.0);
+        speed_count.insert(0.1);
+        speed_count.insert(15.0);
 
         // s2
-        speed_count.insert(15.1).unwrap();
-        speed_count.insert(20.0).unwrap();
+        speed_count.insert(15.1);
+        speed_count.insert(20.0);
 
         // s3
-        speed_count.insert(20.1).unwrap();
-        speed_count.insert(25.0).unwrap();
+        speed_count.insert(20.1);
+        speed_count.insert(25.0);
 
         // s4
-        speed_count.insert(25.1).unwrap();
-        speed_count.insert(30.0).unwrap();
+        speed_count.insert(25.1);
+        speed_count.insert(30.0);
 
         // s5
-        speed_count.insert(30.1).unwrap();
-        speed_count.insert(35.0).unwrap();
+        speed_count.insert(30.1);
+        speed_count.insert(35.0);
 
         // s6
-        speed_count.insert(35.1).unwrap();
-        speed_count.insert(40.0).unwrap();
+        speed_count.insert(35.1);
+        speed_count.insert(40.0);
 
         // s7
-        speed_count.insert(40.1).unwrap();
-        speed_count.insert(45.0).unwrap();
+        speed_count.insert(40.1);
+        speed_count.insert(45.0);
 
         // s8
-        speed_count.insert(45.1).unwrap();
-        speed_count.insert(50.0).unwrap();
+        speed_count.insert(45.1);
+        speed_count.insert(50.0);
 
         // s9
-        speed_count.insert(50.1).unwrap();
-        speed_count.insert(55.0).unwrap();
+        speed_count.insert(50.1);
+        speed_count.insert(55.0);
 
         // s10
-        speed_count.insert(55.1).unwrap();
-        speed_count.insert(60.0).unwrap();
+        speed_count.insert(55.1);
+        speed_count.insert(60.0);
 
         // s11
-        speed_count.insert(60.1).unwrap();
-        speed_count.insert(65.0).unwrap();
+        speed_count.insert(60.1);
+        speed_count.insert(65.0);
 
         // s12
-        speed_count.insert(65.1).unwrap();
-        speed_count.insert(70.0).unwrap();
+        speed_count.insert(65.1);
+        speed_count.insert(70.0);
 
         // s13
-        speed_count.insert(70.1).unwrap();
-        speed_count.insert(75.0).unwrap();
+        speed_count.insert(70.1);
+        speed_count.insert(75.0);
 
         // s14
-        speed_count.insert(75.1).unwrap();
-        speed_count.insert(100.0).unwrap();
-        speed_count.insert(120.0).unwrap();
+        speed_count.insert(75.1);
+        speed_count.insert(100.0);
+        speed_count.insert(120.0);
 
-        assert_eq!(speed_count.s1, 3);
+        assert_eq!(speed_count.s1, 4);
         assert_eq!(speed_count.s2, 2);
         assert_eq!(speed_count.s3, 2);
         assert_eq!(speed_count.s4, 2);
@@ -976,7 +867,7 @@ mod tests {
         assert_eq!(speed_count.s12, 2);
         assert_eq!(speed_count.s13, 2);
         assert_eq!(speed_count.s14, 3);
-        assert_eq!(speed_count.total, 30);
+        assert_eq!(speed_count.total, 31);
     }
 
     #[test]
