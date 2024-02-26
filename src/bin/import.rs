@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use log::{error, info, LevelFilter};
 use simplelog::{
@@ -72,16 +72,70 @@ fn main() {
     };
 
     // Iterate through all paths, extacting the data from the files, transforming it into the
-    // desired shape, and loading it into the database.
+    // desired shape, and inserting it into the database.
     // Exactly how the data is processed depends on what `CountType` it is.
     for path in paths {
-        match process_count(path) {
-            Ok(()) => (),
-            // If there's an error, log it and continue to next file.
+        let count_type = match get_count_type(path) {
+            Ok(v) => v,
             Err(e) => {
                 error!("{path:?} not processed: {e}");
                 continue;
             }
+        };
+
+        info!("Extracting data from {path:?}, a {count_type:?} count.");
+
+        // Process the file according to CountType.
+        match count_type {
+            CountType::IndividualVehicle => {
+                // Extract data from CSV/text file
+                let counted_vehicles = match CountedVehicle::extract(path) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("{path:?} not processed: {e}");
+                        continue;
+                    }
+                };
+
+                let metadata = match CountMetadata::from_path(path) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("{path:?} not processed: {e}");
+                        continue;
+                    }
+                };
+
+                // Create two counts from this: 15-minute speed count and 15-minute class count
+                // TODO: this could also be for other intervals - the function is probably too
+                // specific as is and should take desired interval as parameter
+                let (speed_range_count, vehicle_class_count) =
+                    create_speed_and_class_count(metadata.clone(), counted_vehicles.clone());
+
+                dbg!(vehicle_class_count);
+
+                // Create records for the non-normalized TC_VOLCOUNT table.
+                // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
+                // hour field and count)
+                let non_normal_volcount = create_non_normal_volcount(metadata, counted_vehicles);
+
+                dbg!(&non_normal_volcount);
+
+                // TODO: enter these into the database
+            }
+            CountType::FifteenMinuteVehicle => {
+                let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("{path:?} not processed: {e}");
+                        continue;
+                    }
+                };
+
+                // As they are already binned by 15-minute period, these need no further processing.
+                // TODO: enter into database.
+            }
+            CountType::FifteenMinuteBicycle => (),
+            CountType::FifteenMinutePedestrian => (),
         }
     }
 }
@@ -100,46 +154,4 @@ fn collect_paths(dir: PathBuf, paths: &mut Vec<PathBuf>) -> io::Result<&mut Vec<
         }
     }
     Ok(paths)
-}
-
-/// Process count - extract from file, transform, load into database.
-fn process_count(path: &Path) -> Result<(), CountError> {
-    // Get count type and metatadata from file; create CSV reader over it.
-    let count_type = get_count_type(path)?;
-    // Process the file according to CountType
-    info!("Extracting data from {path:?}, a {count_type:?} count.");
-    match count_type {
-        CountType::IndividualVehicle => {
-            // Extract data from CSV/text file
-            let counted_vehicles = CountedVehicle::extract(path)?;
-
-            let metadata = CountMetadata::from_path(path)?;
-
-            // Create two counts from this: 15-minute speed count and 15-minute class count
-            // TODO: this could also be for other intervals - the function is probably too
-            // specific as is and should take desired interval as parameter
-            let (speed_range_count, vehicle_class_count) =
-                create_speed_and_class_count(metadata.clone(), counted_vehicles.clone());
-
-            dbg!(vehicle_class_count);
-
-            // Create records for the non-normalized TC_VOLCOUNT table.
-            // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
-            // hour field and count)
-            let non_normal_volcount = create_non_normal_volcount(metadata, counted_vehicles);
-
-            dbg!(non_normal_volcount);
-
-            // TODO: enter these into the database
-        }
-        CountType::FifteenMinuteVehicle => {
-            let fifteen_min_volcount = FifteenMinuteVehicle::extract(path)?;
-
-            // As they are already binned by 15-minute period, these need no further processing.
-            // TODO: enter into database.
-        }
-        CountType::FifteenMinuteBicycle => (),
-        CountType::FifteenMinutePedestrian => (),
-    }
-    Ok(())
 }

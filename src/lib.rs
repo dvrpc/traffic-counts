@@ -467,10 +467,10 @@ impl SpeedRangeCount {
     }
 }
 
-/// Represents a row in the TC_CLACOUNT table.
+/// Represents rows in the TC_CLACOUNT table.
 type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
 
-/// Represents a row in the TC_SPECOUNT table.
+/// Represents rows in the TC_SPECOUNT table.
 type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
 
 /// Identifies the time and lane for binning vehicle class/speeds.
@@ -546,7 +546,7 @@ pub fn create_speed_and_class_count(
     )
 }
 
-/// Represents a row in the TC_VOLCOUNT table, which does not have hour fields normalized, but a
+/// Represents rows in the TC_VOLCOUNT table, which does not have hour fields normalized, but a
 /// different field for each hour of the day.
 type NonNormalVolCount = HashMap<NonNormalVolCountKey, NonNormalVolCountValue>;
 
