@@ -204,6 +204,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn non_extant_file_errors_properly() {
+        assert!(matches!(
+            count_type_from_header(Path::new("not_a_file.csv"), CountType::FifteenMinuteBicycle),
+            Err(CountError::CannotOpenFile { .. })
+        ))
+    }
+
+    #[test]
     fn count_type_vehicle_ok() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
         let ct_from_location = count_type_from_location(path).unwrap();
