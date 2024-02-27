@@ -8,10 +8,7 @@ use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
 
-use traffic_counts::{
-    extract_from_file::{get_count_type, Extract},
-    *,
-};
+use traffic_counts::{extract_from_file::Extract, *};
 
 const LOG: &str = "log.txt";
 
@@ -75,7 +72,7 @@ fn main() {
     // desired shape, and inserting it into the database.
     // Exactly how the data is processed depends on what `CountType` it is.
     for path in paths {
-        let count_type = match get_count_type(path) {
+        let count_type = match CountType::from_parent_dir_and_header(path) {
             Ok(v) => v,
             Err(e) => {
                 error!("{path:?} not processed: {e}");

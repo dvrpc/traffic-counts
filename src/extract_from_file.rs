@@ -1,11 +1,15 @@
 //! Extract various kinds of counts from files.
-use std::{fs::File, path::Path};
+use std::fs::{self, File};
+use std::path::Path;
 
 use csv::{Reader, ReaderBuilder};
 use log::error;
 use time::{macros::format_description, Date, Time};
 
-use crate::{CountError, CountMetadata, CountType, CountedVehicle, FifteenMinuteVehicle};
+use crate::{
+    CountError, CountMetadata, CountedVehicle, FifteenMinuteVehicle, FIFTEEN_MINUTE_VEHICLE_HEADER,
+    INDIVIDUAL_VEHICLE_HEADER,
+};
 
 pub trait Extract {
     type Item;
@@ -23,10 +27,7 @@ impl Extract for FifteenMinuteVehicle {
 
         // Iterate through data rows (skipping metadata rows + 1 for header).
         let mut counts = vec![];
-        for row in rdr
-            .records()
-            .skip(num_metadata_rows_to_skip(CountType::FifteenMinuteVehicle) + 1)
-        {
+        for row in rdr.records().skip(num_metadata_rows_in_file(path)?) {
             // Parse date.
             let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
             let date_col = &row.as_ref().unwrap()[1];
@@ -82,10 +83,7 @@ impl Extract for CountedVehicle {
 
         // Iterate through data rows (skipping metadata rows + 1 for header).
         let mut counts = vec![];
-        for row in rdr
-            .records()
-            .skip(num_metadata_rows_to_skip(CountType::IndividualVehicle) + 1)
-        {
+        for row in rdr.records().skip(num_metadata_rows_in_file(path)?) {
             // Parse date.
             let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
             let date_col = &row.as_ref().unwrap()[1];
@@ -117,71 +115,6 @@ impl Extract for CountedVehicle {
     }
 }
 
-fn count_type_from_location(path: &Path) -> Result<CountType, CountError> {
-    // Get the directory immediately above the file.
-    let parent = path
-        .parent()
-        .ok_or(CountError::BadPath(path))?
-        .components()
-        .last()
-        .ok_or(CountError::BadPath(path))?
-        .as_os_str()
-        .to_str()
-        .ok_or(CountError::BadPath(path))?;
-
-    match parent.to_lowercase().as_str() {
-        "15minutebicycle" => Ok(CountType::FifteenMinuteBicycle),
-        "15minutepedestrian" => Ok(CountType::FifteenMinutePedestrian),
-        "15minutevehicle" => Ok(CountType::FifteenMinuteVehicle),
-        "vehicle" => Ok(CountType::IndividualVehicle),
-        _ => Err(CountError::BadLocation(format!("{path:?}"))),
-    }
-}
-
-fn count_type_from_header(
-    path: &Path,
-    location_count_type: CountType,
-) -> Result<CountType, CountError> {
-    // `location_count_type` is what we expect this file to be, based off its location. We use
-    // this because different types of counts can have a variable number of metadata rows.
-
-    const INDIVIDUAL_VEHICLE_COUNT_HEADER: &str = "Veh. No.,Date,Time,Channel,Class,Speed";
-    const FIFTEEN_MINUTE_VEHICLE_COUNT_HEADER1: &str = "Number,Date,Time,Channel 1";
-    const FIFTEEN_MINUTE_VEHICLE_COUNT_HEADER2: &str = "Number,Date,Time,Channel 1,Channel 2";
-    const FIFTEEN_MINUTE_BICYCLE_COUNT_HEADER: &str = "";
-    const FIFTEEN_MINUTE_PEDESTRIAN_COUNT_HEADER: &str = "";
-
-    let file = File::open(path)?;
-    let mut rdr = create_reader(&file);
-    let header = rdr
-        .records()
-        .skip(num_metadata_rows_to_skip(location_count_type))
-        .take(1)
-        .last()
-        .ok_or(CountError::MissingHeader(path))?
-        .map_err(CountError::HeadertoStringRecordError)?
-        .iter()
-        .map(|x| x.trim().to_string())
-        .collect::<Vec<String>>()
-        .join(",");
-
-    match header.as_str() {
-        v if v == INDIVIDUAL_VEHICLE_COUNT_HEADER => Ok(CountType::IndividualVehicle),
-        v if v == FIFTEEN_MINUTE_VEHICLE_COUNT_HEADER1 => Ok(CountType::FifteenMinuteVehicle),
-        v if v == FIFTEEN_MINUTE_VEHICLE_COUNT_HEADER2 => Ok(CountType::FifteenMinuteVehicle),
-        _ => Err(CountError::BadHeader(path)),
-    }
-}
-
-pub fn get_count_type(path: &Path) -> Result<CountType, CountError> {
-    let count_type_from_location = count_type_from_location(path)?;
-    let count_type_from_header = count_type_from_header(path, count_type_from_location)?;
-    if count_type_from_location != count_type_from_header {
-        return Err(CountError::LocationHeaderMisMatch(path));
-    }
-    Ok(count_type_from_location)
-}
-
 /// Create CSV reader from file.
 fn create_reader(file: &File) -> Reader<&File> {
     ReaderBuilder::new()
@@ -191,34 +124,26 @@ fn create_reader(file: &File) -> Reader<&File> {
         .from_reader(file)
 }
 
-fn num_metadata_rows_to_skip(count_type: CountType) -> usize {
-    match count_type {
-        CountType::IndividualVehicle => 3,
-        CountType::FifteenMinuteVehicle => 4,
-        _ => 8,
+/// Count metadata rows in file (those before one of the possible headers).
+fn num_metadata_rows_in_file(path: &Path) -> Result<usize, CountError> {
+    let contents = fs::read_to_string(path)?;
+    let mut count = 0;
+    for line in contents.lines().take(50) {
+        count += 1;
+        // Remove double quotes & spaces to avoid ambiguity in how headers are exported.
+        let line = line.replace(['"', ' '], "");
+
+        if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) || line.contains(INDIVIDUAL_VEHICLE_HEADER)
+        {
+            return Ok(count);
+        }
     }
+    Err(CountError::BadHeader(path))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn non_extant_file_errors_properly() {
-        assert!(matches!(
-            count_type_from_header(Path::new("not_a_file.csv"), CountType::FifteenMinuteBicycle),
-            Err(CountError::CannotOpenFile { .. })
-        ))
-    }
-
-    #[test]
-    fn count_type_vehicle_ok() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let ct_from_location = count_type_from_location(path).unwrap();
-        let ct_from_header = count_type_from_header(path, ct_from_location).unwrap();
-        assert_eq!(&ct_from_location, &ct_from_header);
-        assert_eq!(ct_from_location, CountType::IndividualVehicle);
-    }
 
     #[test]
     fn extract_counted_vehicle_gets_correct_number_of_counts() {

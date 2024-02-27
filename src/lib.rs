@@ -1,6 +1,7 @@
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 
 use std::collections::HashMap;
+use std::fs;
 use std::io;
 use std::path::Path;
 
@@ -9,6 +10,12 @@ use thiserror::Error;
 use time::{Date, PrimitiveDateTime, Time};
 
 pub mod extract_from_file;
+
+// headers stripped of double quotes and spaces
+// TODO: the headers for FifteenMinuteBicycle and FifteenMinutePedestrian
+// still need to be added
+const FIFTEEN_MINUTE_VEHICLE_HEADER: &str = "Number,Date,Time,Channel1";
+const INDIVIDUAL_VEHICLE_HEADER: &str = "Veh.No.,Date,Time,Channel,Class,Speed";
 
 #[derive(Debug, Error)]
 pub enum CountError<'a> {
@@ -102,6 +109,74 @@ pub enum CountType {
     FifteenMinutePedestrian, // Eco-Counter
     FifteenMinuteVehicle,    // 15-min binned data for the simple volume counts from StarNext/Jamar
     IndividualVehicle,       // Individual vehicles from StarNext/Jamar prior to any binning
+}
+
+impl CountType {
+    /// Get the `CountType` from the parent directory where a file is located.
+    pub fn from_parent_dir(path: &Path) -> Result<Self, CountError> {
+        // Get the directory immediately above the file.
+        let parent = path
+            .parent()
+            .ok_or(CountError::BadPath(path))?
+            .components()
+            .last()
+            .ok_or(CountError::BadPath(path))?
+            .as_os_str()
+            .to_str()
+            .ok_or(CountError::BadPath(path))?;
+
+        match parent {
+            "15minutebicycle" => Ok(CountType::FifteenMinuteBicycle),
+            "15minutepedestrian" => Ok(CountType::FifteenMinutePedestrian),
+            "15minutevehicle" => Ok(CountType::FifteenMinuteVehicle),
+            "vehicle" => Ok(CountType::IndividualVehicle),
+            _ => Err(CountError::BadLocation(parent.to_string())),
+        }
+    }
+
+    /// Get `CountType` based on the header of a file.
+    pub fn from_header(path: &Path) -> Result<CountType, CountError> {
+        /*
+          The following is a rather naive solution - it simply checks that the exact string (
+          stripped of double quotes and spaces) of one of the potential headers is in the file.
+
+          However, it avoids needing to worry about:
+            1. the format of the headers and
+            2. the number of metadata rows that can precede the header, which are variable
+               depending on what type of count it is/how the export was done.
+
+          Additionally, it limits the search to the first 50 lines, which is an egregiously
+          large number to ensure that we will never miss the header and prevents the search going
+          through tens of thousands of lines, which is the typical number in files.
+        */
+
+        let contents = fs::read_to_string(path)?;
+        for line in contents.lines().take(50) {
+            // Remove double quotes & spaces to avoid ambiguity in how headers are exported.
+            let line = line.replace(['"', ' '], "");
+
+            if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) {
+                return Ok(CountType::FifteenMinuteVehicle);
+            } else if line.contains(INDIVIDUAL_VEHICLE_HEADER) {
+                return Ok(CountType::IndividualVehicle);
+            }
+        }
+        // Return error if the loop completes without finding one of the headers.
+        Err(CountError::BadHeader(path))
+    }
+
+    /// Get `CountType` from both parent directory and the header of the file.
+    ///
+    /// If the `CountType` differs between the two methods, we can't be sure which is correct,
+    /// so return an error.
+    pub fn from_parent_dir_and_header(path: &Path) -> Result<CountType, CountError> {
+        let count_type_from_location = CountType::from_parent_dir(path)?;
+        let count_type_from_header = CountType::from_header(path)?;
+        if count_type_from_location != count_type_from_header {
+            return Err(CountError::LocationHeaderMisMatch(path));
+        }
+        Ok(count_type_from_location)
+    }
 }
 
 /// A vehicle that has been counted, with no binning applied to it.
@@ -768,5 +843,40 @@ mod tests {
 
         let binned = time_bin(time).unwrap();
         assert_eq!(binned, Time::from_hms(10, 45, 0).unwrap());
+    }
+
+    #[test]
+    fn count_type_from_location_errs_if_invalid_dir() {
+        let count_type = CountType::from_parent_dir(Path::new("/not_count_dir/count_data.csv"));
+        assert!(matches!(count_type, Err(CountError::BadLocation(_))))
+    }
+
+    #[test]
+    fn count_type_from_location_ok_if_valid_dir() {
+        let count_type = CountType::from_parent_dir(Path::new("/vehicle/count_data.csv"));
+        assert!(matches!(count_type, Ok(CountType::IndividualVehicle)))
+    }
+
+    #[test]
+    fn count_type_from_header_errs_if_non_extant_file() {
+        let path = Path::new("test_files/not_a_file.csv");
+        assert!(matches!(
+            CountType::from_header(path),
+            Err(CountError::CannotOpenFile { .. })
+        ))
+    }
+
+    #[test]
+    fn count_type_ind_veh_from_header_ok() {
+        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let ct_from_header = CountType::from_header(path).unwrap();
+        assert_eq!(ct_from_header, CountType::IndividualVehicle);
+    }
+
+    #[test]
+    fn count_type_15min_veh_from_header_ok() {
+        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let ct_from_header = CountType::from_header(path).unwrap();
+        assert_eq!(ct_from_header, CountType::FifteenMinuteVehicle);
     }
 }
