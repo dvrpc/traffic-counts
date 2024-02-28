@@ -136,33 +136,15 @@ impl CountType {
 
     /// Get `CountType` based on the header of a file.
     pub fn from_header(path: &Path) -> Result<CountType, CountError> {
-        /*
-          The following is a rather naive solution - it simply checks that the exact string (
-          stripped of double quotes and spaces) of one of the potential headers is in the file.
+        let (header, _) = header_and_num_nondata_rows(path)?;
 
-          However, it avoids needing to worry about:
-            1. the format of the headers and
-            2. the number of metadata rows that can precede the header, which are variable
-               depending on what type of count it is/how the export was done.
-
-          Additionally, it limits the search to the first 50 lines, which is an egregiously
-          large number to ensure that we will never miss the header and prevents the search going
-          through tens of thousands of lines, which is the typical number in files.
-        */
-
-        let contents = fs::read_to_string(path)?;
-        for line in contents.lines().take(50) {
-            // Remove double quotes & spaces to avoid ambiguity in how headers are exported.
-            let line = line.replace(['"', ' '], "");
-
-            if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) {
-                return Ok(CountType::FifteenMinuteVehicle);
-            } else if line.contains(INDIVIDUAL_VEHICLE_HEADER) {
-                return Ok(CountType::IndividualVehicle);
-            }
+        if header.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) {
+            Ok(CountType::FifteenMinuteVehicle)
+        } else if header.contains(INDIVIDUAL_VEHICLE_HEADER) {
+            Ok(CountType::IndividualVehicle)
+        } else {
+            Err(CountError::BadHeader(path))
         }
-        // Return error if the loop completes without finding one of the headers.
-        Err(CountError::BadHeader(path))
     }
 
     /// Get `CountType` from both parent directory and the header of the file.
@@ -794,6 +776,39 @@ pub fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
     }
 }
 
+/// Get number of rows in file before data starts (metadata rows + header) and the header.
+/*
+  This is a rather naive solution - it simply checks that the exact string (
+  stripped of double quotes and spaces) of one of the potential headers is in the file.
+
+  However, it avoids needing to worry about:
+    1. the format of the headers and
+    2. the type of count, as the number of metadata rows preceding the header are variable
+       depending on what type of count it is/how the export was done.
+
+  Additionally, it limits the search to the first 50 lines, which is an egregiously
+  large number to ensure that we will never miss the header and prevents the search going
+  through tens of thousands of lines, which is the typical number in files.
+
+  By returning the header in addition to the num of rows, it avoids needing to scan through the
+  the file again to get it.
+*/
+fn header_and_num_nondata_rows(path: &Path) -> Result<(String, usize), CountError> {
+    let mut num_rows = 0;
+    let contents = fs::read_to_string(path)?;
+    for line in contents.lines().take(50) {
+        num_rows += 1;
+        // Remove double quotes & spaces to avoid ambiguity in how headers are exported.
+        let line = line.replace(['"', ' '], "");
+
+        if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) || line.contains(INDIVIDUAL_VEHICLE_HEADER)
+        {
+            return Ok((line, num_rows));
+        }
+    }
+    Err(CountError::BadHeader(path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -855,6 +870,22 @@ mod tests {
     fn count_type_from_location_ok_if_valid_dir() {
         let count_type = CountType::from_parent_dir(Path::new("/vehicle/count_data.csv"));
         assert!(matches!(count_type, Ok(CountType::IndividualVehicle)))
+    }
+
+    #[test]
+    fn header_and_nondata_rows_returns_correct_values_15min_veh() {
+        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let (header, num_rows) = header_and_num_nondata_rows(path).unwrap();
+        assert!(header.contains(FIFTEEN_MINUTE_VEHICLE_HEADER));
+        assert_eq!(num_rows, 5);
+    }
+
+    #[test]
+    fn header_and_nondata_rows_returns_correct_values_ind_veh() {
+        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let (header, num_rows) = header_and_num_nondata_rows(path).unwrap();
+        assert!(header.contains(INDIVIDUAL_VEHICLE_HEADER));
+        assert_eq!(num_rows, 4);
     }
 
     #[test]

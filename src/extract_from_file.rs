@@ -1,5 +1,5 @@
 //! Extract various kinds of counts from files.
-use std::fs::{self, File};
+use std::fs::File;
 use std::path::Path;
 
 use csv::{Reader, ReaderBuilder};
@@ -7,8 +7,7 @@ use log::error;
 use time::{macros::format_description, Date, Time};
 
 use crate::{
-    CountError, CountMetadata, CountedVehicle, FifteenMinuteVehicle, FIFTEEN_MINUTE_VEHICLE_HEADER,
-    INDIVIDUAL_VEHICLE_HEADER,
+    header_and_num_nondata_rows, CountError, CountMetadata, CountedVehicle, FifteenMinuteVehicle,
 };
 
 pub trait Extract {
@@ -25,9 +24,10 @@ impl Extract for FifteenMinuteVehicle {
         let mut rdr = create_reader(&data_file);
         let directions = CountMetadata::from_path(path)?.directions;
 
-        // Iterate through data rows (skipping metadata rows + 1 for header).
+        let (_, rows_to_skip) = header_and_num_nondata_rows(path)?;
+        // Iterate through data rows.
         let mut counts = vec![];
-        for row in rdr.records().skip(num_metadata_rows_in_file(path)?) {
+        for row in rdr.records().skip(rows_to_skip) {
             // Parse date.
             let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
             let date_col = &row.as_ref().unwrap()[1];
@@ -81,9 +81,10 @@ impl Extract for CountedVehicle {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
-        // Iterate through data rows (skipping metadata rows + 1 for header).
+        let (_, rows_to_skip) = header_and_num_nondata_rows(path)?;
+        // Iterate through data rows.
         let mut counts = vec![];
-        for row in rdr.records().skip(num_metadata_rows_in_file(path)?) {
+        for row in rdr.records().skip(rows_to_skip) {
             // Parse date.
             let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
             let date_col = &row.as_ref().unwrap()[1];
@@ -122,23 +123,6 @@ fn create_reader(file: &File) -> Reader<&File> {
         .trim(csv::Trim::All)
         .flexible(true)
         .from_reader(file)
-}
-
-/// Count metadata rows in file (those before one of the possible headers).
-fn num_metadata_rows_in_file(path: &Path) -> Result<usize, CountError> {
-    let contents = fs::read_to_string(path)?;
-    let mut count = 0;
-    for line in contents.lines().take(50) {
-        count += 1;
-        // Remove double quotes & spaces to avoid ambiguity in how headers are exported.
-        let line = line.replace(['"', ' '], "");
-
-        if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) || line.contains(INDIVIDUAL_VEHICLE_HEADER)
-        {
-            return Ok(count);
-        }
-    }
-    Err(CountError::BadHeader(path))
 }
 
 #[cfg(test)]
