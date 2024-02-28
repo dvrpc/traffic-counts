@@ -6,9 +6,7 @@ use csv::{Reader, ReaderBuilder};
 use log::error;
 use time::{macros::format_description, Date, Time};
 
-use crate::{
-    header_and_num_nondata_rows, CountError, CountMetadata, CountedVehicle, FifteenMinuteVehicle,
-};
+use crate::{num_nondata_rows, CountError, CountMetadata, CountedVehicle, FifteenMinuteVehicle};
 
 pub trait Extract {
     type Item;
@@ -24,10 +22,9 @@ impl Extract for FifteenMinuteVehicle {
         let mut rdr = create_reader(&data_file);
         let directions = CountMetadata::from_path(path)?.directions;
 
-        let (_, rows_to_skip) = header_and_num_nondata_rows(path)?;
         // Iterate through data rows.
         let mut counts = vec![];
-        for row in rdr.records().skip(rows_to_skip) {
+        for row in rdr.records().skip(num_nondata_rows(path)?) {
             // Parse date.
             let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
             let date_col = &row.as_ref().unwrap()[1];
@@ -81,10 +78,9 @@ impl Extract for CountedVehicle {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
-        let (_, rows_to_skip) = header_and_num_nondata_rows(path)?;
         // Iterate through data rows.
         let mut counts = vec![];
-        for row in rdr.records().skip(rows_to_skip) {
+        for row in rdr.records().skip(num_nondata_rows(path)?) {
             // Parse date.
             let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
             let date_col = &row.as_ref().unwrap()[1];

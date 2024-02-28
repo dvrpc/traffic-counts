@@ -136,15 +136,8 @@ impl CountType {
 
     /// Get `CountType` based on the header of a file.
     pub fn from_header(path: &Path) -> Result<CountType, CountError> {
-        let (header, _) = header_and_num_nondata_rows(path)?;
-
-        if header.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) {
-            Ok(CountType::FifteenMinuteVehicle)
-        } else if header.contains(INDIVIDUAL_VEHICLE_HEADER) {
-            Ok(CountType::IndividualVehicle)
-        } else {
-            Err(CountError::BadHeader(path))
-        }
+        let (count_type, _) = count_type_and_num_nondata_rows(path)?;
+        Ok(count_type)
     }
 
     /// Get `CountType` from both parent directory and the header of the file.
@@ -776,37 +769,37 @@ pub fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
     }
 }
 
-/// Get number of rows in file before data starts (metadata rows + header) and the header.
+/// Get `CountType` and number of rows in file before data starts (metadata rows + header).
 /*
   This is a rather naive solution - it simply checks that the exact string (
-  stripped of double quotes and spaces) of one of the potential headers is in the file.
+  stripped of double quotes and spaces) of one of the potential headers (and thus `CountType`)
+  is in the file. To make it somewhat performant, it limits the search to the first 50 lines, which
+  is an egregiously large number to ensure that we will never miss the header and prevents the
+  search going through tens of thousands of lines, which is the typical number in files.
 
-  However, it avoids needing to worry about:
-    1. the format of the headers and
-    2. the type of count, as the number of metadata rows preceding the header are variable
-       depending on what type of count it is/how the export was done.
-
-  Additionally, it limits the search to the first 50 lines, which is an egregiously
-  large number to ensure that we will never miss the header and prevents the search going
-  through tens of thousands of lines, which is the typical number in files.
-
-  By returning the header in addition to the num of rows, it avoids needing to scan through the
-  the file again to get it.
+  Two values are returned because the exact same procedure is needed to determine
+  either of them. Convenience functions using it are also available to get only value.
 */
-fn header_and_num_nondata_rows(path: &Path) -> Result<(String, usize), CountError> {
+fn count_type_and_num_nondata_rows(path: &Path) -> Result<(CountType, usize), CountError> {
     let mut num_rows = 0;
     let contents = fs::read_to_string(path)?;
     for line in contents.lines().take(50) {
         num_rows += 1;
-        // Remove double quotes & spaces to avoid ambiguity in how headers are exported.
         let line = line.replace(['"', ' '], "");
-
-        if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) || line.contains(INDIVIDUAL_VEHICLE_HEADER)
-        {
-            return Ok((line, num_rows));
+        if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) {
+            return Ok((CountType::FifteenMinuteVehicle, num_rows));
+        } else if line.contains(INDIVIDUAL_VEHICLE_HEADER) {
+            return Ok((CountType::IndividualVehicle, num_rows));
         }
+        // TODO: other header checks/types to be added
     }
     Err(CountError::BadHeader(path))
+}
+
+/// Get the number of nondata rows in a file.
+pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
+    let (_, num_rows) = count_type_and_num_nondata_rows(path)?;
+    Ok(num_rows)
 }
 
 #[cfg(test)]
@@ -868,24 +861,54 @@ mod tests {
 
     #[test]
     fn count_type_from_location_ok_if_valid_dir() {
-        let count_type = CountType::from_parent_dir(Path::new("/vehicle/count_data.csv"));
-        assert!(matches!(count_type, Ok(CountType::IndividualVehicle)))
+        let count_type = CountType::from_parent_dir(Path::new("/vehicle/count_data.csv")).unwrap();
+        assert_eq!(count_type, CountType::IndividualVehicle)
     }
 
     #[test]
-    fn header_and_nondata_rows_returns_correct_values_15min_veh() {
+    fn count_type_and_num_nondata_rows_correct_15min_veh_sample() {
         let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
-        let (header, num_rows) = header_and_num_nondata_rows(path).unwrap();
-        assert!(header.contains(FIFTEEN_MINUTE_VEHICLE_HEADER));
+        let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
+        assert_eq!(count_type, CountType::FifteenMinuteVehicle);
         assert_eq!(num_rows, 5);
     }
 
     #[test]
-    fn header_and_nondata_rows_returns_correct_values_ind_veh() {
+    fn count_type_and_num_nondata_rows_correct_ind_veh_sample() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let (header, num_rows) = header_and_num_nondata_rows(path).unwrap();
-        assert!(header.contains(INDIVIDUAL_VEHICLE_HEADER));
+        let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
+        assert_eq!(count_type, CountType::IndividualVehicle);
         assert_eq!(num_rows, 4);
+    }
+
+    #[test]
+    fn count_type_and_num_nondata_rows_errs_if_no_matching_header() {
+        let path = Path::new("test_files/bad_header.txt");
+        assert!(matches!(
+            count_type_and_num_nondata_rows(path),
+            Err(CountError::BadHeader(_))
+        ))
+    }
+
+    #[test]
+    fn num_nondata_rows_correct() {
+        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let num_rows = num_nondata_rows(path).unwrap();
+        assert_eq!(num_rows, 4);
+    }
+
+    #[test]
+    fn count_type_ind_veh_from_header_correct() {
+        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let ct_from_header = CountType::from_header(path).unwrap();
+        assert_eq!(ct_from_header, CountType::IndividualVehicle);
+    }
+
+    #[test]
+    fn count_type_15min_veh_from_header_correct() {
+        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let ct_from_header = CountType::from_header(path).unwrap();
+        assert_eq!(ct_from_header, CountType::FifteenMinuteVehicle);
     }
 
     #[test]
@@ -898,16 +921,11 @@ mod tests {
     }
 
     #[test]
-    fn count_type_ind_veh_from_header_ok() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let ct_from_header = CountType::from_header(path).unwrap();
-        assert_eq!(ct_from_header, CountType::IndividualVehicle);
-    }
-
-    #[test]
-    fn count_type_15min_veh_from_header_ok() {
-        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
-        let ct_from_header = CountType::from_header(path).unwrap();
-        assert_eq!(ct_from_header, CountType::FifteenMinuteVehicle);
+    fn count_type_from_header_errs_if_no_matching_header() {
+        let path = Path::new("test_files/bad_header.txt");
+        assert!(matches!(
+            CountType::from_header(path),
+            Err(CountError::BadHeader(_))
+        ))
     }
 }
