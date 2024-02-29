@@ -36,10 +36,6 @@ pub enum CountError<'a> {
     LocationHeaderMisMatch(&'a Path),
     #[error("no such vehicle class '{0}'")]
     BadVehicleClass(u8),
-    #[error("invalid speed '{0}'")]
-    InvalidSpeed(f32),
-    #[error("cannot locate header in '{0}'")]
-    MissingHeader(&'a Path),
     #[error("error converting header row to string")]
     HeadertoStringRecordError(#[from] csv::Error),
 }
@@ -854,15 +850,36 @@ mod tests {
     }
 
     #[test]
-    fn count_type_from_location_errs_if_invalid_dir() {
-        let count_type = CountType::from_parent_dir(Path::new("/not_count_dir/count_data.csv"));
-        assert!(matches!(count_type, Err(CountError::BadLocation(_))))
+    fn count_type_from_location_correct_ind_veh() {
+        let count_type = CountType::from_parent_dir(Path::new("/vehicle/count_data.csv")).unwrap();
+        assert_eq!(count_type, CountType::IndividualVehicle)
     }
 
     #[test]
-    fn count_type_from_location_ok_if_valid_dir() {
-        let count_type = CountType::from_parent_dir(Path::new("/vehicle/count_data.csv")).unwrap();
-        assert_eq!(count_type, CountType::IndividualVehicle)
+    fn count_type_from_location_correct_15min_veh() {
+        let count_type =
+            CountType::from_parent_dir(Path::new("/15minutevehicle/count_data.csv")).unwrap();
+        assert_eq!(count_type, CountType::FifteenMinuteVehicle)
+    }
+
+    #[test]
+    fn count_type_from_location_correct_15min_bicycle() {
+        let count_type =
+            CountType::from_parent_dir(Path::new("/15minutebicycle/count_data.csv")).unwrap();
+        assert_eq!(count_type, CountType::FifteenMinuteBicycle)
+    }
+
+    #[test]
+    fn count_type_from_location_correct_15min_ped() {
+        let count_type =
+            CountType::from_parent_dir(Path::new("/15minutepedestrian/count_data.csv")).unwrap();
+        assert_eq!(count_type, CountType::FifteenMinutePedestrian)
+    }
+
+    #[test]
+    fn count_type_from_location_errs_if_invalid_dir() {
+        let count_type = CountType::from_parent_dir(Path::new("/not_count_dir/count_data.csv"));
+        assert!(matches!(count_type, Err(CountError::BadLocation(_))))
     }
 
     #[test]
@@ -926,6 +943,40 @@ mod tests {
         assert!(matches!(
             CountType::from_header(path),
             Err(CountError::BadHeader(_))
+        ))
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_header_15min_veh_correct() {
+        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let count_type = CountType::from_parent_dir_and_header(path).unwrap();
+        assert_eq!(count_type, CountType::FifteenMinuteVehicle);
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_header_ind_veh_correct() {
+        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let count_type = CountType::from_parent_dir_and_header(path).unwrap();
+        assert_eq!(count_type, CountType::IndividualVehicle);
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_errs_if_mismatch1() {
+        let path = Path::new("test_files/15minutevehicle/ind_veh_count.txt");
+        let count_type = CountType::from_parent_dir_and_header(path);
+        assert!(matches!(
+            count_type,
+            Err(CountError::LocationHeaderMisMatch(_))
+        ))
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_errs_if_mismatch2() {
+        let path = Path::new("test_files/vehicle/15min_veh_count.txt");
+        let count_type = CountType::from_parent_dir_and_header(path);
+        assert!(matches!(
+            count_type,
+            Err(CountError::LocationHeaderMisMatch(_))
         ))
     }
 }
