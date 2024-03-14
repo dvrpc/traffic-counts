@@ -692,13 +692,46 @@ impl NonNormalVolCountValue {
 }
 
 /// Aggregate `CountedVehicle`s into the shape of the TC_VOLCOUNT table.
+///
+/// This excludes the first and last hour of the overall count,
+/// as they are unlikely to be a full hour of data.
 pub fn create_non_normal_volcount(
     metadata: CountMetadata,
     counts: Vec<CountedVehicle>,
 ) -> NonNormalVolCount {
     let mut non_normal_vol_count: NonNormalVolCount = HashMap::new();
 
+    if counts.is_empty() {
+        return non_normal_vol_count;
+    }
+
+    // Determine first and last date/hour of count.
+    // (The unwraps are ok, b/c only would be `None` (which would cause panic in following set of
+    // assignments) if `counts` empty, and we explicitly check this above and return early if that
+    // is the case.)
+    let first_count = counts
+        .iter()
+        .min_by_key(|x| PrimitiveDateTime::new(x.date, x.time))
+        .unwrap();
+
+    let last_count = counts
+        .iter()
+        .max_by_key(|x| PrimitiveDateTime::new(x.date, x.time))
+        .unwrap();
+
+    let first_date = first_count.date;
+    let first_hour = first_count.time.hour();
+    let last_date = last_count.date;
+    let last_hour = last_count.time.hour();
+
     for count in counts {
+        // Ignore counts in first and last hour of overall count.
+        if (count.date == first_date && count.time.hour() == first_hour)
+            || (count.date == last_date && count.time.hour() == last_hour)
+        {
+            continue;
+        }
+
         // Get the direction from the channel of count/metadata of filename.
         // Channel 1 is first direction, Channel 2 is the second (if any)
         let direction = match count.channel {
