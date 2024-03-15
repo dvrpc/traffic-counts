@@ -5,19 +5,19 @@ use time::macros::date;
 use traffic_counts::{extract_from_file::Extract, Direction, *};
 
 #[test]
-fn create_non_normal_vol_count_correct_num_records_and_keys() {
+fn create_non_normal_speedavg_count_correct_num_records_and_keys() {
     // one direction, two lanes
     let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
     let counted_vehicles = CountedVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
-    let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
+    let non_normal_count = create_non_normal_speedavg_count(metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 10);
 
     // two directions, two lanes
     let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
     let counted_vehicles = CountedVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
-    let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
+    let non_normal_count = create_non_normal_speedavg_count(metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 6);
 
     let keys = vec![
@@ -65,13 +65,13 @@ fn create_non_normal_vol_count_correct_num_records_and_keys() {
 }
 
 #[test]
-fn create_non_normal_volcount_correct_totals_by_day() {
+fn create_non_normal_speedavg_count_spot_check_averages() {
     // 165367
     // 1 direction, 2 lanes
     let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
     let counted_vehicles = CountedVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
-    let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
+    let non_normal_count = create_non_normal_speedavg_count(metadata, counted_vehicles);
     let day1_east1_key = NonNormalCountKey {
         dvrpc_num: 165367,
         date: date!(2023 - 11 - 06),
@@ -133,28 +133,44 @@ fn create_non_normal_volcount_correct_totals_by_day() {
         channel: 2,
     };
 
-    let day1_total = non_normal_count[&day1_east1_key].totalcount.unwrap()
-        + non_normal_count[&day1_east2_key].totalcount.unwrap();
-    let day2_total = non_normal_count[&day2_east1_key].totalcount.unwrap()
-        + non_normal_count[&day2_east2_key].totalcount.unwrap();
-    let day3_total = non_normal_count[&day3_east1_key].totalcount.unwrap()
-        + non_normal_count[&day3_east2_key].totalcount.unwrap();
-    let day4_total = non_normal_count[&day4_east1_key].totalcount.unwrap()
-        + non_normal_count[&day4_east2_key].totalcount.unwrap();
-    let day5_total = non_normal_count[&day5_east1_key].totalcount.unwrap()
-        + non_normal_count[&day5_east2_key].totalcount.unwrap();
-    assert_eq!(day1_total, 8636);
-    assert_eq!(day2_total, 14751);
-    assert_eq!(day3_total, 15298);
-    assert_eq!(day4_total, 15379);
-    assert_eq!(day5_total, 4220);
+    // the non-complete hours are not included in the resulting data structure
+    assert!(non_normal_count[&day1_east1_key].am11.is_none());
+    assert!(non_normal_count[&day1_east2_key].am11.is_none());
+    assert!(non_normal_count[&day5_east1_key].am10.is_none());
+    assert!(non_normal_count[&day5_east2_key].am10.is_none());
+
+    // spotcheck averages
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day1_east1_key].pm4.unwrap()),
+        "38.34"
+    );
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day1_east2_key].pm6.unwrap()),
+        "37.68"
+    );
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day3_east2_key].am9.unwrap()),
+        "39.14"
+    );
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day4_east1_key].pm12.unwrap()),
+        "36.49"
+    );
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day5_east1_key].am3.unwrap()),
+        "43.14"
+    );
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day5_east2_key].am3.unwrap()),
+        "45.36"
+    );
 
     // 166905
     // two directions, 2 lanes
     let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
     let counted_vehicles = CountedVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
-    let non_normal_volcount = create_non_normal_vol_count(metadata, counted_vehicles);
+    let non_normal_count = create_non_normal_speedavg_count(metadata, counted_vehicles);
 
     let day1_east_key = NonNormalCountKey {
         dvrpc_num: 166905,
@@ -192,14 +208,28 @@ fn create_non_normal_volcount_correct_totals_by_day() {
         direction: Direction::West,
         channel: 2,
     };
-    let day1_total = non_normal_volcount[&day1_east_key].totalcount.unwrap()
-        + non_normal_volcount[&day1_west_key].totalcount.unwrap();
-    let day2_total = non_normal_volcount[&day2_east_key].totalcount.unwrap()
-        + non_normal_volcount[&day2_west_key].totalcount.unwrap();
-    let day3_total = non_normal_volcount[&day3_east_key].totalcount.unwrap()
-        + non_normal_volcount[&day3_west_key].totalcount.unwrap();
 
-    assert_eq!(day1_total, 2893);
-    assert_eq!(day2_total, 4450);
-    assert_eq!(day3_total, 1173);
+    // the non-complete hours are not included in the resulting data structure
+    assert!(non_normal_count[&day1_east_key].am10.is_none());
+    assert!(non_normal_count[&day1_west_key].am10.is_none());
+    assert!(non_normal_count[&day3_east_key].am10.is_none());
+    assert!(non_normal_count[&day3_west_key].am10.is_none());
+
+    // spotcheck averages
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day1_east_key].am11.unwrap()),
+        "30.36"
+    );
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day1_west_key].am11.unwrap()),
+        "32.71"
+    );
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day2_west_key].pm5.unwrap()),
+        "31.94"
+    );
+    assert_eq!(
+        format!("{:.2}", non_normal_count[&day3_east_key].am9.unwrap()),
+        "31.63"
+    );
 }

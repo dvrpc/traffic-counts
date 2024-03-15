@@ -108,15 +108,22 @@ fn main() {
                 let (speed_range_count, vehicle_class_count) =
                     create_speed_and_class_count(metadata.clone(), counted_vehicles.clone());
 
-                dbg!(vehicle_class_count);
+                // dbg!(vehicle_class_count);
 
                 // Create records for the non-normalized TC_VOLCOUNT table.
                 // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
                 // hour field and count)
-                let non_normal_volcount = create_non_normal_volcount(metadata, counted_vehicles);
+                let non_normal_vol_count =
+                    create_non_normal_vol_count(metadata.clone(), counted_vehicles.clone());
 
-                dbg!(&non_normal_volcount);
+                // dbg!(&non_normal_vol_count);
 
+                // Create records for the non-normalized TC_SPESUM table
+                // (another one with specific hourly fields, this time for average speed/hour)
+                let non_normal_speedavg_count =
+                    create_non_normal_speedavg_count(metadata, counted_vehicles);
+
+                // dbg!(&non_normal_speedavg_count);
                 // TODO: enter these into the database
             }
             CountType::FifteenMinuteVehicle => {
