@@ -9,7 +9,10 @@ use log::error;
 use thiserror::Error;
 use time::{Date, PrimitiveDateTime, Time};
 
+pub mod annual_avg;
 pub mod extract_from_file;
+
+use annual_avg::GetDate;
 
 // headers stripped of double quotes and spaces
 // TODO: the headers for FifteenMinuteBicycle and FifteenMinutePedestrian
@@ -160,6 +163,12 @@ pub struct CountedVehicle {
     pub speed: f32,
 }
 
+impl GetDate for CountedVehicle {
+    fn get_date(&self) -> Date {
+        self.date.to_owned()
+    }
+}
+
 impl CountedVehicle {
     pub fn new(
         date: Date,
@@ -186,6 +195,12 @@ pub struct FifteenMinuteVehicle {
     pub time: Time,
     pub count: u16,
     pub direction: Direction,
+}
+
+impl GetDate for FifteenMinuteVehicle {
+    fn get_date(&self) -> Date {
+        self.date.to_owned()
+    }
 }
 
 impl FifteenMinuteVehicle {
@@ -1228,7 +1243,7 @@ pub fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
   search going through tens of thousands of lines, which is the typical number in files.
 
   Two values are returned because the exact same procedure is needed to determine
-  either of them. Convenience functions using it are also available to get only value.
+  either of them. Convenience functions using it are also available to get only one value.
 */
 fn count_type_and_num_nondata_rows(path: &Path) -> Result<(CountType, usize), CountError> {
     let mut num_rows = 0;

@@ -8,7 +8,7 @@ use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
 
-use traffic_counts::{extract_from_file::Extract, *};
+use traffic_counts::{annual_avg::determine_date, extract_from_file::Extract, *};
 
 const LOG: &str = "log.txt";
 
@@ -107,6 +107,8 @@ fn main() {
                 // specific as is and should take desired interval as parameter
                 let (speed_range_count, vehicle_class_count) =
                     create_speed_and_class_count(metadata.clone(), counted_vehicles.clone());
+                let date = determine_date(counted_vehicles.clone());
+                dbg!(date);
 
                 // dbg!(vehicle_class_count);
 
