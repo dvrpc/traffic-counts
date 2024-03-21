@@ -6,7 +6,7 @@ use csv::{Reader, ReaderBuilder};
 use log::error;
 use time::{macros::format_description, Date, Time};
 
-use crate::{num_nondata_rows, CountError, CountMetadata, CountedVehicle, FifteenMinuteVehicle};
+use crate::{num_nondata_rows, CountError, CountMetadata, FifteenMinuteVehicle, IndividualVehicle};
 
 pub trait Extract {
     type Item;
@@ -70,9 +70,9 @@ impl Extract for FifteenMinuteVehicle {
     }
 }
 
-/// Extract CountedVehicle records from a file.
-impl Extract for CountedVehicle {
-    type Item = CountedVehicle;
+/// Extract IndividualVehicle records from a file.
+impl Extract for IndividualVehicle {
+    type Item = IndividualVehicle;
 
     fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
@@ -92,7 +92,7 @@ impl Extract for CountedVehicle {
             let time_col = &row.as_ref().unwrap()[2];
             let count_time = Time::parse(time_col, &time_format).unwrap();
 
-            let count = match CountedVehicle::new(
+            let count = match IndividualVehicle::new(
                 count_date,
                 count_time,
                 row.as_ref().unwrap()[3].parse().unwrap(),
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn extract_counted_vehicle_gets_correct_number_of_counts() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let counted_vehicles = CountedVehicle::extract(path).unwrap();
+        let counted_vehicles = IndividualVehicle::extract(path).unwrap();
         assert_eq!(counted_vehicles.len(), 8706);
     }
 

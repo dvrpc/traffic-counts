@@ -70,9 +70,9 @@ fn main() {
 
     // Iterate through all paths, extacting the data from the files, transforming it into the
     // desired shape, and inserting it into the database.
-    // Exactly how the data is processed depends on what `CountType` it is.
+    // Exactly how the data is processed depends on what `InputCount` it is.
     for path in paths {
-        let count_type = match CountType::from_parent_dir_and_header(path) {
+        let count_type = match InputCount::from_parent_dir_and_header(path) {
             Ok(v) => v,
             Err(e) => {
                 error!("{path:?} not processed: {e}");
@@ -82,11 +82,11 @@ fn main() {
 
         info!("Extracting data from {path:?}, a {count_type:?} count.");
 
-        // Process the file according to CountType.
+        // Process the file according to InputCount.
         match count_type {
-            CountType::IndividualVehicle => {
+            InputCount::IndividualVehicle => {
                 // Extract data from CSV/text file
-                let counted_vehicles = match CountedVehicle::extract(path) {
+                let individual_vehicles = match IndividualVehicle::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
                         error!("{path:?} not processed: {e}");
@@ -106,8 +106,8 @@ fn main() {
                 // TODO: this could also be for other intervals - the function is probably too
                 // specific as is and should take desired interval as parameter
                 let (speed_range_count, vehicle_class_count) =
-                    create_speed_and_class_count(metadata.clone(), counted_vehicles.clone());
-                let date = determine_date(counted_vehicles.clone());
+                    create_speed_and_class_count(metadata.clone(), individual_vehicles.clone());
+                let date = determine_date(individual_vehicles.clone());
                 dbg!(date);
 
                 // dbg!(vehicle_class_count);
@@ -116,19 +116,19 @@ fn main() {
                 // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
                 // hour field and count)
                 let non_normal_vol_count =
-                    create_non_normal_vol_count(metadata.clone(), counted_vehicles.clone());
+                    create_non_normal_vol_count(metadata.clone(), individual_vehicles.clone());
 
                 // dbg!(&non_normal_vol_count);
 
                 // Create records for the non-normalized TC_SPESUM table
                 // (another one with specific hourly fields, this time for average speed/hour)
                 let non_normal_speedavg_count =
-                    create_non_normal_speedavg_count(metadata, counted_vehicles);
+                    create_non_normal_speedavg_count(metadata, individual_vehicles);
 
                 // dbg!(&non_normal_speedavg_count);
                 // TODO: enter these into the database
             }
-            CountType::FifteenMinuteVehicle => {
+            InputCount::FifteenMinuteVehicle => {
                 let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
@@ -140,8 +140,8 @@ fn main() {
                 // As they are already binned by 15-minute period, these need no further processing.
                 // TODO: enter into database.
             }
-            CountType::FifteenMinuteBicycle => (),
-            CountType::FifteenMinutePedestrian => (),
+            InputCount::FifteenMinuteBicycle => (),
+            InputCount::FifteenMinutePedestrian => (),
         }
     }
 }

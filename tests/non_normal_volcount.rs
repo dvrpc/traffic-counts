@@ -8,14 +8,14 @@ use traffic_counts::{extract_from_file::Extract, Direction, *};
 fn create_non_normal_vol_count_correct_num_records_and_keys() {
     // one direction, two lanes
     let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
-    let counted_vehicles = CountedVehicle::extract(path).unwrap();
+    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
     let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 10);
 
     // two directions, two lanes
     let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-    let counted_vehicles = CountedVehicle::extract(path).unwrap();
+    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
     let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 6);
@@ -69,7 +69,7 @@ fn create_non_normal_volcount_correct_totals_by_day() {
     // 165367
     // 1 direction, 2 lanes
     let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
-    let counted_vehicles = CountedVehicle::extract(path).unwrap();
+    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
     let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
     let day1_east1_key = NonNormalCountKey {
@@ -152,7 +152,7 @@ fn create_non_normal_volcount_correct_totals_by_day() {
     // 166905
     // two directions, 2 lanes
     let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-    let counted_vehicles = CountedVehicle::extract(path).unwrap();
+    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
     let non_normal_volcount = create_non_normal_vol_count(metadata, counted_vehicles);
 

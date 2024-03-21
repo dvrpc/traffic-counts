@@ -1,3 +1,14 @@
+//! Library for defining data structures related to DVRPC's traffic counts, extracting data
+//! from files (see [`InputCount`] for the types of counts that can be handled as inputs),
+//! and doing various calculations like average annual daily traffic.
+//!
+//! An associated program at src/bin/import.rs implements the data extraction from files
+//! and inserts the data into our database.
+//!
+//! This library also lays the foundations for the inverse need - getting data from the database
+//! in order to act on it or display it in some way, whether for CRUD user interfaces or other
+//! uses.
+//!
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 
 use std::collections::HashMap;
@@ -20,6 +31,7 @@ use annual_avg::GetDate;
 const FIFTEEN_MINUTE_VEHICLE_HEADER: &str = "Number,Date,Time,Channel1";
 const INDIVIDUAL_VEHICLE_HEADER: &str = "Veh.No.,Date,Time,Channel,Class,Speed";
 
+/// Various errors that can occur.
 #[derive(Debug, Error)]
 pub enum CountError<'a> {
     #[error("problem with file or directory path")]
@@ -55,63 +67,25 @@ pub enum FileNameProblem {
     InvalidSpeedLimit,
 }
 
-/// Names of the 15 classifications from the FWA.
-///
-/// See:
-///  * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
-///  * <https://www.fhwa.dot.gov/policyinformation/tmguide/tmg_2013/vehicle-types.cfm>
-///  * <https://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/13091/002.cfm>
-#[derive(Debug, Clone)]
-pub enum VehicleClass {
-    Motorcycles,                        // 1
-    PassengerCars,                      // 2
-    OtherFourTireSingleUnitVehicles,    // 3
-    Buses,                              // 4
-    TwoAxleSixTireSingleUnitTrucks,     // 5
-    ThreeAxleSingleUnitTrucks,          // 6
-    FourOrMoreAxleSingleUnitTrucks,     // 7
-    FourOrFewerAxleSingleTrailerTrucks, // 8
-    FiveAxleSingleTrailerTrucks,        // 9
-    SixOrMoreAxleSingleTrailerTrucks,   // 10
-    FiveOrFewerAxleMultiTrailerTrucks,  // 11
-    SixAxleMultiTrailerTrucks,          // 12
-    SevenOrMoreAxleMultiTrailerTrucks,  // 13
-    UnclassifiedVehicle,                // 15 (there is an "Unused" class group at 14)
-}
-
-impl VehicleClass {
-    /// Create a VehicleClass from a number.
-    pub fn from_num(num: u8) -> Result<Self, CountError<'static>> {
-        match num {
-            1 => Ok(VehicleClass::Motorcycles),
-            2 => Ok(VehicleClass::PassengerCars),
-            3 => Ok(VehicleClass::OtherFourTireSingleUnitVehicles),
-            4 => Ok(VehicleClass::Buses),
-            5 => Ok(VehicleClass::TwoAxleSixTireSingleUnitTrucks),
-            6 => Ok(VehicleClass::ThreeAxleSingleUnitTrucks),
-            7 => Ok(VehicleClass::FourOrMoreAxleSingleUnitTrucks),
-            8 => Ok(VehicleClass::FourOrFewerAxleSingleTrailerTrucks),
-            9 => Ok(VehicleClass::FiveAxleSingleTrailerTrucks),
-            10 => Ok(VehicleClass::SixOrMoreAxleSingleTrailerTrucks),
-            11 => Ok(VehicleClass::FiveOrFewerAxleMultiTrailerTrucks),
-            12 => Ok(VehicleClass::SixAxleMultiTrailerTrucks),
-            13 => Ok(VehicleClass::SevenOrMoreAxleMultiTrailerTrucks),
-            0 | 14 => Ok(VehicleClass::UnclassifiedVehicle), // TODO: verify this
-            other => Err(CountError::BadVehicleClass(other)),
-        }
-    }
-}
-
+/// The kinds of counts this library can handle as inputs.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum CountType {
-    FifteenMinuteBicycle,    // Eco-Counter
-    FifteenMinutePedestrian, // Eco-Counter
-    FifteenMinuteVehicle,    // 15-min binned data for the simple volume counts from StarNext/Jamar
-    IndividualVehicle,       // Individual vehicles from StarNext/Jamar prior to any binning
+pub enum InputCount {
+    /// Eco-Counter
+    FifteenMinuteBicycle,
+    /// Eco-Counter
+    FifteenMinutePedestrian,
+    /// 15-minute binned data for the simple volume counts from StarNext/Jamar.
+    ///
+    /// See [`FifteenMinuteVehicle`], the corresponding type.
+    FifteenMinuteVehicle,
+    /// Individual vehicles from StarNext/Jamar prior to any binning.
+    ///
+    /// See [`IndividualVehicle`], the corresponding type.
+    IndividualVehicle,
 }
 
-impl CountType {
-    /// Get the `CountType` from the parent directory where a file is located.
+impl InputCount {
+    /// Get the `InputCount` variant from the parent directory where a file is located.
     pub fn from_parent_dir(path: &Path) -> Result<Self, CountError> {
         // Get the directory immediately above the file.
         let parent = path
@@ -125,27 +99,27 @@ impl CountType {
             .ok_or(CountError::BadPath(path))?;
 
         match parent {
-            "15minutebicycle" => Ok(CountType::FifteenMinuteBicycle),
-            "15minutepedestrian" => Ok(CountType::FifteenMinutePedestrian),
-            "15minutevehicle" => Ok(CountType::FifteenMinuteVehicle),
-            "vehicle" => Ok(CountType::IndividualVehicle),
+            "15minutebicycle" => Ok(InputCount::FifteenMinuteBicycle),
+            "15minutepedestrian" => Ok(InputCount::FifteenMinutePedestrian),
+            "15minutevehicle" => Ok(InputCount::FifteenMinuteVehicle),
+            "vehicle" => Ok(InputCount::IndividualVehicle),
             _ => Err(CountError::BadLocation(parent.to_string())),
         }
     }
 
-    /// Get `CountType` based on the header of a file.
-    pub fn from_header(path: &Path) -> Result<CountType, CountError> {
+    /// Get `InputCount` variant based on the header of a file.
+    pub fn from_header(path: &Path) -> Result<InputCount, CountError> {
         let (count_type, _) = count_type_and_num_nondata_rows(path)?;
         Ok(count_type)
     }
 
-    /// Get `CountType` from both parent directory and the header of the file.
+    /// Get `InputCount` variant from both parent directory and the header of the file.
     ///
-    /// If the `CountType` differs between the two methods, we can't be sure which is correct,
+    /// If the variant differs between the two methods, we can't be sure which is correct,
     /// so return an error.
-    pub fn from_parent_dir_and_header(path: &Path) -> Result<CountType, CountError> {
-        let count_type_from_location = CountType::from_parent_dir(path)?;
-        let count_type_from_header = CountType::from_header(path)?;
+    pub fn from_parent_dir_and_header(path: &Path) -> Result<InputCount, CountError> {
+        let count_type_from_location = InputCount::from_parent_dir(path)?;
+        let count_type_from_header = InputCount::from_header(path)?;
         if count_type_from_location != count_type_from_header {
             return Err(CountError::LocationHeaderMisMatch(path));
         }
@@ -153,9 +127,9 @@ impl CountType {
     }
 }
 
-/// A vehicle that has been counted, with no binning applied to it.
+/// An individual vehicle that has been counted, with no binning applied to it.
 #[derive(Debug, Clone)]
-pub struct CountedVehicle {
+pub struct IndividualVehicle {
     pub date: Date,
     pub time: Time,
     pub channel: u8,
@@ -163,13 +137,13 @@ pub struct CountedVehicle {
     pub speed: f32,
 }
 
-impl GetDate for CountedVehicle {
+impl GetDate for IndividualVehicle {
     fn get_date(&self) -> Date {
         self.date.to_owned()
     }
 }
 
-impl CountedVehicle {
+impl IndividualVehicle {
     pub fn new(
         date: Date,
         time: Time,
@@ -219,7 +193,7 @@ impl FifteenMinuteVehicle {
     }
 }
 
-/// The metadata of a count.
+/// The metadata of an input count.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CountMetadata {
     pub technician: String, // initials
@@ -230,7 +204,7 @@ pub struct CountMetadata {
 }
 
 impl CountMetadata {
-    /// Get a count's metadata from its path.
+    /// Get an input count's metadata from its path.
     ///
     /// In the filename, each field is separate by a dash (-).
     /// technician-dvrpc_num-directions-counter_id-speed_limit.csv/txt
@@ -343,7 +317,7 @@ pub enum Direction {
     West,
 }
 
-/// The directions that a count could contain.
+/// The [`Direction`]s that a count could contain.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Directions {
     pub direction1: Direction,
@@ -359,7 +333,56 @@ impl Directions {
     }
 }
 
-/// Count of vehicles by vehicle class in some non-specific time period.
+/// Names of the 15 classifications from the FWA.
+///
+/// See:
+///  * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
+///  * <https://www.fhwa.dot.gov/policyinformation/tmguide/tmg_2013/vehicle-types.cfm>
+///  * <https://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/13091/002.cfm>
+#[derive(Debug, Clone)]
+pub enum VehicleClass {
+    Motorcycles,                        // 1
+    PassengerCars,                      // 2
+    OtherFourTireSingleUnitVehicles,    // 3
+    Buses,                              // 4
+    TwoAxleSixTireSingleUnitTrucks,     // 5
+    ThreeAxleSingleUnitTrucks,          // 6
+    FourOrMoreAxleSingleUnitTrucks,     // 7
+    FourOrFewerAxleSingleTrailerTrucks, // 8
+    FiveAxleSingleTrailerTrucks,        // 9
+    SixOrMoreAxleSingleTrailerTrucks,   // 10
+    FiveOrFewerAxleMultiTrailerTrucks,  // 11
+    SixAxleMultiTrailerTrucks,          // 12
+    SevenOrMoreAxleMultiTrailerTrucks,  // 13
+    UnclassifiedVehicle,                // 15 (there is an "Unused" class group at 14)
+}
+
+impl VehicleClass {
+    /// Create a VehicleClass from a number.
+    pub fn from_num(num: u8) -> Result<Self, CountError<'static>> {
+        match num {
+            1 => Ok(VehicleClass::Motorcycles),
+            2 => Ok(VehicleClass::PassengerCars),
+            3 => Ok(VehicleClass::OtherFourTireSingleUnitVehicles),
+            4 => Ok(VehicleClass::Buses),
+            5 => Ok(VehicleClass::TwoAxleSixTireSingleUnitTrucks),
+            6 => Ok(VehicleClass::ThreeAxleSingleUnitTrucks),
+            7 => Ok(VehicleClass::FourOrMoreAxleSingleUnitTrucks),
+            8 => Ok(VehicleClass::FourOrFewerAxleSingleTrailerTrucks),
+            9 => Ok(VehicleClass::FiveAxleSingleTrailerTrucks),
+            10 => Ok(VehicleClass::SixOrMoreAxleSingleTrailerTrucks),
+            11 => Ok(VehicleClass::FiveOrFewerAxleMultiTrailerTrucks),
+            12 => Ok(VehicleClass::SixAxleMultiTrailerTrucks),
+            13 => Ok(VehicleClass::SevenOrMoreAxleMultiTrailerTrucks),
+            0 | 14 => Ok(VehicleClass::UnclassifiedVehicle), // TODO: verify this
+            other => Err(CountError::BadVehicleClass(other)),
+        }
+    }
+}
+
+/// Count of vehicles by vehicle class (see [`VehicleClass`]) over some time period.
+///
+/// This is generally - but not always - for 15-minute intervals.
 ///
 /// Note: unclassified vehicles are counted in `c15` field, but also are included in the `c2`
 /// (Passenger Cars). Thus, a simple sum of fields `c1` through `c15` would double-count
@@ -435,7 +458,9 @@ impl VehicleClassCount {
     }
 }
 
-/// Count of vehicles by speed range in some non-specific time period.
+/// Count of vehicles by speed range over some time period.
+///
+/// This is generally - but not always - for 15-minute intervals.
 #[derive(Debug, Clone, Copy)]
 pub struct SpeedRangeCount {
     pub dvrpc_num: i32,
@@ -482,7 +507,7 @@ impl SpeedRangeCount {
         value.insert(speed);
         value
     }
-    /// Insert individual vehicle into count.
+    /// Insert individual speed into count.
     pub fn insert(&mut self, speed: f32) {
         // The end of the ranges are inclusive to the number's .0 decimal;
         // that is:
@@ -541,10 +566,10 @@ pub struct BinnedCountKey {
     pub channel: u8,
 }
 
-/// Create the 15-minute binned class and speed counts.
+/// Create the 15-minute binned speed and class counts from [`IndividualVehicle`]s.
 pub fn create_speed_and_class_count(
     metadata: CountMetadata,
-    counts: Vec<CountedVehicle>,
+    counts: Vec<IndividualVehicle>,
 ) -> (FifteenMinuteSpeedRangeCount, FifteenMinuteVehicleClassCount) {
     let mut fifteen_min_speed_range_count: FifteenMinuteSpeedRangeCount = HashMap::new();
     let mut fifteen_min_vehicle_class_count: FifteenMinuteVehicleClassCount = HashMap::new();
@@ -607,7 +632,7 @@ pub fn create_speed_and_class_count(
     )
 }
 
-/// Identifies the primary key for records of the TC_VOLCOUNT and TC_SPESUM tables.
+/// The key for records of the TC_VOLCOUNT and TC_SPESUM tables.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NonNormalCountKey {
     pub dvrpc_num: i32,
@@ -707,13 +732,13 @@ impl NonNormalVolCountValue {
     }
 }
 
-/// Aggregate `CountedVehicle`s into the shape of the TC_VOLCOUNT table.
+/// Aggregate [`IndividualVehicle`]s into the shape of the TC_VOLCOUNT table.
 ///
 /// This excludes the first and last hour of the overall count,
 /// as they are unlikely to be a full hour of data.
 pub fn create_non_normal_vol_count(
     metadata: CountMetadata,
-    counts: Vec<CountedVehicle>,
+    counts: Vec<IndividualVehicle>,
 ) -> NonNormalVolCount {
     let mut non_normal_vol_count: NonNormalVolCount = HashMap::new();
 
@@ -884,7 +909,7 @@ impl NonNormalSpeedAvgValue {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct NonNormalSpeedRawValue {
+struct NonNormalSpeedRawValue {
     // pub lane: i32,
     pub am12: Vec<f32>,
     pub am1: Vec<f32>,
@@ -914,7 +939,7 @@ pub struct NonNormalSpeedRawValue {
 impl NonNormalSpeedRawValue {
     /// Create a NonNormalSpeedAvgValue with empty Vecs.
     /// (For the first time a new key is created in a HashMap.)
-    pub fn first(hour: u8, speed: f32) -> Self {
+    fn first(hour: u8, speed: f32) -> Self {
         let mut value = Self {
             ..Default::default()
         };
@@ -950,13 +975,13 @@ impl NonNormalSpeedRawValue {
     }
 }
 
-/// Aggregate `CountedVehicle`s into the shape of the TC_SPESUM table.
+/// Aggregate [`IndividualVehicle`]s into the shape of the TC_SPESUM table.
 ///
 /// This excludes the first and last hour of the overall count,
 /// as they are unlikely to be a full hour of data.
 pub fn create_non_normal_speedavg_count(
     metadata: CountMetadata,
-    counts: Vec<CountedVehicle>,
+    counts: Vec<IndividualVehicle>,
 ) -> NonNormalSpeedAvgCount {
     let mut non_normal_speed_raw_count: NonNormalSpeedRawCount = HashMap::new();
     let mut non_normal_speed_avg_count: NonNormalSpeedAvgCount = HashMap::default();
@@ -1234,10 +1259,10 @@ pub fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
     }
 }
 
-/// Get `CountType` and number of rows in file before data starts (metadata rows + header).
+/// Get `InputCount` and number of rows in file before data starts (metadata rows + header).
 /*
   This is a rather naive solution - it simply checks that the exact string (
-  stripped of double quotes and spaces) of one of the potential headers (and thus `CountType`)
+  stripped of double quotes and spaces) of one of the potential headers (and thus `InputCount`)
   is in the file. To make it somewhat performant, it limits the search to the first 50 lines, which
   is an egregiously large number to ensure that we will never miss the header and prevents the
   search going through tens of thousands of lines, which is the typical number in files.
@@ -1245,16 +1270,16 @@ pub fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
   Two values are returned because the exact same procedure is needed to determine
   either of them. Convenience functions using it are also available to get only one value.
 */
-fn count_type_and_num_nondata_rows(path: &Path) -> Result<(CountType, usize), CountError> {
+fn count_type_and_num_nondata_rows(path: &Path) -> Result<(InputCount, usize), CountError> {
     let mut num_rows = 0;
     let contents = fs::read_to_string(path)?;
     for line in contents.lines().take(50) {
         num_rows += 1;
         let line = line.replace(['"', ' '], "");
         if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) {
-            return Ok((CountType::FifteenMinuteVehicle, num_rows));
+            return Ok((InputCount::FifteenMinuteVehicle, num_rows));
         } else if line.contains(INDIVIDUAL_VEHICLE_HEADER) {
-            return Ok((CountType::IndividualVehicle, num_rows));
+            return Ok((InputCount::IndividualVehicle, num_rows));
         }
         // TODO: other header checks/types to be added
     }
@@ -1320,34 +1345,34 @@ mod tests {
 
     #[test]
     fn count_type_from_location_correct_ind_veh() {
-        let count_type = CountType::from_parent_dir(Path::new("/vehicle/count_data.csv")).unwrap();
-        assert_eq!(count_type, CountType::IndividualVehicle)
+        let count_type = InputCount::from_parent_dir(Path::new("/vehicle/count_data.csv")).unwrap();
+        assert_eq!(count_type, InputCount::IndividualVehicle)
     }
 
     #[test]
     fn count_type_from_location_correct_15min_veh() {
         let count_type =
-            CountType::from_parent_dir(Path::new("/15minutevehicle/count_data.csv")).unwrap();
-        assert_eq!(count_type, CountType::FifteenMinuteVehicle)
+            InputCount::from_parent_dir(Path::new("/15minutevehicle/count_data.csv")).unwrap();
+        assert_eq!(count_type, InputCount::FifteenMinuteVehicle)
     }
 
     #[test]
     fn count_type_from_location_correct_15min_bicycle() {
         let count_type =
-            CountType::from_parent_dir(Path::new("/15minutebicycle/count_data.csv")).unwrap();
-        assert_eq!(count_type, CountType::FifteenMinuteBicycle)
+            InputCount::from_parent_dir(Path::new("/15minutebicycle/count_data.csv")).unwrap();
+        assert_eq!(count_type, InputCount::FifteenMinuteBicycle)
     }
 
     #[test]
     fn count_type_from_location_correct_15min_ped() {
         let count_type =
-            CountType::from_parent_dir(Path::new("/15minutepedestrian/count_data.csv")).unwrap();
-        assert_eq!(count_type, CountType::FifteenMinutePedestrian)
+            InputCount::from_parent_dir(Path::new("/15minutepedestrian/count_data.csv")).unwrap();
+        assert_eq!(count_type, InputCount::FifteenMinutePedestrian)
     }
 
     #[test]
     fn count_type_from_location_errs_if_invalid_dir() {
-        let count_type = CountType::from_parent_dir(Path::new("/not_count_dir/count_data.csv"));
+        let count_type = InputCount::from_parent_dir(Path::new("/not_count_dir/count_data.csv"));
         assert!(matches!(count_type, Err(CountError::BadLocation(_))))
     }
 
@@ -1355,7 +1380,7 @@ mod tests {
     fn count_type_and_num_nondata_rows_correct_15min_veh_sample() {
         let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
         let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
-        assert_eq!(count_type, CountType::FifteenMinuteVehicle);
+        assert_eq!(count_type, InputCount::FifteenMinuteVehicle);
         assert_eq!(num_rows, 5);
     }
 
@@ -1363,7 +1388,7 @@ mod tests {
     fn count_type_and_num_nondata_rows_correct_ind_veh_sample() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
         let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
-        assert_eq!(count_type, CountType::IndividualVehicle);
+        assert_eq!(count_type, InputCount::IndividualVehicle);
         assert_eq!(num_rows, 4);
     }
 
@@ -1386,22 +1411,22 @@ mod tests {
     #[test]
     fn count_type_ind_veh_from_header_correct() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let ct_from_header = CountType::from_header(path).unwrap();
-        assert_eq!(ct_from_header, CountType::IndividualVehicle);
+        let ct_from_header = InputCount::from_header(path).unwrap();
+        assert_eq!(ct_from_header, InputCount::IndividualVehicle);
     }
 
     #[test]
     fn count_type_15min_veh_from_header_correct() {
         let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
-        let ct_from_header = CountType::from_header(path).unwrap();
-        assert_eq!(ct_from_header, CountType::FifteenMinuteVehicle);
+        let ct_from_header = InputCount::from_header(path).unwrap();
+        assert_eq!(ct_from_header, InputCount::FifteenMinuteVehicle);
     }
 
     #[test]
     fn count_type_from_header_errs_if_non_extant_file() {
         let path = Path::new("test_files/not_a_file.csv");
         assert!(matches!(
-            CountType::from_header(path),
+            InputCount::from_header(path),
             Err(CountError::CannotOpenFile { .. })
         ))
     }
@@ -1410,7 +1435,7 @@ mod tests {
     fn count_type_from_header_errs_if_no_matching_header() {
         let path = Path::new("test_files/bad_header.txt");
         assert!(matches!(
-            CountType::from_header(path),
+            InputCount::from_header(path),
             Err(CountError::BadHeader(_))
         ))
     }
@@ -1418,21 +1443,21 @@ mod tests {
     #[test]
     fn count_type_from_parent_dir_and_header_15min_veh_correct() {
         let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
-        let count_type = CountType::from_parent_dir_and_header(path).unwrap();
-        assert_eq!(count_type, CountType::FifteenMinuteVehicle);
+        let count_type = InputCount::from_parent_dir_and_header(path).unwrap();
+        assert_eq!(count_type, InputCount::FifteenMinuteVehicle);
     }
 
     #[test]
     fn count_type_from_parent_dir_and_header_ind_veh_correct() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-        let count_type = CountType::from_parent_dir_and_header(path).unwrap();
-        assert_eq!(count_type, CountType::IndividualVehicle);
+        let count_type = InputCount::from_parent_dir_and_header(path).unwrap();
+        assert_eq!(count_type, InputCount::IndividualVehicle);
     }
 
     #[test]
     fn count_type_from_parent_dir_and_errs_if_mismatch1() {
         let path = Path::new("test_files/15minutevehicle/ind_veh_count.txt");
-        let count_type = CountType::from_parent_dir_and_header(path);
+        let count_type = InputCount::from_parent_dir_and_header(path);
         assert!(matches!(
             count_type,
             Err(CountError::LocationHeaderMisMatch(_))
@@ -1442,7 +1467,7 @@ mod tests {
     #[test]
     fn count_type_from_parent_dir_and_errs_if_mismatch2() {
         let path = Path::new("test_files/vehicle/15min_veh_count.txt");
-        let count_type = CountType::from_parent_dir_and_header(path);
+        let count_type = InputCount::from_parent_dir_and_header(path);
         assert!(matches!(
             count_type,
             Err(CountError::LocationHeaderMisMatch(_))

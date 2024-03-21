@@ -8,7 +8,7 @@ use traffic_counts::{
     *,
 };
 
-// A type just only for tests here.
+// A type just for tests here.
 struct TestCount {
     date: Date,
 }
@@ -173,7 +173,7 @@ fn determine_date_returns_none_when_only_one_count() {
 #[test]
 fn determine_date_correct_for_165367() {
     let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
-    let counted_vehicles = CountedVehicle::extract(path).unwrap();
+    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
     let correct_date = date!(2023 - 11 - 07);
     let determined_date = determine_date(counted_vehicles).unwrap();
     assert_eq!(correct_date, determined_date);
@@ -182,7 +182,7 @@ fn determine_date_correct_for_165367() {
 #[test]
 fn determine_date_correct_for_166905() {
     let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-    let counted_vehicles = CountedVehicle::extract(path).unwrap();
+    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
     let correct_date = date!(2023 - 11 - 07);
     let determined_date = determine_date(counted_vehicles).unwrap();
     assert_eq!(correct_date, determined_date);

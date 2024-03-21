@@ -5,7 +5,7 @@ use oracle::sql_type::Timestamp;
 use oracle::{Connection, Error as OracleError, Statement};
 use time::{Date, Weekday};
 
-use crate::CountType;
+use crate::InputCount;
 
 /// A trait for getting a [`Date`](https://docs.rs/time/latest/time/struct.Date.html) from a type.
 pub trait GetDate {
@@ -53,7 +53,7 @@ where
 pub fn set_date_for_annual_avg_calc(
     date: Date,
     recordnum: u32,
-    count_type: CountType,
+    count_type: InputCount,
     conn: &Connection,
 ) -> Result<Statement, OracleError> {
     let oracle_date = Timestamp::new(
@@ -67,7 +67,7 @@ pub fn set_date_for_annual_avg_calc(
     );
 
     // If this is motor vehicle count, we also need to set SET_FLAG to -1 in TC_VOLCOUNT
-    if count_type == CountType::FifteenMinuteVehicle {
+    if count_type == InputCount::FifteenMinuteVehicle {
         conn.execute(
             "UPDATE tc_volcount SET set_flag = -1 WHERE recordnum = :1 AND COUNTDATE = :2",
             &[&recordnum, &oracle_date],
