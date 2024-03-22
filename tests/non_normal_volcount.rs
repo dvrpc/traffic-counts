@@ -5,201 +5,97 @@ use time::macros::date;
 use traffic_counts::{extract_from_file::Extract, Direction, *};
 
 #[test]
-fn create_non_normal_vol_count_correct_num_records_and_keys() {
-    // one direction, two lanes
-    let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
-    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
-    let metadata = CountMetadata::from_path(path).unwrap();
-    let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
-    assert_eq!(non_normal_count.len(), 10);
-
+fn create_non_normal_vol_count_correct_num_records_and_total_count_166905() {
     // two directions, two lanes
     let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
     let counted_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
-    let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
+    let mut non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 6);
 
-    let keys = vec![
-        NonNormalCountKey {
-            dvrpc_num: 166905,
-            date: date!(2023 - 11 - 06),
-            direction: Direction::East,
-            channel: 1,
-        },
-        NonNormalCountKey {
-            dvrpc_num: 166905,
-            date: date!(2023 - 11 - 06),
-            direction: Direction::West,
-            channel: 2,
-        },
-        NonNormalCountKey {
-            dvrpc_num: 166905,
-            date: date!(2023 - 11 - 07),
-            direction: Direction::West,
-            channel: 2,
-        },
-        NonNormalCountKey {
-            dvrpc_num: 166905,
-            date: date!(2023 - 11 - 07),
-            direction: Direction::East,
-            channel: 1,
-        },
-        NonNormalCountKey {
-            dvrpc_num: 166905,
-            date: date!(2023 - 11 - 08),
-            direction: Direction::West,
-            channel: 2,
-        },
-        NonNormalCountKey {
-            dvrpc_num: 166905,
-            date: date!(2023 - 11 - 08),
-            direction: Direction::East,
-            channel: 1,
-        },
-    ];
+    // Sort by date, and then channel, so elements of the vec are in an expected order to test.
+    non_normal_count.sort_unstable_by_key(|count| (count.date, count.channel));
 
-    for key in keys {
-        assert!(non_normal_count.contains_key(&key));
-    }
+    // Ensure order is what we expect.
+    assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
+    assert_eq!(non_normal_count[0].direction, Direction::East);
+    assert_eq!(non_normal_count[0].channel, 1);
+    assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
+    assert_eq!(non_normal_count[1].direction, Direction::West);
+    assert_eq!(non_normal_count[1].channel, 2);
+    assert_eq!(non_normal_count[5].date, date!(2023 - 11 - 08));
+    assert_eq!(non_normal_count[5].direction, Direction::West);
+    assert_eq!(non_normal_count[5].channel, 2);
+
+    // the non-complete hours are not included in the resulting data structure
+    assert!(non_normal_count[0].am10.is_none());
+    assert!(non_normal_count[1].am10.is_none());
+    assert!(non_normal_count[4].am10.is_none());
+    assert!(non_normal_count[5].am10.is_none());
+
+    // Test total counts.
+    assert_eq!(
+        non_normal_count[0].totalcount.unwrap() + non_normal_count[1].totalcount.unwrap(),
+        2893
+    );
+    assert_eq!(
+        non_normal_count[2].totalcount.unwrap() + non_normal_count[3].totalcount.unwrap(),
+        4450
+    );
+    assert_eq!(
+        non_normal_count[4].totalcount.unwrap() + non_normal_count[5].totalcount.unwrap(),
+        1173
+    );
 }
 
 #[test]
-fn create_non_normal_volcount_correct_totals_by_day() {
-    // 165367
-    // 1 direction, 2 lanes
+fn create_non_normal_vol_count_correct_num_records_and_total_count_165367() {
+    // one direction, two lanes
     let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
     let counted_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
-    let non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
-    let day1_east1_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 06),
-        direction: Direction::East,
-        channel: 1,
-    };
-    let day1_east2_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 06),
-        direction: Direction::East,
-        channel: 2,
-    };
-    let day2_east1_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 07),
-        direction: Direction::East,
-        channel: 1,
-    };
-    let day2_east2_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 07),
-        direction: Direction::East,
-        channel: 2,
-    };
-    let day3_east1_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 08),
-        direction: Direction::East,
-        channel: 1,
-    };
-    let day3_east2_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 08),
-        direction: Direction::East,
-        channel: 2,
-    };
-    let day4_east1_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 09),
-        direction: Direction::East,
-        channel: 1,
-    };
-    let day4_east2_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 09),
-        direction: Direction::East,
-        channel: 2,
-    };
-    let day5_east1_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 10),
-        direction: Direction::East,
-        channel: 1,
-    };
-    let day5_east2_key = NonNormalCountKey {
-        dvrpc_num: 165367,
-        date: date!(2023 - 11 - 10),
-        direction: Direction::East,
-        channel: 2,
-    };
+    let mut non_normal_count = create_non_normal_vol_count(metadata, counted_vehicles);
+    assert_eq!(non_normal_count.len(), 10);
 
-    let day1_total = non_normal_count[&day1_east1_key].totalcount.unwrap()
-        + non_normal_count[&day1_east2_key].totalcount.unwrap();
-    let day2_total = non_normal_count[&day2_east1_key].totalcount.unwrap()
-        + non_normal_count[&day2_east2_key].totalcount.unwrap();
-    let day3_total = non_normal_count[&day3_east1_key].totalcount.unwrap()
-        + non_normal_count[&day3_east2_key].totalcount.unwrap();
-    let day4_total = non_normal_count[&day4_east1_key].totalcount.unwrap()
-        + non_normal_count[&day4_east2_key].totalcount.unwrap();
-    let day5_total = non_normal_count[&day5_east1_key].totalcount.unwrap()
-        + non_normal_count[&day5_east2_key].totalcount.unwrap();
-    assert_eq!(day1_total, 8636);
-    assert_eq!(day2_total, 14751);
-    assert_eq!(day3_total, 15298);
-    assert_eq!(day4_total, 15379);
-    assert_eq!(day5_total, 4220);
+    // Sort by date, and then channel, so elements of the vec are in an expected order to test.
+    non_normal_count.sort_unstable_by_key(|count| (count.date, count.channel));
 
-    // 166905
-    // two directions, 2 lanes
-    let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
-    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
-    let metadata = CountMetadata::from_path(path).unwrap();
-    let non_normal_volcount = create_non_normal_vol_count(metadata, counted_vehicles);
+    // Ensure order is what we expect.
+    assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
+    assert_eq!(non_normal_count[0].direction, Direction::East);
+    assert_eq!(non_normal_count[0].channel, 1);
+    assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
+    assert_eq!(non_normal_count[1].direction, Direction::East);
+    assert_eq!(non_normal_count[1].channel, 2);
+    assert_eq!(non_normal_count[9].date, date!(2023 - 11 - 10));
+    assert_eq!(non_normal_count[9].direction, Direction::East);
+    assert_eq!(non_normal_count[9].channel, 2);
 
-    let day1_east_key = NonNormalCountKey {
-        dvrpc_num: 166905,
-        date: date!(2023 - 11 - 06),
-        direction: Direction::East,
-        channel: 1,
-    };
-    let day1_west_key = NonNormalCountKey {
-        dvrpc_num: 166905,
-        date: date!(2023 - 11 - 06),
-        direction: Direction::West,
-        channel: 2,
-    };
-    let day2_east_key = NonNormalCountKey {
-        dvrpc_num: 166905,
-        date: date!(2023 - 11 - 07),
-        direction: Direction::East,
-        channel: 1,
-    };
-    let day2_west_key = NonNormalCountKey {
-        dvrpc_num: 166905,
-        date: date!(2023 - 11 - 07),
-        direction: Direction::West,
-        channel: 2,
-    };
-    let day3_east_key = NonNormalCountKey {
-        dvrpc_num: 166905,
-        date: date!(2023 - 11 - 08),
-        direction: Direction::East,
-        channel: 1,
-    };
-    let day3_west_key = NonNormalCountKey {
-        dvrpc_num: 166905,
-        date: date!(2023 - 11 - 08),
-        direction: Direction::West,
-        channel: 2,
-    };
-    let day1_total = non_normal_volcount[&day1_east_key].totalcount.unwrap()
-        + non_normal_volcount[&day1_west_key].totalcount.unwrap();
-    let day2_total = non_normal_volcount[&day2_east_key].totalcount.unwrap()
-        + non_normal_volcount[&day2_west_key].totalcount.unwrap();
-    let day3_total = non_normal_volcount[&day3_east_key].totalcount.unwrap()
-        + non_normal_volcount[&day3_west_key].totalcount.unwrap();
+    // the non-complete hours are not included in the resulting data structure
+    assert!(non_normal_count[0].am11.is_none());
+    assert!(non_normal_count[1].am11.is_none());
+    assert!(non_normal_count[8].am10.is_none());
+    assert!(non_normal_count[9].am10.is_none());
 
-    assert_eq!(day1_total, 2893);
-    assert_eq!(day2_total, 4450);
-    assert_eq!(day3_total, 1173);
+    // Test total counts.
+    assert_eq!(
+        non_normal_count[0].totalcount.unwrap() + non_normal_count[1].totalcount.unwrap(),
+        8636
+    );
+    assert_eq!(
+        non_normal_count[2].totalcount.unwrap() + non_normal_count[3].totalcount.unwrap(),
+        14751
+    );
+    assert_eq!(
+        non_normal_count[4].totalcount.unwrap() + non_normal_count[5].totalcount.unwrap(),
+        15298
+    );
+    assert_eq!(
+        non_normal_count[6].totalcount.unwrap() + non_normal_count[7].totalcount.unwrap(),
+        15379
+    );
+    assert_eq!(
+        non_normal_count[8].totalcount.unwrap() + non_normal_count[9].totalcount.unwrap(),
+        4220
+    );
 }

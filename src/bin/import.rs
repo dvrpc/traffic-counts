@@ -108,7 +108,7 @@ fn main() {
                 let (speed_range_count, vehicle_class_count) =
                     create_speed_and_class_count(metadata.clone(), individual_vehicles.clone());
                 let date = determine_date(individual_vehicles.clone());
-                dbg!(date);
+                // dbg!(date);
 
                 // dbg!(vehicle_class_count);
 
@@ -118,7 +118,7 @@ fn main() {
                 let non_normal_vol_count =
                     create_non_normal_vol_count(metadata.clone(), individual_vehicles.clone());
 
-                // dbg!(&non_normal_vol_count);
+                dbg!(&non_normal_vol_count);
 
                 // Create records for the non-normalized TC_SPESUM table
                 // (another one with specific hourly fields, this time for average speed/hour)
