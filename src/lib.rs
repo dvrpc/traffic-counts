@@ -163,7 +163,7 @@ impl IndividualVehicle {
     }
 }
 
-///  Pre-binned, simple volume counts in 15-minute intervals (TC_15MINVOLCOUNT table).
+/// Pre-binned, simple volume counts in 15-minute intervals (TC_15MINVOLCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
     pub date: Date,
@@ -336,26 +336,31 @@ impl Directions {
 
 /// Names of the 15 classifications from the FWA.
 ///
+/// NOTE: There is an "Unused" class at 14, which is excluded (presumably its for a future, yet
+/// undefined, class). However, JAMAR/StarNext uses "14" for unclassfied vehicles, and doesn't use
+/// 15. To cover both cases, 14 and 15 are considered unclassified in `from_num`.
+///
 /// See:
 ///  * <https://www.fhwa.dot.gov/policyinformation/vehclass.cfm>
 ///  * <https://www.fhwa.dot.gov/policyinformation/tmguide/tmg_2013/vehicle-types.cfm>
 ///  * <https://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/13091/002.cfm>
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum VehicleClass {
-    Motorcycles,                        // 1
-    PassengerCars,                      // 2
-    OtherFourTireSingleUnitVehicles,    // 3
-    Buses,                              // 4
-    TwoAxleSixTireSingleUnitTrucks,     // 5
-    ThreeAxleSingleUnitTrucks,          // 6
-    FourOrMoreAxleSingleUnitTrucks,     // 7
-    FourOrFewerAxleSingleTrailerTrucks, // 8
-    FiveAxleSingleTrailerTrucks,        // 9
-    SixOrMoreAxleSingleTrailerTrucks,   // 10
-    FiveOrFewerAxleMultiTrailerTrucks,  // 11
-    SixAxleMultiTrailerTrucks,          // 12
-    SevenOrMoreAxleMultiTrailerTrucks,  // 13
-    UnclassifiedVehicle,                // 15 (there is an "Unused" class group at 14)
+    Motorcycles = 1,
+    PassengerCars = 2,
+    OtherFourTireSingleUnitVehicles = 3,
+    Buses = 4,
+    TwoAxleSixTireSingleUnitTrucks = 5,
+    ThreeAxleSingleUnitTrucks = 6,
+    FourOrMoreAxleSingleUnitTrucks = 7,
+    FourOrFewerAxleSingleTrailerTrucks = 8,
+    FiveAxleSingleTrailerTrucks = 9,
+    SixOrMoreAxleSingleTrailerTrucks = 10,
+    FiveOrFewerAxleMultiTrailerTrucks = 11,
+    SixAxleMultiTrailerTrucks = 12,
+    SevenOrMoreAxleMultiTrailerTrucks = 13,
+    UnclassifiedVehicle = 15,
 }
 
 impl VehicleClass {
@@ -375,7 +380,7 @@ impl VehicleClass {
             11 => Ok(VehicleClass::FiveOrFewerAxleMultiTrailerTrucks),
             12 => Ok(VehicleClass::SixAxleMultiTrailerTrucks),
             13 => Ok(VehicleClass::SevenOrMoreAxleMultiTrailerTrucks),
-            0 | 14 => Ok(VehicleClass::UnclassifiedVehicle), // TODO: verify this
+            0 | 14 | 15 => Ok(VehicleClass::UnclassifiedVehicle),
             other => Err(CountError::BadVehicleClass(other)),
         }
     }
