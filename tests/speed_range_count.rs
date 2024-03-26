@@ -1,4 +1,4 @@
-use traffic_counts::*;
+use traffic_counts::{intermediate::*, *};
 
 #[test]
 fn speed_binning_is_correct() {

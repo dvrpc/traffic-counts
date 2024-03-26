@@ -22,8 +22,9 @@ use time::{Date, PrimitiveDateTime, Time};
 
 pub mod annual_avg;
 pub mod extract_from_file;
+pub mod intermediate;
 use annual_avg::GetDate;
-use non_normal::*;
+use intermediate::*;
 
 // headers stripped of double quotes and spaces
 // TODO: the headers for FifteenMinuteBicycle and FifteenMinutePedestrian
@@ -162,7 +163,7 @@ impl IndividualVehicle {
     }
 }
 
-///  Pre-binned, simple volume counts in 15-minute intervals.
+///  Pre-binned, simple volume counts in 15-minute intervals (TC_15MINVOLCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
     pub date: Date,
@@ -380,15 +381,10 @@ impl VehicleClass {
     }
 }
 
-/// Count of vehicles by vehicle class (see [`VehicleClass`]) over some time period.
-///
-/// This is generally - but not always - for 15-minute intervals.
-///
-/// Note: unclassified vehicles are counted in `c15` field, but also are included in the `c2`
-/// (Passenger Cars). Thus, a simple sum of fields `c1` through `c15` would double-count
-/// unclassified vehicles.
-#[derive(Debug, Clone, Copy)]
-pub struct VehicleClassCount {
+/// 15-minute count of vehicles by vehicle class (see [`VehicleClass`]) (TC_CLACOUNT table).
+pub struct FifteenMinuteVehicleClassCount {
+    pub datetime: PrimitiveDateTime,
+    pub channel: u8,
     pub dvrpc_num: i32,
     pub direction: Direction,
     pub c1: i32,
@@ -408,61 +404,11 @@ pub struct VehicleClassCount {
     pub total: i32,
 }
 
-impl VehicleClassCount {
-    /// Create a new count.
-    pub fn first(dvrpc_num: i32, direction: Direction, class: VehicleClass) -> Self {
-        let mut count = Self {
-            dvrpc_num,
-            direction,
-            c1: 0,
-            c2: 0,
-            c3: 0,
-            c4: 0,
-            c5: 0,
-            c6: 0,
-            c7: 0,
-            c8: 0,
-            c9: 0,
-            c10: 0,
-            c11: 0,
-            c12: 0,
-            c13: 0,
-            c15: 0,
-            total: 1,
-        };
-        count.insert(class);
-        count
-    }
-    /// Insert individual counted vehicles into count.
-    pub fn insert(&mut self, class: VehicleClass) {
-        match class {
-            VehicleClass::Motorcycles => self.c1 += 1,
-            VehicleClass::PassengerCars => self.c2 += 1,
-            VehicleClass::OtherFourTireSingleUnitVehicles => self.c3 += 1,
-            VehicleClass::Buses => self.c4 += 1,
-            VehicleClass::TwoAxleSixTireSingleUnitTrucks => self.c5 += 1,
-            VehicleClass::ThreeAxleSingleUnitTrucks => self.c6 += 1,
-            VehicleClass::FourOrMoreAxleSingleUnitTrucks => self.c7 += 1,
-            VehicleClass::FourOrFewerAxleSingleTrailerTrucks => self.c8 += 1,
-            VehicleClass::FiveAxleSingleTrailerTrucks => self.c9 += 1,
-            VehicleClass::SixOrMoreAxleSingleTrailerTrucks => self.c10 += 1,
-            VehicleClass::FiveOrFewerAxleMultiTrailerTrucks => self.c11 += 1,
-            VehicleClass::SixAxleMultiTrailerTrucks => self.c12 += 1,
-            VehicleClass::SevenOrMoreAxleMultiTrailerTrucks => self.c13 += 1,
-            VehicleClass::UnclassifiedVehicle => {
-                // Unclassified vehicles get included with class 2 and also counted on their own.
-                self.c2 += 1;
-                self.c15 += 1;
-            }
-        }
-    }
-}
-
-/// Count of vehicles by speed range over some time period.
-///
-/// This is generally - but not always - for 15-minute intervals.
-#[derive(Debug, Clone, Copy)]
-pub struct SpeedRangeCount {
+/// 15-minute count of vehicles by speed range (TC_SPECOUNT table).
+#[derive(Debug, Clone)]
+pub struct FifteenMinuteSpeedRangeCount {
+    pub datetime: PrimitiveDateTime,
+    pub channel: u8,
     pub dvrpc_num: i32,
     pub direction: Direction,
     pub s1: i32,
@@ -482,97 +428,17 @@ pub struct SpeedRangeCount {
     pub total: i32,
 }
 
-impl SpeedRangeCount {
-    /// Create a SpeedRangeCount with 0 count for all speed ranges.
-    pub fn first(dvrpc_num: i32, direction: Direction, speed: f32) -> Self {
-        let mut value = Self {
-            dvrpc_num,
-            direction,
-            s1: 0,
-            s2: 0,
-            s3: 0,
-            s4: 0,
-            s5: 0,
-            s6: 0,
-            s7: 0,
-            s8: 0,
-            s9: 0,
-            s10: 0,
-            s11: 0,
-            s12: 0,
-            s13: 0,
-            s14: 0,
-            total: 0,
-        };
-        value.insert(speed);
-        value
-    }
-    /// Insert individual speed into count.
-    pub fn insert(&mut self, speed: f32) {
-        // The end of the ranges are inclusive to the number's .0 decimal;
-        // that is:
-        // 0-15: 0.0 to 15.0
-        // >15-20: 15.1 to 20.0, etc.
-
-        // Unfortunately, using floats as tests in pattern matching will be an error in a future
-        // Rust release, so need to do if/else rather than match.
-        // <https://github.com/rust-lang/rust/issues/41620>
-        if speed.is_sign_negative() {
-            // This shouldn't be necessary, but I saw a -0.0 in one of the files.
-            self.s1 += 1
-        } else if (0.0..=15.0).contains(&speed) {
-            self.s1 += 1;
-        } else if (15.1..=20.0).contains(&speed) {
-            self.s2 += 1;
-        } else if (20.1..=25.0).contains(&speed) {
-            self.s3 += 1;
-        } else if (25.1..=30.0).contains(&speed) {
-            self.s4 += 1;
-        } else if (30.1..=35.0).contains(&speed) {
-            self.s5 += 1;
-        } else if (35.1..=40.0).contains(&speed) {
-            self.s6 += 1;
-        } else if (40.1..=45.0).contains(&speed) {
-            self.s7 += 1;
-        } else if (45.1..=50.0).contains(&speed) {
-            self.s8 += 1;
-        } else if (50.1..=55.0).contains(&speed) {
-            self.s9 += 1;
-        } else if (55.1..=60.0).contains(&speed) {
-            self.s10 += 1;
-        } else if (60.1..=65.0).contains(&speed) {
-            self.s11 += 1;
-        } else if (65.1..=70.0).contains(&speed) {
-            self.s12 += 1;
-        } else if (70.1..=75.0).contains(&speed) {
-            self.s13 += 1;
-        } else if (75.1..).contains(&speed) {
-            self.s14 += 1;
-        }
-        self.total += 1;
-    }
-}
-
-/// Represents rows in the TC_CLACOUNT table.
-type FifteenMinuteVehicleClassCount = HashMap<BinnedCountKey, VehicleClassCount>;
-
-/// Represents rows in the TC_SPECOUNT table.
-type FifteenMinuteSpeedRangeCount = HashMap<BinnedCountKey, SpeedRangeCount>;
-
-/// Identifies the time and lane for binning vehicle class/speeds.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct BinnedCountKey {
-    pub datetime: PrimitiveDateTime,
-    pub channel: u8,
-}
-
-/// Create the 15-minute binned speed and class counts from [`IndividualVehicle`]s.
+/// Create 15-minute speed and class counts from [`IndividualVehicle`]s.
 pub fn create_speed_and_class_count(
     metadata: CountMetadata,
     counts: Vec<IndividualVehicle>,
-) -> (FifteenMinuteSpeedRangeCount, FifteenMinuteVehicleClassCount) {
-    let mut fifteen_min_speed_range_count: FifteenMinuteSpeedRangeCount = HashMap::new();
-    let mut fifteen_min_vehicle_class_count: FifteenMinuteVehicleClassCount = HashMap::new();
+) -> (
+    Vec<FifteenMinuteSpeedRangeCount>,
+    Vec<FifteenMinuteVehicleClassCount>,
+) {
+    let mut fifteen_min_speed_range_map: HashMap<BinnedCountKey, SpeedRangeCount> = HashMap::new();
+    let mut fifteen_min_vehicle_class_map: HashMap<BinnedCountKey, VehicleClassCount> =
+        HashMap::new();
 
     for count in counts {
         // Get the direction from the channel of count/metadata of filename.
@@ -599,8 +465,8 @@ pub fn create_speed_and_class_count(
             channel: count.channel,
         };
 
-        // Add new entry to 15-min speed range count or increment existing one.
-        fifteen_min_speed_range_count
+        // Add new entry to 15-min speed range map or increment existing one.
+        fifteen_min_speed_range_map
             .entry(key)
             .and_modify(|c| {
                 c.total += 1;
@@ -612,8 +478,8 @@ pub fn create_speed_and_class_count(
                 count.speed,
             ));
 
-        // Add new entry to 15-min vehicle class count or increment existing one.
-        fifteen_min_vehicle_class_count
+        // Add new entry to 15-min vehicle class map or increment existing one.
+        fifteen_min_vehicle_class_map
             .entry(key)
             .and_modify(|c| {
                 c.total += 1;
@@ -624,6 +490,58 @@ pub fn create_speed_and_class_count(
                 direction,
                 count.class,
             ));
+    }
+
+    // Convert speed range count from HashMap to Vec.
+    let mut fifteen_min_speed_range_count = vec![];
+    for (key, value) in fifteen_min_speed_range_map {
+        fifteen_min_speed_range_count.push(FifteenMinuteSpeedRangeCount {
+            datetime: key.datetime,
+            channel: key.channel,
+            dvrpc_num: value.dvrpc_num,
+            direction: value.direction,
+            s1: value.s1,
+            s2: value.s2,
+            s3: value.s3,
+            s4: value.s4,
+            s5: value.s5,
+            s6: value.s6,
+            s7: value.s7,
+            s8: value.s8,
+            s9: value.s9,
+            s10: value.s10,
+            s11: value.s11,
+            s12: value.s12,
+            s13: value.s13,
+            s14: value.s14,
+            total: value.total,
+        });
+    }
+
+    // Convert vehicle class from HashMap to Vec.
+    let mut fifteen_min_vehicle_class_count = vec![];
+    for (key, value) in fifteen_min_vehicle_class_map {
+        fifteen_min_vehicle_class_count.push(FifteenMinuteVehicleClassCount {
+            datetime: key.datetime,
+            channel: key.channel,
+            dvrpc_num: value.dvrpc_num,
+            direction: value.direction,
+            c1: value.c1,
+            c2: value.c2,
+            c3: value.c3,
+            c4: value.c4,
+            c5: value.c5,
+            c6: value.c6,
+            c7: value.c7,
+            c8: value.c8,
+            c9: value.c9,
+            c10: value.c10,
+            c11: value.c11,
+            c12: value.c12,
+            c13: value.c13,
+            c15: value.c15,
+            total: value.total,
+        });
     }
 
     (
@@ -642,7 +560,7 @@ pub enum Weather {
     Sunny,
 }
 
-/// Corresponds to a row in the non-normal TC_VOLCOUNT table.
+/// Non-normalalized volume counts (TC_VOLCOUNT table).
 ///
 /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
 /// the following day - can start and stop at any time.
@@ -681,7 +599,7 @@ pub struct NonNormalVolCount {
     pub pm11: Option<i32>,
 }
 
-/// Aggregate [`IndividualVehicle`]s into the shape of the TC_VOLCOUNT table.
+/// Create non-normalized volume counts from [`IndividualVehicle`]s.
 ///
 /// This excludes the first and last hour of the overall count,
 /// as they are unlikely to be a full hour of data.
@@ -815,7 +733,7 @@ pub fn create_non_normal_vol_count(
     non_normal_vol_count
 }
 
-/// Corresponds to a row in the non-normal TC_SPESUM table.
+/// Non-normalized average speed counts (TC_SPESUM table).
 ///
 /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
 /// the following day - can start and stop at any time.
@@ -851,7 +769,7 @@ pub struct NonNormalAvgSpeedCount {
     pub pm11: Option<f32>,
 }
 
-/// Aggregate [`IndividualVehicle`]s into the shape of the TC_SPESUM table.
+/// Create non-normalized average speed counts from [`IndividualVehicle`]s.
 ///
 /// This excludes the first and last hour of the overall count,
 /// as they are unlikely to be a full hour of data.
@@ -1203,238 +1121,6 @@ fn count_type_and_num_nondata_rows(path: &Path) -> Result<(InputCount, usize), C
 pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
     let (_, num_rows) = count_type_and_num_nondata_rows(path)?;
     Ok(num_rows)
-}
-
-// Intermediate data types and work to eventually produce non-normal counts
-mod non_normal {
-    use crate::{Direction, Weather};
-    use time::Date;
-
-    // The key for records of the TC_VOLCOUNT & TC_SPESUM tables, used in intermediate data structure.
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct NonNormalCountKey {
-        pub dvrpc_num: i32,
-        pub date: Date,
-        pub direction: Direction,
-        pub channel: u8,
-    }
-
-    /// The rest of the fields in the TC_VOLCOUNT table.
-    ///
-    /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
-    /// the following day - can start and stop at any time.
-    #[derive(Debug, Clone, Default)]
-    pub struct NonNormalVolCountValue {
-        pub setflag: Option<i32>,
-        pub totalcount: Option<i32>,
-        pub weather: Option<Weather>,
-        pub am12: Option<i32>,
-        pub am1: Option<i32>,
-        pub am2: Option<i32>,
-        pub am3: Option<i32>,
-        pub am4: Option<i32>,
-        pub am5: Option<i32>,
-        pub am6: Option<i32>,
-        pub am7: Option<i32>,
-        pub am8: Option<i32>,
-        pub am9: Option<i32>,
-        pub am10: Option<i32>,
-        pub am11: Option<i32>,
-        pub pm12: Option<i32>,
-        pub pm1: Option<i32>,
-        pub pm2: Option<i32>,
-        pub pm3: Option<i32>,
-        pub pm4: Option<i32>,
-        pub pm5: Option<i32>,
-        pub pm6: Option<i32>,
-        pub pm7: Option<i32>,
-        pub pm8: Option<i32>,
-        pub pm9: Option<i32>,
-        pub pm10: Option<i32>,
-        pub pm11: Option<i32>,
-    }
-
-    impl NonNormalVolCountValue {
-        /// Create a NonNormalVolCountValue with `None` for everything except
-        /// the total and the first hour/count, which will be `Some(1)`.
-        /// (For the first time a new key is created in a HashMap.)
-        pub fn first(hour: u8) -> Self {
-            let mut value = Self {
-                ..Default::default()
-            };
-
-            value.totalcount = Some(1);
-
-            match hour {
-                0 => value.am12 = Some(1),
-                1 => value.am1 = Some(1),
-                2 => value.am2 = Some(1),
-                3 => value.am3 = Some(1),
-                4 => value.am4 = Some(1),
-                5 => value.am5 = Some(1),
-                6 => value.am6 = Some(1),
-                7 => value.am7 = Some(1),
-                8 => value.am8 = Some(1),
-                9 => value.am9 = Some(1),
-                10 => value.am10 = Some(1),
-                11 => value.am11 = Some(1),
-                12 => value.pm12 = Some(1),
-                13 => value.pm1 = Some(1),
-                14 => value.pm2 = Some(1),
-                15 => value.pm3 = Some(1),
-                16 => value.pm4 = Some(1),
-                17 => value.pm5 = Some(1),
-                18 => value.pm6 = Some(1),
-                19 => value.pm7 = Some(1),
-                20 => value.pm8 = Some(1),
-                21 => value.pm9 = Some(1),
-                22 => value.pm10 = Some(1),
-                23 => value.pm11 = Some(1),
-                _ => (), // ok, because time.hour() can only be 0-23
-            }
-            value
-        }
-    }
-
-    /// The rest of the fields in the TC_SPESUM table.
-    ///
-    /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
-    /// the following day - can start and stop at any time.
-    #[derive(Debug, Clone, Default)]
-    pub struct NonNormalAvgSpeedValue {
-        // pub lane: i32,
-        pub am12: Option<f32>,
-        pub am1: Option<f32>,
-        pub am2: Option<f32>,
-        pub am3: Option<f32>,
-        pub am4: Option<f32>,
-        pub am5: Option<f32>,
-        pub am6: Option<f32>,
-        pub am7: Option<f32>,
-        pub am8: Option<f32>,
-        pub am9: Option<f32>,
-        pub am10: Option<f32>,
-        pub am11: Option<f32>,
-        pub pm12: Option<f32>,
-        pub pm1: Option<f32>,
-        pub pm2: Option<f32>,
-        pub pm3: Option<f32>,
-        pub pm4: Option<f32>,
-        pub pm5: Option<f32>,
-        pub pm6: Option<f32>,
-        pub pm7: Option<f32>,
-        pub pm8: Option<f32>,
-        pub pm9: Option<f32>,
-        pub pm10: Option<f32>,
-        pub pm11: Option<f32>,
-    }
-
-    impl NonNormalAvgSpeedValue {
-        // Create new NonNormalAvgSpeedValue, including the first hourly average we calculate.
-        // Subsequent hourly averages are added by modifying this instance (via the key in
-        // the HashMap this is the value for).
-        pub fn first(hour_as_str: &str, average_speed: f32) -> Self {
-            let mut value = Self {
-                ..Default::default()
-            };
-
-            match hour_as_str {
-                "am12" => value.am12 = Some(average_speed),
-                "am1" => value.am1 = Some(average_speed),
-                "am2" => value.am2 = Some(average_speed),
-                "am3" => value.am3 = Some(average_speed),
-                "am4" => value.am4 = Some(average_speed),
-                "am5" => value.am5 = Some(average_speed),
-                "am6" => value.am6 = Some(average_speed),
-                "am7" => value.am7 = Some(average_speed),
-                "am8" => value.am8 = Some(average_speed),
-                "am9" => value.am9 = Some(average_speed),
-                "am10" => value.am10 = Some(average_speed),
-                "am11" => value.am11 = Some(average_speed),
-                "pm12" => value.pm12 = Some(average_speed),
-                "pm1" => value.pm1 = Some(average_speed),
-                "pm2" => value.pm2 = Some(average_speed),
-                "pm3" => value.pm3 = Some(average_speed),
-                "pm4" => value.pm4 = Some(average_speed),
-                "pm5" => value.pm5 = Some(average_speed),
-                "pm6" => value.pm6 = Some(average_speed),
-                "pm7" => value.pm7 = Some(average_speed),
-                "pm8" => value.pm8 = Some(average_speed),
-                "pm9" => value.pm9 = Some(average_speed),
-                "pm10" => value.pm10 = Some(average_speed),
-                "pm11" => value.pm11 = Some(average_speed),
-                _ => (),
-            }
-            value
-        }
-    }
-
-    #[derive(Debug, Clone, Default)]
-    pub struct NonNormalRawSpeedValue {
-        // pub lane: i32,
-        pub am12: Vec<f32>,
-        pub am1: Vec<f32>,
-        pub am2: Vec<f32>,
-        pub am3: Vec<f32>,
-        pub am4: Vec<f32>,
-        pub am5: Vec<f32>,
-        pub am6: Vec<f32>,
-        pub am7: Vec<f32>,
-        pub am8: Vec<f32>,
-        pub am9: Vec<f32>,
-        pub am10: Vec<f32>,
-        pub am11: Vec<f32>,
-        pub pm12: Vec<f32>,
-        pub pm1: Vec<f32>,
-        pub pm2: Vec<f32>,
-        pub pm3: Vec<f32>,
-        pub pm4: Vec<f32>,
-        pub pm5: Vec<f32>,
-        pub pm6: Vec<f32>,
-        pub pm7: Vec<f32>,
-        pub pm8: Vec<f32>,
-        pub pm9: Vec<f32>,
-        pub pm10: Vec<f32>,
-        pub pm11: Vec<f32>,
-    }
-    impl NonNormalRawSpeedValue {
-        /// Create a `NonNormalAvgSpeedValue` with empty Vecs.
-        /// (For the first time a new key is created in a HashMap.)
-        pub fn first(hour: u8, speed: f32) -> Self {
-            let mut value = Self {
-                ..Default::default()
-            };
-
-            match hour {
-                0 => value.am12 = vec![speed],
-                1 => value.am1 = vec![speed],
-                2 => value.am2 = vec![speed],
-                3 => value.am3 = vec![speed],
-                4 => value.am4 = vec![speed],
-                5 => value.am5 = vec![speed],
-                6 => value.am6 = vec![speed],
-                7 => value.am7 = vec![speed],
-                8 => value.am8 = vec![speed],
-                9 => value.am9 = vec![speed],
-                10 => value.am10 = vec![speed],
-                11 => value.am11 = vec![speed],
-                12 => value.pm12 = vec![speed],
-                13 => value.pm1 = vec![speed],
-                14 => value.pm2 = vec![speed],
-                15 => value.pm3 = vec![speed],
-                16 => value.pm4 = vec![speed],
-                17 => value.pm5 = vec![speed],
-                18 => value.pm6 = vec![speed],
-                19 => value.pm7 = vec![speed],
-                20 => value.pm8 = vec![speed],
-                21 => value.pm9 = vec![speed],
-                22 => value.pm10 = vec![speed],
-                23 => value.pm11 = vec![speed],
-                _ => (), // ok, because time.hour() can only be 0-23
-            }
-            value
-        }
-    }
 }
 
 #[cfg(test)]
