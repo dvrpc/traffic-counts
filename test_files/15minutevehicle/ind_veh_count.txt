@@ -1,0 +1,5 @@
+Date/Time:, 11/6/2023 11:34:00 AM
+Site Code:, 165367
+Station ID:, 
+Veh. No., Date, Time, Channel, Class, Speed
+1, 11/6/2023, 11:54:57 AM, 2, 2, 36.3

@@ -1,0 +1,5 @@
+Date/Time:, 11/6/2023 11:34:00 AM
+Site Code:, 165367
+Station ID:, 
+No matching header in this file
+8418, 11/10/2023, 10:04:03 AM, 1, 1, 1.0
