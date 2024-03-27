@@ -21,6 +21,7 @@ use thiserror::Error;
 use time::{Date, PrimitiveDateTime, Time};
 
 pub mod annual_avg;
+pub mod db;
 pub mod extract_from_file;
 pub mod intermediate;
 use annual_avg::GetDate;
