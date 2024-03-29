@@ -8,13 +8,13 @@ use crate::*;
 
 /// A trait for database operations on output count types.
 pub trait CountTable {
-    /// Get the name of the table in the database that this count type corresponds to.
-    fn table_name() -> &'static str;
+    /// The name of the table in the database that this count type corresponds to.
+    const TABLE_NAME: &'static str; // associated constant
 
     /// Delete all records in the table.
     fn delete(conn: &Connection, recordnum: i32) -> Result<(), oracle::Error> {
         let sql = "delete from :1 where recordnum = :2";
-        conn.execute(sql, &[&Self::table_name(), &recordnum])?;
+        conn.execute(sql, &[&Self::TABLE_NAME, &recordnum])?;
         conn.commit()
     }
     // TODO
@@ -22,30 +22,20 @@ pub trait CountTable {
 }
 
 impl CountTable for FifteenMinuteVehicleClassCount {
-    fn table_name() -> &'static str {
-        "tc_clacount"
-    }
+    const TABLE_NAME: &'static str = "tc_clacount";
 }
 
 impl CountTable for FifteenMinuteSpeedRangeCount {
-    fn table_name() -> &'static str {
-        "tc_specount"
-    }
+    const TABLE_NAME: &'static str = "tc_specount";
 }
 impl CountTable for NonNormalAvgSpeedCount {
-    fn table_name() -> &'static str {
-        "tc_spesum"
-    }
+    const TABLE_NAME: &'static str = "tc_spesum";
 }
 impl CountTable for NonNormalVolCount {
-    fn table_name() -> &'static str {
-        "tc_volcount"
-    }
+    const TABLE_NAME: &'static str = "tc_volcount";
 }
 impl CountTable for FifteenMinuteVehicle {
-    fn table_name() -> &'static str {
-        "tc_15minvolcount"
-    }
+    const TABLE_NAME: &'static str = "tc_15minvolcount";
 }
 
 /// Create a connection pool.
