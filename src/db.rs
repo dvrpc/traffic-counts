@@ -11,20 +11,18 @@ pub trait CountTable {
     /// The name of the table in the database that this count type corresponds to.
     const TABLE_NAME: &'static str; // associated constant
 
-    /// Delete all records in the table.
+    /// Delete all records in the table with a particular recordnum.
     fn delete(conn: &Connection, recordnum: i32) -> Result<(), oracle::Error> {
-        let sql = "delete from :1 where recordnum = :2";
-        conn.execute(sql, &[&Self::TABLE_NAME, &recordnum])?;
+        let sql = &format!("delete from {} where recordnum = :1", &Self::TABLE_NAME);
+        conn.execute(sql, &[&recordnum])?;
         conn.commit()
     }
     // TODO
     fn insert(&self) {}
 }
-
 impl CountTable for FifteenMinuteVehicleClassCount {
     const TABLE_NAME: &'static str = "tc_clacount";
 }
-
 impl CountTable for FifteenMinuteSpeedRangeCount {
     const TABLE_NAME: &'static str = "tc_specount";
 }
@@ -46,7 +44,6 @@ pub fn create_pool(username: String, password: String) -> Result<Pool, OracleErr
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use std::env;
