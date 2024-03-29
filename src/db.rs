@@ -1,44 +1,50 @@
 //! Interact with database.
 use oracle::{
     pool::{Pool, PoolBuilder},
-    Error as OracleError,
+    Connection, Error as OracleError,
 };
 
-use crate::{
-    CountError, FifteenMinuteSpeedRangeCount, FifteenMinuteVehicleClassCount,
-    NonNormalAvgSpeedCount, NonNormalVolCount,
-};
+use crate::*;
 
-pub trait Insert {
-    type Item;
-    fn insert(item: Self::Item) -> Result<(), CountError<'static>>;
+/// A trait for database operations on output count types.
+pub trait CountTable {
+    /// Get the name of the table in the database that this count type corresponds to.
+    fn table_name() -> &'static str;
+
+    /// Delete all records in the table.
+    fn delete(conn: &Connection, recordnum: i32) -> Result<(), oracle::Error> {
+        let sql = "delete from :1 where recordnum = :2";
+        conn.execute(sql, &[&Self::table_name(), &recordnum])?;
+        conn.commit()
+    }
+    // TODO
+    fn insert(&self) {}
 }
 
-impl Insert for FifteenMinuteVehicleClassCount {
-    type Item = FifteenMinuteVehicleClassCount;
-    fn insert(_: FifteenMinuteVehicleClassCount) -> Result<(), CountError<'static>> {
-        Ok(())
+impl CountTable for FifteenMinuteVehicleClassCount {
+    fn table_name() -> &'static str {
+        "tc_clacount"
     }
 }
 
-impl Insert for FifteenMinuteSpeedRangeCount {
-    type Item = FifteenMinuteSpeedRangeCount;
-    fn insert(_: FifteenMinuteSpeedRangeCount) -> Result<(), CountError<'static>> {
-        Ok(())
+impl CountTable for FifteenMinuteSpeedRangeCount {
+    fn table_name() -> &'static str {
+        "tc_specount"
     }
 }
-
-impl Insert for NonNormalVolCount {
-    type Item = NonNormalVolCount;
-    fn insert(_: NonNormalVolCount) -> Result<(), CountError<'static>> {
-        Ok(())
+impl CountTable for NonNormalAvgSpeedCount {
+    fn table_name() -> &'static str {
+        "tc_spesum"
     }
 }
-
-impl Insert for NonNormalAvgSpeedCount {
-    type Item = NonNormalVolCount;
-    fn insert(_: NonNormalVolCount) -> Result<(), CountError<'static>> {
-        Ok(())
+impl CountTable for NonNormalVolCount {
+    fn table_name() -> &'static str {
+        "tc_volcount"
+    }
+}
+impl CountTable for FifteenMinuteVehicle {
+    fn table_name() -> &'static str {
+        "tc_15minvolcount"
     }
 }
 

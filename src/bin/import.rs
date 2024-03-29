@@ -8,7 +8,13 @@ use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
 
-use traffic_counts::{annual_avg::determine_date, extract_from_file::Extract, *};
+use traffic_counts::intermediate::VehicleClassCount;
+use traffic_counts::{
+    annual_avg::determine_date,
+    db::{create_pool, CountTable},
+    extract_from_file::Extract,
+    *,
+};
 
 const LOG: &str = "log.txt";
 
@@ -43,20 +49,22 @@ fn main() {
 
     // The database env vars aren't needed for a while, but if they aren't available, return
     // early before doing any work.
-    match env::var("DB_USERNAME") {
+    let username = match env::var("DB_USERNAME") {
         Ok(v) => v,
         Err(e) => {
             error!("Unable to load username from .env file: {e}.");
             return;
         }
     };
-    match env::var("DB_PASSWORD") {
+    let password = match env::var("DB_PASSWORD") {
         Ok(v) => v,
         Err(e) => {
             error!("Unable to load password from .env file: {e}.");
             return;
         }
     };
+    let pool = create_pool(username, password).unwrap();
+    let conn = pool.get().unwrap();
 
     // Get all the paths of the files that need to be processed.
     let mut paths = vec![];
@@ -81,20 +89,19 @@ fn main() {
         };
 
         info!("Extracting data from {path:?}, a {count_type:?} count.");
-
+        let metadata = match CountMetadata::from_path(path) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("{path:?} not processed: {e}");
+                continue;
+            }
+        };
+        let record_num = metadata.clone().dvrpc_num;
         // Process the file according to InputCount.
         match count_type {
             InputCount::IndividualVehicle => {
                 // Extract data from CSV/text file
                 let individual_vehicles = match IndividualVehicle::extract(path) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("{path:?} not processed: {e}");
-                        continue;
-                    }
-                };
-
-                let metadata = match CountMetadata::from_path(path) {
                     Ok(v) => v,
                     Err(e) => {
                         error!("{path:?} not processed: {e}");
@@ -109,7 +116,6 @@ fn main() {
                     create_speed_and_class_count(metadata.clone(), individual_vehicles.clone());
                 let date = determine_date(individual_vehicles.clone());
                 // dbg!(date);
-
                 // dbg!(vehicle_class_count);
 
                 // Create records for the non-normalized TC_VOLCOUNT table.
@@ -118,15 +124,19 @@ fn main() {
                 let non_normal_vol_count =
                     create_non_normal_vol_count(metadata.clone(), individual_vehicles.clone());
 
-                dbg!(&non_normal_vol_count);
+                // dbg!(&non_normal_vol_count);
 
                 // Create records for the non-normalized TC_SPESUM table
                 // (another one with specific hourly fields, this time for average speed/hour)
                 let non_normal_speedavg_count =
-                    create_non_normal_speedavg_count(metadata, individual_vehicles);
+                    create_non_normal_speedavg_count(metadata.clone(), individual_vehicles);
 
                 // dbg!(&non_normal_speedavg_count);
                 // TODO: enter these into the database
+                FifteenMinuteVehicleClassCount::delete(&conn, record_num).unwrap();
+                FifteenMinuteSpeedRangeCount::delete(&conn, record_num).unwrap();
+                NonNormalVolCount::delete(&conn, record_num).unwrap();
+                NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
             }
             InputCount::FifteenMinuteVehicle => {
                 let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
@@ -139,6 +149,7 @@ fn main() {
 
                 // As they are already binned by 15-minute period, these need no further processing.
                 // TODO: enter into database.
+                FifteenMinuteVehicle::delete(&conn, record_num).unwrap();
             }
             InputCount::FifteenMinuteBicycle => (),
             InputCount::FifteenMinutePedestrian => (),

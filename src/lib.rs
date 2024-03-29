@@ -55,6 +55,8 @@ pub enum CountError<'a> {
     BadVehicleClass(u8),
     #[error("error converting header row to string")]
     HeadertoStringRecordError(#[from] csv::Error),
+    #[error("database error `{0}`")]
+    DbError(#[from] oracle::Error),
 }
 
 /// Identifying the problem when there's an error with a filename.
@@ -388,6 +390,7 @@ impl VehicleClass {
 }
 
 /// 15-minute count of vehicles by vehicle class (see [`VehicleClass`]) (TC_CLACOUNT table).
+#[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicleClassCount {
     pub datetime: PrimitiveDateTime,
     pub channel: u8,
