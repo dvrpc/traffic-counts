@@ -12,6 +12,7 @@
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -319,6 +320,18 @@ pub enum Direction {
     East,
     South,
     West,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dir = match self {
+            Direction::North => "north".to_string(),
+            Direction::East => "east".to_string(),
+            Direction::South => "south".to_string(),
+            Direction::West => "west".to_string(),
+        };
+        write!(f, "{}", dir)
+    }
 }
 
 /// The [`Direction`]s that a count could contain.

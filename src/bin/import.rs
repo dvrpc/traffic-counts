@@ -133,10 +133,24 @@ fn main() {
 
                 // dbg!(&non_normal_speedavg_count);
                 // TODO: enter these into the database
-                FifteenMinuteVehicleClassCount::delete(&conn, record_num).unwrap();
-                FifteenMinuteSpeedRangeCount::delete(&conn, record_num).unwrap();
+                // FifteenMinuteVehicleClassCount::delete(&conn, record_num).unwrap();
+                // FifteenMinuteSpeedRangeCount::delete(&conn, record_num).unwrap();
                 NonNormalVolCount::delete(&conn, record_num).unwrap();
-                NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
+                // NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
+
+                // Create prepared statment and use it to insert counts.
+                let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
+                for vol_count in non_normal_vol_count {
+                    match vol_count.insert(&mut prepared) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            dbg!(&e);
+                            dbg!(&vol_count);
+                        }
+                    }
+                }
+                // dbg!(&non_normal_vol_count[0]);
+                conn.commit().unwrap();
             }
             InputCount::FifteenMinuteVehicle => {
                 let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
@@ -149,7 +163,7 @@ fn main() {
 
                 // As they are already binned by 15-minute period, these need no further processing.
                 // TODO: enter into database.
-                FifteenMinuteVehicle::delete(&conn, record_num).unwrap();
+                // FifteenMinuteVehicle::delete(&conn, record_num).unwrap();
             }
             InputCount::FifteenMinuteBicycle => (),
             InputCount::FifteenMinutePedestrian => (),
