@@ -86,7 +86,7 @@ alter table tc_15minvolcount add constraint tc_15minvolcount_pk primary key (id)
 
 -- Add new unique constraint to reflect how data will be stored.
 alter table tc_volcount 
-    add constraint unique_record_date_dir_volcount unique (recordnum, countdate, cntdir);
+    add constraint unique_record_date_dir_lane_volcount unique (recordnum, countdate, cntdir, countlane);
 alter table tc_15minvolcount 
     add constraint unique_record_datetime_dir_15minvolcount unique (recordnum, countdate, counttime, cntdir);
 /*
