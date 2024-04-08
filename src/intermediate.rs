@@ -288,7 +288,6 @@ impl NonNormalVolCountValue {
 /// the following day - can start and stop at any time.
 #[derive(Debug, Clone, Default)]
 pub struct NonNormalAvgSpeedValue {
-    // pub lane: i32,
     pub am12: Option<f32>,
     pub am1: Option<f32>,
     pub am2: Option<f32>,
@@ -358,7 +357,6 @@ impl NonNormalAvgSpeedValue {
 /// Raw speeds, used to create averages.
 #[derive(Debug, Clone, Default)]
 pub struct NonNormalRawSpeedValue {
-    // pub lane: i32,
     pub am12: Vec<f32>,
     pub am1: Vec<f32>,
     pub am2: Vec<f32>,
