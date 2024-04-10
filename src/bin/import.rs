@@ -8,7 +8,6 @@ use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
 
-use traffic_counts::intermediate::VehicleClassCount;
 use traffic_counts::{
     annual_avg::determine_date,
     db::{create_pool, CountTable},
@@ -108,15 +107,16 @@ fn main() {
                         continue;
                     }
                 };
+                dbg!(individual_vehicles.len());
 
                 // Create two counts from this: 15-minute speed count and 15-minute class count
                 // TODO: this could also be for other intervals - the function is probably too
                 // specific as is and should take desired interval as parameter
                 let (speed_range_count, vehicle_class_count) =
                     create_speed_and_class_count(metadata.clone(), individual_vehicles.clone());
-                let date = determine_date(individual_vehicles.clone());
-                // dbg!(date);
-                // dbg!(vehicle_class_count);
+                // let date = determine_date(individual_vehicles.clone());
+
+                dbg!(vehicle_class_count.len());
 
                 // Create records for the non-normalized TC_VOLCOUNT table.
                 // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
@@ -124,32 +124,58 @@ fn main() {
                 let non_normal_vol_count =
                     create_non_normal_vol_count(metadata.clone(), individual_vehicles.clone());
 
-                // dbg!(&non_normal_vol_count);
-
                 // Create records for the non-normalized TC_SPESUM table
                 // (another one with specific hourly fields, this time for average speed/hour)
                 let non_normal_speedavg_count =
                     create_non_normal_speedavg_count(metadata.clone(), individual_vehicles);
 
-                // dbg!(&non_normal_speedavg_count);
-                // TODO: enter these into the database
-                // FifteenMinuteVehicleClassCount::delete(&conn, record_num).unwrap();
-                // FifteenMinuteSpeedRangeCount::delete(&conn, record_num).unwrap();
+                // Delete existing records from db.
+                FifteenMinuteVehicleClassCount::delete(&conn, record_num).unwrap();
+                FifteenMinuteSpeedRangeCount::delete(&conn, record_num).unwrap();
                 NonNormalVolCount::delete(&conn, record_num).unwrap();
-                // NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
+                NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
 
-                // Create prepared statment and use it to insert counts.
-                let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
-                for vol_count in non_normal_vol_count {
-                    match vol_count.insert(&mut prepared) {
+                // Create prepared statments and use them to insert counts.
+                let mut prepared = FifteenMinuteVehicleClassCount::prepare_insert(&conn).unwrap();
+                for count in vehicle_class_count {
+                    match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            dbg!(&e);
-                            dbg!(&vol_count);
+                            error!("Error inserting count {count:?}: {e}");
                         }
                     }
                 }
-                // dbg!(&non_normal_vol_count[0]);
+                conn.commit().unwrap();
+
+                let mut prepared = FifteenMinuteSpeedRangeCount::prepare_insert(&conn).unwrap();
+                for count in speed_range_count {
+                    match count.insert(&mut prepared) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Error inserting count {count:?}: {e}");
+                        }
+                    }
+                }
+                conn.commit().unwrap();
+                let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
+                for count in non_normal_vol_count {
+                    match count.insert(&mut prepared) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Error inserting count {count:?}: {e}");
+                        }
+                    }
+                }
+                conn.commit().unwrap();
+                let mut prepared = NonNormalAvgSpeedCount::prepare_insert(&conn).unwrap();
+                for count in non_normal_speedavg_count {
+                    match count.insert(&mut prepared) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Error inserting count {count:?}: {e}");
+                        }
+                    }
+                }
                 conn.commit().unwrap();
             }
             InputCount::FifteenMinuteVehicle => {
@@ -161,9 +187,19 @@ fn main() {
                     }
                 };
 
-                // As they are already binned by 15-minute period, these need no further processing.
-                // TODO: enter into database.
-                // FifteenMinuteVehicle::delete(&conn, record_num).unwrap();
+                // As they are already binned by 15-minute period, these need no further
+                // processing; just insert into database.
+                FifteenMinuteVehicle::delete(&conn, record_num).unwrap();
+                let mut prepared = FifteenMinuteVehicle::prepare_insert(&conn).unwrap();
+                for count in fifteen_min_volcount {
+                    match count.insert(&mut prepared) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Error inserting count {count:?}: {e}");
+                        }
+                    }
+                }
+                conn.commit().unwrap();
             }
             InputCount::FifteenMinuteBicycle => (),
             InputCount::FifteenMinutePedestrian => (),
