@@ -170,10 +170,12 @@ impl IndividualVehicle {
 /// Pre-binned, simple volume counts in 15-minute intervals (TC_15MINVOLCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
+    pub dvrpc_num: i32,
     pub date: Date,
     pub time: Time,
     pub count: u16,
     pub direction: Direction,
+    pub channel: u8,
 }
 
 impl GetDate for FifteenMinuteVehicle {
@@ -184,16 +186,20 @@ impl GetDate for FifteenMinuteVehicle {
 
 impl FifteenMinuteVehicle {
     pub fn new(
+        dvrpc_num: i32,
         date: Date,
         time: Time,
         count: u16,
         direction: Direction,
+        channel: u8,
     ) -> Result<Self, CountError<'static>> {
         Ok(Self {
+            dvrpc_num,
             date,
             time,
             count,
             direction,
+            channel,
         })
     }
 }

@@ -20,7 +20,7 @@ impl Extract for FifteenMinuteVehicle {
     fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
-        let directions = CountMetadata::from_path(path)?.directions;
+        let metadata = CountMetadata::from_path(path)?;
 
         // Iterate through data rows.
         let mut counts = vec![];
@@ -38,10 +38,12 @@ impl Extract for FifteenMinuteVehicle {
             // There will always be at least one count per row.
             // Extract the first (and perhaps only) direction.
             match FifteenMinuteVehicle::new(
+                metadata.dvrpc_num,
                 count_date,
                 count_time,
                 row.as_ref().unwrap()[3].parse().unwrap(),
-                directions.direction1,
+                metadata.directions.direction1,
+                1,
             ) {
                 Ok(v) => counts.push(v),
                 Err(e) => {
@@ -51,12 +53,14 @@ impl Extract for FifteenMinuteVehicle {
             };
 
             // There may also be a second count within the row.
-            if let Some(v) = directions.direction2 {
+            if let Some(v) = metadata.directions.direction2 {
                 match FifteenMinuteVehicle::new(
+                    metadata.dvrpc_num,
                     count_date,
                     count_time,
                     row.as_ref().unwrap()[4].parse().unwrap(),
                     v,
+                    2,
                 ) {
                     Ok(v) => counts.push(v),
                     Err(e) => {

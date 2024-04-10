@@ -270,49 +270,49 @@ impl CountTable for NonNormalVolCount {
     }
 }
 
-// impl CountTable for FifteenMinuteVehicle {
-//     const TABLE_NAME: &'static str = "tc_15minvolcount";
-//     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
-//         let sql = &format!(
-//             "insert into {}
-//             (recordnum, countdate, counttime, volcount, cntdir, countlane) \
-//             VALUES (:1, :2, :3, :4, :5, :6)",
-//             &Self::TABLE_NAME,
-//         );
-//         conn.statement(sql).build()
-//     }
+impl CountTable for FifteenMinuteVehicle {
+    const TABLE_NAME: &'static str = "tc_15minvolcount";
+    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+        let sql = &format!(
+            "insert into {}
+            (recordnum, countdate, counttime, volcount, cntdir, countlane) \
+            VALUES (:1, :2, :3, :4, :5, :6)",
+            &Self::TABLE_NAME,
+        );
+        conn.statement(sql).build()
+    }
 
-//     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-//         let oracle_date = Timestamp::new(
-//             self.date.year(),
-//             self.date.month() as u32,
-//             self.date.day() as u32,
-//             0,
-//             0,
-//             0,
-//             0,
-//         );
-//         // COUNTTIME is ok to be full datetime
-//         let oracle_dt = Timestamp::new(
-//             self.date.year(),
-//             self.date.month() as u32,
-//             self.date.day() as u32,
-//             self.time.hour() as u32,
-//             self.time.minute() as u32,
-//             self.time.second() as u32,
-//             0,
-//         );
+    fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
+        let oracle_date = Timestamp::new(
+            self.date.year(),
+            self.date.month() as u32,
+            self.date.day() as u32,
+            0,
+            0,
+            0,
+            0,
+        );
+        // COUNTTIME is ok to be full datetime
+        let oracle_dt = Timestamp::new(
+            self.date.year(),
+            self.date.month() as u32,
+            self.date.day() as u32,
+            self.time.hour() as u32,
+            self.time.minute() as u32,
+            self.time.second() as u32,
+            0,
+        );
 
-//         stmt.execute(&[
-//             &self.dvrpc_num,
-//             &oracle_date,
-//             &oracle_dt,
-//             &self.count,
-//             &format!("{}", self.direction),
-//             &self.channel, // TODO: needs to be added/handled in type
-//         ])
-//     }
-// }
+        stmt.execute(&[
+            &self.dvrpc_num,
+            &oracle_date,
+            &oracle_dt,
+            &self.count,
+            &format!("{}", self.direction),
+            &self.channel,
+        ])
+    }
+}
 
 /// Create a connection pool.
 pub fn create_pool(username: String, password: String) -> Result<Pool, OracleError> {
