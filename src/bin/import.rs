@@ -110,13 +110,15 @@ fn main() {
                 dbg!(individual_vehicles.len());
 
                 // Create two counts from this: 15-minute speed count and 15-minute class count
-                // TODO: this could also be for other intervals - the function is probably too
-                // specific as is and should take desired interval as parameter
-                let (speed_range_count, vehicle_class_count) =
-                    create_speed_and_class_count(metadata.clone(), individual_vehicles.clone());
+                let (speed_range_count, vehicle_class_count) = create_speed_and_class_count(
+                    metadata.clone(),
+                    individual_vehicles.clone(),
+                    TimeInterval::FifteenMin,
+                );
                 // let date = determine_date(individual_vehicles.clone());
 
                 dbg!(vehicle_class_count.len());
+                dbg!(speed_range_count.len());
 
                 // Create records for the non-normalized TC_VOLCOUNT table.
                 // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
@@ -130,13 +132,13 @@ fn main() {
                     create_non_normal_speedavg_count(metadata.clone(), individual_vehicles);
 
                 // Delete existing records from db.
-                FifteenMinuteVehicleClassCount::delete(&conn, record_num).unwrap();
-                FifteenMinuteSpeedRangeCount::delete(&conn, record_num).unwrap();
+                TimeBinnedVehicleClassCount::delete(&conn, record_num).unwrap();
+                TimeBinnedSpeedRangeCount::delete(&conn, record_num).unwrap();
                 NonNormalVolCount::delete(&conn, record_num).unwrap();
                 NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
 
                 // Create prepared statments and use them to insert counts.
-                let mut prepared = FifteenMinuteVehicleClassCount::prepare_insert(&conn).unwrap();
+                let mut prepared = TimeBinnedVehicleClassCount::prepare_insert(&conn).unwrap();
                 for count in vehicle_class_count {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
@@ -147,7 +149,7 @@ fn main() {
                 }
                 conn.commit().unwrap();
 
-                let mut prepared = FifteenMinuteSpeedRangeCount::prepare_insert(&conn).unwrap();
+                let mut prepared = TimeBinnedSpeedRangeCount::prepare_insert(&conn).unwrap();
                 for count in speed_range_count {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),

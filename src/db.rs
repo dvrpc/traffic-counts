@@ -25,7 +25,7 @@ pub trait CountTable {
     /// Insert a record into the table using prepared statement.
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error>;
 }
-impl CountTable for FifteenMinuteVehicleClassCount {
+impl CountTable for TimeBinnedVehicleClassCount {
     const TABLE_NAME: &'static str = "tc_clacount";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
@@ -86,7 +86,7 @@ impl CountTable for FifteenMinuteVehicleClassCount {
         ])
     }
 }
-impl CountTable for FifteenMinuteSpeedRangeCount {
+impl CountTable for TimeBinnedSpeedRangeCount {
     const TABLE_NAME: &'static str = "tc_specount";
     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
         let sql = &format!(

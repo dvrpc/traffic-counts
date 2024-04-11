@@ -6,9 +6,9 @@
 //!
 //! HashMap Key + HashMap Value = Vec
 //!
-//! [`BinnedCountKey`] + [`VehicleClassCount`] = [`crate::FifteenMinuteVehicleClassCount`].
+//! [`BinnedCountKey`] + [`VehicleClassCount`] = [`crate::TimeBinnedVehicleClassCount`].
 //!
-//! [`BinnedCountKey`] + [`SpeedRangeCount`] = [`crate::FifteenMinuteSpeedRangeCount`].
+//! [`BinnedCountKey`] + [`SpeedRangeCount`] = [`crate::TimeBinned::peedRangeCount`].
 //!
 //! [`NonNormalCountKey`] + [`NonNormalAvgSpeedValue`] = [`crate::NonNormalAvgSpeedCount`].
 //!

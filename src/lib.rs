@@ -408,9 +408,12 @@ impl VehicleClass {
     }
 }
 
-/// 15-minute count of vehicles by vehicle class (see [`VehicleClass`]) (TC_CLACOUNT table).
+/// Count of vehicles by class (see [`VehicleClass`]),
+/// binned into 15-minute or hourly intervals (TC_CLACOUNT table).
+///
+/// We almost always want fifteen-minute counts, but hourly is also an option.
 #[derive(Debug, Clone)]
-pub struct FifteenMinuteVehicleClassCount {
+pub struct TimeBinnedVehicleClassCount {
     pub datetime: PrimitiveDateTime,
     pub channel: u8,
     pub dvrpc_num: i32,
@@ -432,9 +435,12 @@ pub struct FifteenMinuteVehicleClassCount {
     pub total: i32,
 }
 
-/// 15-minute count of vehicles by speed range (TC_SPECOUNT table).
+/// Count of vehicles by speed range,
+/// binned into 15-minute or hourly intervals (TC_SPECOUNT table).
+///
+/// We almost always want fifteen-minute counts, but hourly is also an option.
 #[derive(Debug, Clone)]
-pub struct FifteenMinuteSpeedRangeCount {
+pub struct TimeBinnedSpeedRangeCount {
     pub datetime: PrimitiveDateTime,
     pub channel: u8,
     pub dvrpc_num: i32,
@@ -456,17 +462,17 @@ pub struct FifteenMinuteSpeedRangeCount {
     pub total: i32,
 }
 
-/// Create 15-minute speed and class counts from [`IndividualVehicle`]s.
+/// Create time-binned speed and class counts from [`IndividualVehicle`]s.
 pub fn create_speed_and_class_count(
     metadata: CountMetadata,
     counts: Vec<IndividualVehicle>,
+    interval: TimeInterval,
 ) -> (
-    Vec<FifteenMinuteSpeedRangeCount>,
-    Vec<FifteenMinuteVehicleClassCount>,
+    Vec<TimeBinnedSpeedRangeCount>,
+    Vec<TimeBinnedVehicleClassCount>,
 ) {
-    let mut fifteen_min_speed_range_map: HashMap<BinnedCountKey, SpeedRangeCount> = HashMap::new();
-    let mut fifteen_min_vehicle_class_map: HashMap<BinnedCountKey, VehicleClassCount> =
-        HashMap::new();
+    let mut speed_range_map: HashMap<BinnedCountKey, SpeedRangeCount> = HashMap::new();
+    let mut vehicle_class_map: HashMap<BinnedCountKey, VehicleClassCount> = HashMap::new();
 
     for count in counts {
         // Get the direction from the channel of count/metadata of filename.
@@ -480,8 +486,8 @@ pub fn create_speed_and_class_count(
             }
         };
 
-        // create a key for the Hashmap for 15-minute periods
-        let time_part = match time_bin(count.time) {
+        // Create a key for the Hashmap for time intervals
+        let time_part = match bin_time(count.time, interval) {
             Ok(v) => v,
             Err(e) => {
                 error!("{e}");
@@ -494,7 +500,7 @@ pub fn create_speed_and_class_count(
         };
 
         // Add new entry to 15-min speed range map or increment existing one.
-        fifteen_min_speed_range_map
+        speed_range_map
             .entry(key)
             .and_modify(|c| {
                 c.total += 1;
@@ -507,7 +513,7 @@ pub fn create_speed_and_class_count(
             ));
 
         // Add new entry to 15-min vehicle class map or increment existing one.
-        fifteen_min_vehicle_class_map
+        vehicle_class_map
             .entry(key)
             .and_modify(|c| {
                 c.total += 1;
@@ -521,9 +527,9 @@ pub fn create_speed_and_class_count(
     }
 
     // Convert speed range count from HashMap to Vec.
-    let mut fifteen_min_speed_range_count = vec![];
-    for (key, value) in fifteen_min_speed_range_map {
-        fifteen_min_speed_range_count.push(FifteenMinuteSpeedRangeCount {
+    let mut speed_range_count = vec![];
+    for (key, value) in speed_range_map {
+        speed_range_count.push(TimeBinnedSpeedRangeCount {
             datetime: key.datetime,
             channel: key.channel,
             dvrpc_num: value.dvrpc_num,
@@ -547,9 +553,9 @@ pub fn create_speed_and_class_count(
     }
 
     // Convert vehicle class from HashMap to Vec.
-    let mut fifteen_min_vehicle_class_count = vec![];
-    for (key, value) in fifteen_min_vehicle_class_map {
-        fifteen_min_vehicle_class_count.push(FifteenMinuteVehicleClassCount {
+    let mut vehicle_class_count = vec![];
+    for (key, value) in vehicle_class_map {
+        vehicle_class_count.push(TimeBinnedVehicleClassCount {
             datetime: key.datetime,
             channel: key.channel,
             dvrpc_num: value.dvrpc_num,
@@ -572,10 +578,7 @@ pub fn create_speed_and_class_count(
         });
     }
 
-    (
-        fifteen_min_speed_range_count,
-        fifteen_min_vehicle_class_count,
-    )
+    (speed_range_count, vehicle_class_count)
 }
 
 /// Possible weather values.
@@ -1107,14 +1110,27 @@ pub fn create_non_normal_speedavg_count(
     non_normal_speed_avg_count
 }
 
-/// Put time into four bins per hour.
-pub fn time_bin(time: Time) -> Result<Time, time::error::ComponentRange> {
+/// Time interval to bin data by.
+#[derive(Clone, Copy)]
+pub enum TimeInterval {
+    Hour,
+    FifteenMin,
+}
+
+/// Bin time by fifteen-minute or hourly intervals by changing the minute.
+pub fn bin_time(time: Time, interval: TimeInterval) -> Result<Time, time::error::ComponentRange> {
     let time = time.replace_second(0)?;
-    match time.minute() {
-        0..=14 => Ok(time.replace_minute(0)?),
-        15..=29 => Ok(time.replace_minute(15)?),
-        30..=44 => Ok(time.replace_minute(30)?),
-        _ => Ok(time.replace_minute(45)?), // minute is always 0-59, so this is 45-59
+
+    match interval {
+        TimeInterval::Hour => Ok(time.replace_minute(0)?),
+        TimeInterval::FifteenMin => {
+            match time.minute() {
+                0..=14 => Ok(time.replace_minute(0)?),
+                15..=29 => Ok(time.replace_minute(15)?),
+                30..=44 => Ok(time.replace_minute(30)?),
+                _ => Ok(time.replace_minute(45)?), // minute is always 0-59, so this is 45-59
+            }
+        }
     }
 }
 
@@ -1156,50 +1172,79 @@ mod tests {
     use super::*;
 
     #[test]
-    fn time_binning_is_correct() {
+    fn time_binning_fifteen_min_is_correct() {
         // 1st 15-minute bin
         let time = Time::from_hms(10, 0, 0).unwrap();
 
-        let binned = time_bin(time).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
         assert_eq!(binned, Time::from_hms(10, 0, 0).unwrap());
         assert_ne!(binned, Time::from_hms(10, 10, 0).unwrap());
 
         let time = Time::from_hms(10, 14, 00).unwrap();
-        let binned = time_bin(time).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
         assert_eq!(binned, Time::from_hms(10, 0, 0).unwrap());
 
         // 2nd 15-minute bin
         let time = Time::from_hms(10, 25, 00).unwrap();
 
-        let binned = time_bin(time).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
         assert_eq!(binned, Time::from_hms(10, 15, 0).unwrap());
 
         let time = Time::from_hms(10, 29, 00).unwrap();
 
-        let binned = time_bin(time).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
         assert_eq!(binned, Time::from_hms(10, 15, 0).unwrap());
 
         // 3rd 15-minute bin
         let time = Time::from_hms(10, 31, 00).unwrap();
 
-        let binned = time_bin(time).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
         assert_eq!(binned, Time::from_hms(10, 30, 0).unwrap());
 
         let time = Time::from_hms(10, 44, 00).unwrap();
 
-        let binned = time_bin(time).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
         assert_eq!(binned, Time::from_hms(10, 30, 0).unwrap());
 
         // 4th 15-minute bin
         let time = Time::from_hms(10, 45, 00).unwrap();
 
-        let binned = time_bin(time).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
         assert_eq!(binned, Time::from_hms(10, 45, 0).unwrap());
 
         let time = Time::from_hms(10, 59, 00).unwrap();
 
-        let binned = time_bin(time).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
         assert_eq!(binned, Time::from_hms(10, 45, 0).unwrap());
+    }
+
+    #[test]
+    fn time_binning_hourly_is_correct() {
+        // the time we are trying to bin to
+        let expected = Time::from_hms(10, 0, 0).unwrap();
+        // the interval to use
+        let interval = TimeInterval::Hour;
+
+        assert_eq!(
+            bin_time(Time::from_hms(10, 0, 0).unwrap(), interval).unwrap(),
+            expected
+        );
+        assert_eq!(
+            bin_time(Time::from_hms(10, 15, 0).unwrap(), interval).unwrap(),
+            expected
+        );
+        assert_eq!(
+            bin_time(Time::from_hms(10, 16, 0).unwrap(), interval).unwrap(),
+            expected
+        );
+        assert_eq!(
+            bin_time(Time::from_hms(10, 31, 0).unwrap(), interval).unwrap(),
+            expected
+        );
+        assert_eq!(
+            bin_time(Time::from_hms(10, 59, 0).unwrap(), interval).unwrap(),
+            expected
+        );
     }
 
     #[test]
