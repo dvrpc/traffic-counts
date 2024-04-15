@@ -508,10 +508,7 @@ pub fn create_speed_and_class_count(
         // Add new entry to 15-min speed range map or increment existing one.
         speed_range_map
             .entry(key)
-            .and_modify(|c| {
-                c.total += 1;
-                c.insert(count.speed)
-            })
+            .and_modify(|c| c.insert(count.speed))
             .or_insert(SpeedRangeCount::first(
                 metadata.dvrpc_num,
                 direction,
@@ -521,10 +518,7 @@ pub fn create_speed_and_class_count(
         // Add new entry to 15-min vehicle class map or increment existing one.
         vehicle_class_map
             .entry(key)
-            .and_modify(|c| {
-                c.total += 1;
-                c.insert(count.class.clone())
-            })
+            .and_modify(|c| c.insert(count.class.clone()))
             .or_insert(VehicleClassCount::first(
                 metadata.dvrpc_num,
                 direction,
@@ -637,13 +631,27 @@ pub fn create_speed_and_class_count(
         });
     }
 
-    // Drop the first and last one - those periods will have incomplete data.
-    speed_range_count.sort_unstable_by_key(|c| c.datetime);
-    speed_range_count.remove(0);
-    speed_range_count.pop();
-    vehicle_class_count.sort_unstable_by_key(|c| c.datetime);
-    vehicle_class_count.remove(0);
-    vehicle_class_count.pop();
+    // Drop the first and last one periods (will have incomplete data).
+    // May need to drop two records if there are counts in both directions.
+    speed_range_count.sort_unstable_by_key(|c| (c.datetime, c.channel));
+    vehicle_class_count.sort_unstable_by_key(|c| (c.datetime, c.channel));
+    if metadata.directions.direction2.is_some() {
+        speed_range_count.remove(0);
+        speed_range_count.remove(0);
+        speed_range_count.pop();
+        speed_range_count.pop();
+
+        vehicle_class_count.remove(0);
+        vehicle_class_count.remove(0);
+        vehicle_class_count.pop();
+        vehicle_class_count.pop();
+    } else {
+        speed_range_count.remove(0);
+        speed_range_count.pop();
+
+        vehicle_class_count.remove(0);
+        vehicle_class_count.pop();
+    }
 
     (speed_range_count, vehicle_class_count)
 }

@@ -77,7 +77,6 @@ impl VehicleClassCount {
     /// Create one with its first count inserted.
     pub fn first(dvrpc_num: i32, direction: Direction, class: VehicleClass) -> Self {
         let mut count = Self::new(dvrpc_num, direction);
-        count.total = 1;
         count.insert(class);
         count
     }
@@ -103,6 +102,7 @@ impl VehicleClassCount {
                 self.c15 += 1;
             }
         }
+        self.total += 1;
     }
 }
 

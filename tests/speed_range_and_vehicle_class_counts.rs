@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use time::macros::datetime;
 use traffic_counts::{extract_from_file::Extract, intermediate::*, *};
 
 #[test]
@@ -95,20 +96,42 @@ fn empty_periods_created_correctly_166905() {
         create_speed_and_class_count(metadata, individual_vehicles, TimeInterval::FifteenMin);
 
     // total number of periods
-    assert_eq!(speed_range_count.len(), 384);
+    assert_eq!(speed_range_count.len(), 382);
     // periods with 0 vehicles
     let empty_periods = speed_range_count.iter().filter(|c| c.total == 0).count();
     assert_eq!(empty_periods, 23);
 
     // total number of periods
-    assert_eq!(vehicle_class_count.len(), 384);
+    assert_eq!(vehicle_class_count.len(), 382);
+
     // periods with 0 vehicles
     let empty_periods = vehicle_class_count.iter().filter(|c| c.total == 0).count();
-    assert_eq!(empty_periods, 23)
+    assert_eq!(empty_periods, 23);
+
+    // first and last periods
+    let expected_first_dt = datetime!(2023-11-06 11:00);
+    assert_eq!(
+        speed_range_count.first().unwrap().datetime,
+        expected_first_dt
+    );
+    assert_eq!(
+        vehicle_class_count.first().unwrap().datetime,
+        expected_first_dt
+    );
+    let expected_last_dt = datetime!(2023-11-08 10:30);
+    assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
+    assert_eq!(
+        vehicle_class_count.last().unwrap().datetime,
+        expected_last_dt
+    );
+
+    // verify last period total (channel 2)
+    assert_eq!(speed_range_count.last().unwrap().total, 26);
+    assert_eq!(vehicle_class_count.last().unwrap().total, 26);
 }
 
 #[test]
-fn empty_periods_created_correctly_165367() {
+fn counts_created_correctly_165367() {
     let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
     let individual_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
@@ -117,14 +140,36 @@ fn empty_periods_created_correctly_165367() {
         create_speed_and_class_count(metadata, individual_vehicles, TimeInterval::FifteenMin);
 
     // total number of periods
-    assert_eq!(speed_range_count.len(), 754);
+    assert_eq!(speed_range_count.len(), 752);
     // periods with 0 vehicles
     let empty_periods = speed_range_count.iter().filter(|c| c.total == 0).count();
     assert_eq!(empty_periods, 15);
 
     // total number of periods
-    assert_eq!(vehicle_class_count.len(), 754);
+    assert_eq!(vehicle_class_count.len(), 752);
+
     // periods with 0 vehicles
     let empty_periods = vehicle_class_count.iter().filter(|c| c.total == 0).count();
-    assert_eq!(empty_periods, 15)
+    assert_eq!(empty_periods, 15);
+
+    // first and last periods
+    let expected_first_dt = datetime!(2023-11-06 12:00);
+    assert_eq!(
+        speed_range_count.first().unwrap().datetime,
+        expected_first_dt
+    );
+    assert_eq!(
+        vehicle_class_count.first().unwrap().datetime,
+        expected_first_dt
+    );
+    let expected_last_dt = datetime!(2023-11-10 9:45);
+    assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
+    assert_eq!(
+        vehicle_class_count.last().unwrap().datetime,
+        expected_last_dt
+    );
+
+    // verify last period total (channel 2)
+    assert_eq!(speed_range_count.last().unwrap().total, 117);
+    assert_eq!(vehicle_class_count.last().unwrap().total, 117);
 }
