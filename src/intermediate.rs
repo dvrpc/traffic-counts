@@ -52,9 +52,9 @@ pub struct VehicleClassCount {
 }
 
 impl VehicleClassCount {
-    /// Create a new count.
-    pub fn first(dvrpc_num: i32, direction: Direction, class: VehicleClass) -> Self {
-        let mut count = Self {
+    /// Create one with 0 count for all speed ranges.
+    pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
+        Self {
             dvrpc_num,
             direction,
             c1: 0,
@@ -71,8 +71,13 @@ impl VehicleClassCount {
             c12: 0,
             c13: 0,
             c15: 0,
-            total: 1,
-        };
+            total: 0,
+        }
+    }
+    /// Create one with its first count inserted.
+    pub fn first(dvrpc_num: i32, direction: Direction, class: VehicleClass) -> Self {
+        let mut count = Self::new(dvrpc_num, direction);
+        count.total = 1;
         count.insert(class);
         count
     }
@@ -126,9 +131,9 @@ pub struct SpeedRangeCount {
 }
 
 impl SpeedRangeCount {
-    /// Create a SpeedRangeCount with 0 count for all speed ranges.
-    pub fn first(dvrpc_num: i32, direction: Direction, speed: f32) -> Self {
-        let mut value = Self {
+    /// Create one with 0 count for all speed ranges.
+    pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
+        Self {
             dvrpc_num,
             direction,
             s1: 0,
@@ -146,7 +151,12 @@ impl SpeedRangeCount {
             s13: 0,
             s14: 0,
             total: 0,
-        };
+        }
+    }
+
+    /// Create one with its first count inserted.
+    pub fn first(dvrpc_num: i32, direction: Direction, speed: f32) -> Self {
+        let mut value = Self::new(dvrpc_num, direction);
         value.insert(speed);
         value
     }

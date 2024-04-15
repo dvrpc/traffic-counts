@@ -19,7 +19,7 @@ use std::path::Path;
 
 use log::error;
 use thiserror::Error;
-use time::{Date, PrimitiveDateTime, Time};
+use time::{Date, Duration, PrimitiveDateTime, Time};
 
 pub mod annual_avg;
 pub mod db;
@@ -463,18 +463,24 @@ pub struct TimeBinnedSpeedRangeCount {
 }
 
 /// Create time-binned speed and class counts from [`IndividualVehicle`]s.
+///
+/// The first and last records are dropped, as they likely contain incomplete data.
 pub fn create_speed_and_class_count(
     metadata: CountMetadata,
-    counts: Vec<IndividualVehicle>,
+    mut counts: Vec<IndividualVehicle>,
     interval: TimeInterval,
 ) -> (
     Vec<TimeBinnedSpeedRangeCount>,
     Vec<TimeBinnedVehicleClassCount>,
 ) {
+    if counts.is_empty() {
+        return (vec![], vec![]);
+    }
+
     let mut speed_range_map: HashMap<BinnedCountKey, SpeedRangeCount> = HashMap::new();
     let mut vehicle_class_map: HashMap<BinnedCountKey, VehicleClassCount> = HashMap::new();
 
-    for count in counts {
+    for count in counts.clone() {
         // Get the direction from the channel of count/metadata of filename.
         // Channel 1 is first direction, Channel 2 is the second (if any)
         let direction = match count.channel {
@@ -524,6 +530,59 @@ pub fn create_speed_and_class_count(
                 direction,
                 count.class,
             ));
+    }
+
+    /*
+      If there was some time period (whose length is `interval`) where no vehicle was counted,
+      there will be no corresponding entry in our HashMap for it. However, that's because of the
+      data we are using - `IndividualVehicle`s, which are vehicles that were counted - not because
+      there is missing data for that time period. So create those where necessary.
+    */
+
+    // Sort counts by date and time, get range, check if number of records is less than expected
+    // for every period to be included, insert any missing.
+    counts.sort_unstable_by_key(|c| (c.date, c.time));
+
+    let first_dt =
+        PrimitiveDateTime::new(counts.first().unwrap().date, counts.first().unwrap().time);
+    let last_dt = PrimitiveDateTime::new(counts.last().unwrap().date, counts.last().unwrap().time);
+
+    let all_datetimes = generate_time_bins(first_dt, last_dt, interval);
+
+    if all_datetimes.len() < speed_range_map.len() {
+        let mut all_keys = vec![];
+        let all_channels = if metadata.directions.direction2.is_some() {
+            vec![1, 2]
+        } else {
+            vec![1]
+        };
+
+        // construct all possible keys
+        for datetime in all_datetimes.clone() {
+            for channel in all_channels.iter() {
+                all_keys.push(BinnedCountKey {
+                    datetime,
+                    channel: *channel,
+                })
+            }
+        }
+        // Add missing periods for speed range count
+        for key in all_keys {
+            let direction = match key.channel {
+                1 => metadata.directions.direction1,
+                2 => metadata.directions.direction2.unwrap(),
+                _ => {
+                    error!("Unable to determine channel/direction.");
+                    continue;
+                }
+            };
+            speed_range_map
+                .entry(key)
+                .or_insert(SpeedRangeCount::new(metadata.dvrpc_num, direction));
+            vehicle_class_map
+                .entry(key)
+                .or_insert(VehicleClassCount::new(metadata.dvrpc_num, direction));
+        }
     }
 
     // Convert speed range count from HashMap to Vec.
@@ -577,6 +636,14 @@ pub fn create_speed_and_class_count(
             total: value.total,
         });
     }
+
+    // Drop the first and last one - those periods will have incomplete data.
+    speed_range_count.sort_unstable_by_key(|c| c.datetime);
+    speed_range_count.remove(0);
+    speed_range_count.pop();
+    vehicle_class_count.sort_unstable_by_key(|c| c.datetime);
+    vehicle_class_count.remove(0);
+    vehicle_class_count.pop();
 
     (speed_range_count, vehicle_class_count)
 }
@@ -1134,6 +1201,35 @@ pub fn bin_time(time: Time, interval: TimeInterval) -> Result<Time, time::error:
     }
 }
 
+pub fn generate_time_bins(
+    first_dt: PrimitiveDateTime,
+    last_dt: PrimitiveDateTime,
+    interval: TimeInterval,
+) -> Vec<PrimitiveDateTime> {
+    let first_bin = PrimitiveDateTime::new(
+        first_dt.date(),
+        bin_time(first_dt.time(), interval).unwrap(),
+    );
+
+    let last_bin =
+        PrimitiveDateTime::new(last_dt.date(), bin_time(last_dt.time(), interval).unwrap());
+
+    let mut dts: Vec<PrimitiveDateTime> = vec![];
+
+    let mut current_bin = first_bin;
+
+    let time_to_add = match interval {
+        TimeInterval::Hour => Duration::HOUR,
+        TimeInterval::FifteenMin => Duration::minutes(15),
+    };
+
+    while current_bin <= last_bin {
+        dts.push(current_bin);
+        current_bin = current_bin.saturating_add(time_to_add);
+    }
+    dts
+}
+
 /// Get `InputCount` and number of rows in file before data starts (metadata rows + header).
 /*
   This is a rather naive solution - it simply checks that the exact string (
@@ -1170,6 +1266,7 @@ pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use time::macros::datetime;
 
     #[test]
     fn time_binning_fifteen_min_is_correct() {
@@ -1376,5 +1473,66 @@ mod tests {
             count_type,
             Err(CountError::LocationHeaderMisMatch(_))
         ))
+    }
+
+    #[test]
+    fn generate_time_bins_correct() {
+        let first_dt = datetime!(2024 - 04 - 08 7:00);
+        let last_dt = datetime!(2024 - 04 - 08 7:14);
+        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        assert_eq!(keys_15.len(), 1);
+        assert_eq!(keys_hour.len(), 1);
+
+        let first_dt = datetime!(2024 - 04 - 08 7:00);
+        let last_dt = datetime!(2024 - 04 - 08 7:15);
+        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        assert_eq!(keys_15.len(), 2);
+        assert_eq!(keys_hour.len(), 1);
+
+        let first_dt = datetime!(2024 - 04 - 08 7:00);
+        let last_dt = datetime!(2024 - 04 - 08 7:59);
+        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        assert_eq!(keys_15.len(), 4);
+        assert_eq!(keys_hour.len(), 1);
+
+        let first_dt = datetime!(2024 - 04 - 08 7:00);
+        let last_dt = datetime!(2024 - 04 - 08 8:59);
+        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        assert_eq!(keys_15.len(), 8);
+        assert_eq!(keys_hour.len(), 2);
+
+        let first_dt = datetime!(2024-04-08 0:00);
+        let last_dt = datetime!(2024-04-08 23:59);
+        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        assert_eq!(keys_15.len(), 96);
+        assert_eq!(keys_hour.len(), 24);
+
+        let first_dt = datetime!(2024-04-08 0:00);
+        let last_dt = datetime!(2024-04-09 0:00);
+        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        assert_eq!(keys_15.len(), 97);
+        assert_eq!(keys_hour.len(), 25);
+
+        // spanning two months
+        let first_dt = datetime!(2024-03-31 23:00);
+        let last_dt = datetime!(2024-04-01 00:01);
+        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        assert_eq!(keys_15.len(), 5);
+        assert_eq!(keys_hour.len(), 2);
+
+        // spanning two years
+        let first_dt = datetime!(2023-12-31 23:00);
+        let last_dt = datetime!(2024-01-01 00:01);
+        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        assert_eq!(keys_15.len(), 5);
+        assert_eq!(keys_hour.len(), 2);
     }
 }
