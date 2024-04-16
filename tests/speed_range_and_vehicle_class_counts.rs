@@ -148,9 +148,15 @@ fn counts_created_correctly_165367() {
     // total number of periods
     assert_eq!(vehicle_class_count.len(), 752);
 
-    // periods with 0 vehicles
-    let empty_periods = vehicle_class_count.iter().filter(|c| c.total == 0).count();
-    assert_eq!(empty_periods, 15);
+    // periods with 0 vehicles, including verifying the time of the first occurence
+    let empty_periods = vehicle_class_count
+        .iter()
+        .filter(|c| c.total == 0)
+        .collect::<Vec<_>>();
+    assert_eq!(empty_periods.len(), 15);
+    assert_eq!(empty_periods[0].total, 0);
+    assert_eq!(empty_periods[0].datetime, datetime!(2023-11-07 1:00));
+    assert_eq!(empty_periods[0].channel, 1);
 
     // first and last periods
     let expected_first_dt = datetime!(2023-11-06 12:00);
