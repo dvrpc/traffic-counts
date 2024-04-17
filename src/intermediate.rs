@@ -8,7 +8,7 @@
 //!
 //! [`BinnedCountKey`] + [`VehicleClassCount`] = [`crate::TimeBinnedVehicleClassCount`].
 //!
-//! [`BinnedCountKey`] + [`SpeedRangeCount`] = [`crate::TimeBinned::peedRangeCount`].
+//! [`BinnedCountKey`] + [`SpeedRangeCount`] = [`crate::TimeBinnedSpeedRangeCount`].
 //!
 //! [`NonNormalCountKey`] + [`NonNormalAvgSpeedValue`] = [`crate::NonNormalAvgSpeedCount`].
 //!
