@@ -1,9 +1,11 @@
-//! Library for defining data structures related to DVRPC's traffic counts, extracting data
-//! from files (see [`InputCount`] for the types of counts that can be handled as inputs),
-//! and doing various calculations like average annual daily traffic.
+//! This library contains data structures related to DVRPC's traffic counts,
+//! traits for [extracting][`extract_from_file::Extract`] data from files
+//! and [interacting with the database][`db::CountTable`],
+//! and operations like calculating the average annual daily traffic.
 //!
-//! An associated program at src/bin/import.rs implements the data extraction from files
-//! and inserts the data into our database.
+//! The binary [import](../import/index.html) program implements extracting data from files
+//! and inserting it into our database. See its documentation for further details, including
+//! the filename specification and the types of counts it can create.
 //!
 //! This library also lays the foundations for the inverse need - getting data from the database
 //! in order to act on it or display it in some way, whether for CRUD user interfaces or other
@@ -79,7 +81,7 @@ pub enum InputCount {
     FifteenMinuteBicycle,
     /// Eco-Counter
     FifteenMinutePedestrian,
-    /// 15-minute binned data for the simple volume counts from StarNext/Jamar.
+    /// Pre-binned, 15-minute volume counts from StarNext/Jamar.
     ///
     /// See [`FifteenMinuteVehicle`], the corresponding type.
     FifteenMinuteVehicle,
@@ -132,7 +134,17 @@ impl InputCount {
     }
 }
 
-/// An individual vehicle that has been counted, with no binning applied to it.
+/// An individual vehicle that has been counted, with no binning applied to it,
+/// including vehicle classification and speed.
+///
+/// Four different kinds of counts can be derived from this type of data:
+///   - volume by class per time period ([`TimeBinnedVehicleClassCount`])
+///   - volume by speed range per time period ([`TimeBinnedSpeedRangeCount`])
+///   - volume per hour of the day ([`NonNormalVolCount`])
+///   - average speed per hour of the day ([`NonNormalAvgSpeedCount`])
+///
+/// See [`create_speed_and_class_count`], [`create_non_normal_vol_count`], and
+/// [`create_non_normal_speedavg_count`].
 #[derive(Debug, Clone)]
 pub struct IndividualVehicle {
     pub date: Date,
@@ -167,7 +179,7 @@ impl IndividualVehicle {
     }
 }
 
-/// Pre-binned, simple volume counts in 15-minute intervals (TC_15MINVOLCOUNT table).
+/// Pre-binned, 15-minute volume counts (TC_15MINVOLCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
     pub dvrpc_num: i32,
@@ -204,7 +216,8 @@ impl FifteenMinuteVehicle {
     }
 }
 
-/// The metadata of an input count.
+/// The metadata of an input count, including technician, id, direction(s), count machine id,
+/// and - potentially - the speed limit.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CountMetadata {
     pub technician: String, // initials
@@ -408,7 +421,7 @@ impl VehicleClass {
     }
 }
 
-/// Count of vehicles by class (see [`VehicleClass`]),
+/// Count of [vehicles by class][`VehicleClass`],
 /// binned into 15-minute or hourly intervals (TC_CLACOUNT table).
 ///
 /// We almost always want fifteen-minute counts, but hourly is also an option.
