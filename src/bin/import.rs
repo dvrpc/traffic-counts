@@ -70,7 +70,7 @@ use traffic_counts::{
     *,
 };
 
-const LOG: &str = "log.txt";
+const LOG: &str = "import.log";
 
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
@@ -79,6 +79,9 @@ fn main() {
     // Get env var for path where CSVs will be, panic if it doesn't exist.
     let data_dir =
         env::var("DATA_DIR").expect("Unable to load data directory path from .env file.");
+
+    // Get env var for path where log will be, panic if it doesn't exist.
+    let log_dir = env::var("LOG_DIR").expect("Unable to load log directory path from .env file.");
 
     // Set up logging, panic if it fails.
     let config = ConfigBuilder::new().set_time_format_rfc3339().build();
@@ -95,7 +98,7 @@ fn main() {
             OpenOptions::new()
                 .append(true)
                 .create(true)
-                .open(format!("{data_dir}/{LOG}"))
+                .open(format!("{log_dir}/{LOG}"))
                 .expect("Could not open log file."),
         ),
     ])

@@ -554,7 +554,7 @@ pub fn create_speed_and_class_count(
         PrimitiveDateTime::new(counts.first().unwrap().date, counts.first().unwrap().time);
     let last_dt = PrimitiveDateTime::new(counts.last().unwrap().date, counts.last().unwrap().time);
 
-    let all_datetimes = generate_time_bins(first_dt, last_dt, interval);
+    let all_datetimes = create_time_bins(first_dt, last_dt, interval);
 
     if all_datetimes.len() < speed_range_map.len() {
         let mut all_keys = vec![];
@@ -1222,7 +1222,8 @@ pub fn bin_time(time: Time, interval: TimeInterval) -> Result<Time, time::error:
     }
 }
 
-pub fn generate_time_bins(
+/// Create all intervals between (and including) a first and last datetime.
+pub fn create_time_bins(
     first_dt: PrimitiveDateTime,
     last_dt: PrimitiveDateTime,
     interval: TimeInterval,
@@ -1497,62 +1498,62 @@ mod tests {
     }
 
     #[test]
-    fn generate_time_bins_correct() {
+    fn create_time_bins_correct() {
         let first_dt = datetime!(2024 - 04 - 08 7:00);
         let last_dt = datetime!(2024 - 04 - 08 7:14);
-        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
-        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 1);
         assert_eq!(keys_hour.len(), 1);
 
         let first_dt = datetime!(2024 - 04 - 08 7:00);
         let last_dt = datetime!(2024 - 04 - 08 7:15);
-        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
-        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 2);
         assert_eq!(keys_hour.len(), 1);
 
         let first_dt = datetime!(2024 - 04 - 08 7:00);
         let last_dt = datetime!(2024 - 04 - 08 7:59);
-        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
-        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 4);
         assert_eq!(keys_hour.len(), 1);
 
         let first_dt = datetime!(2024 - 04 - 08 7:00);
         let last_dt = datetime!(2024 - 04 - 08 8:59);
-        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
-        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 8);
         assert_eq!(keys_hour.len(), 2);
 
         let first_dt = datetime!(2024-04-08 0:00);
         let last_dt = datetime!(2024-04-08 23:59);
-        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
-        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 96);
         assert_eq!(keys_hour.len(), 24);
 
         let first_dt = datetime!(2024-04-08 0:00);
         let last_dt = datetime!(2024-04-09 0:00);
-        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
-        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 97);
         assert_eq!(keys_hour.len(), 25);
 
         // spanning two months
         let first_dt = datetime!(2024-03-31 23:00);
         let last_dt = datetime!(2024-04-01 00:01);
-        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
-        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 5);
         assert_eq!(keys_hour.len(), 2);
 
         // spanning two years
         let first_dt = datetime!(2023-12-31 23:00);
         let last_dt = datetime!(2024-01-01 00:01);
-        let keys_15 = generate_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
-        let keys_hour = generate_time_bins(first_dt, last_dt, TimeInterval::Hour);
+        let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
+        let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 5);
         assert_eq!(keys_hour.len(), 2);
     }
