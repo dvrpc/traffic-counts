@@ -37,7 +37,7 @@
 //!     - "123456" is the recordnum of the count.
 //!     - "s" is the direction. In this case, only one lane, going south.
 //!     - "101" is the physical machine the count was taken on.
-//!     - "na" for unknown/not available speedlimit.
+//!     - "na" for unknown/not available speed limit.
 //!
 //! All possible sets of directions:
 //!   - ew

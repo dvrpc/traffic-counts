@@ -679,7 +679,7 @@ pub enum Weather {
     Sunny,
 }
 
-/// Non-normalalized volume counts (TC_VOLCOUNT table).
+/// Non-normalized volume counts (TC_VOLCOUNT table).
 ///
 /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
 /// the following day - can start and stop at any time.
