@@ -64,7 +64,6 @@ use simplelog::{
 };
 
 use traffic_counts::{
-    annual_avg::determine_date,
     db::{create_pool, CountTable},
     extract_from_file::Extract,
     *,

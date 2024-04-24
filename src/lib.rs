@@ -13,7 +13,7 @@
 //!
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::fs;
 use std::io;
@@ -21,13 +21,11 @@ use std::path::Path;
 
 use log::error;
 use thiserror::Error;
-use time::{Date, Duration, PrimitiveDateTime, Time};
+use time::{Date, Duration, PrimitiveDateTime, Time, Weekday};
 
-pub mod annual_avg;
 pub mod db;
 pub mod extract_from_file;
 pub mod intermediate;
-use annual_avg::GetDate;
 use intermediate::*;
 
 // headers stripped of double quotes and spaces
@@ -1283,6 +1281,47 @@ fn count_type_and_num_nondata_rows(path: &Path) -> Result<(InputCount, usize), C
 pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
     let (_, num_rows) = count_type_and_num_nondata_rows(path)?;
     Ok(num_rows)
+}
+
+/// A trait for getting a [`Date`](https://docs.rs/time/latest/time/struct.Date.html) from a type.
+pub trait GetDate {
+    fn get_date(&self) -> Date;
+}
+
+/// Determine the date to use for the annual average calculation.
+pub fn determine_date<T>(counts: Vec<T>) -> Option<Date>
+where
+    T: GetDate,
+{
+    if counts.is_empty() {
+        return None;
+    }
+
+    // Get all unique dates of the counts.
+    let mut dates = counts
+        .iter()
+        .map(|count| count.get_date())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    // Drop the first day, as it won't be full day of data, after sorting to ensure order.
+    dates.sort();
+    dates.remove(0);
+
+    let week_days = [
+        Weekday::Monday,
+        Weekday::Tuesday,
+        Weekday::Wednesday,
+        Weekday::Thursday,
+        Weekday::Friday,
+    ];
+
+    // Return the first date that is a non-weekend weekday.
+    dates
+        .iter()
+        .find(|date| week_days.contains(&date.weekday()))
+        .copied()
 }
 
 #[cfg(test)]

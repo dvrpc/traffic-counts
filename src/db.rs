@@ -321,6 +321,37 @@ pub fn create_pool(username: String, password: String) -> Result<Pool, OracleErr
         .build()
 }
 
+/// Set SET_DATE (date for AADT/AADB/AADP) in TC_HEADER (& redundant SET_FLAG in TC_VOLCOUNT)
+pub fn set_date_for_annual_avg_calc(
+    date: Date,
+    recordnum: u32,
+    count_type: InputCount,
+    conn: &Connection,
+) -> Result<Statement, OracleError> {
+    let oracle_date = Timestamp::new(
+        date.year(),
+        date.month() as u32,
+        date.day().into(),
+        0,
+        0,
+        0,
+        0,
+    );
+
+    // If this is motor vehicle count, we also need to set SET_FLAG to -1 in TC_VOLCOUNT
+    if count_type == InputCount::FifteenMinuteVehicle {
+        conn.execute(
+            "UPDATE tc_volcount SET set_flag = -1 WHERE recordnum = :1 AND COUNTDATE = :2",
+            &[&recordnum, &oracle_date],
+        )?;
+    }
+
+    conn.execute(
+        "INSERT into tc_header (set_date) VALUES (:1) WHERE recordnum = :2",
+        &[&oracle_date, &recordnum],
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -2,11 +2,7 @@ use std::path::Path;
 
 use time::{macros::date, Date, Weekday};
 
-use traffic_counts::{
-    annual_avg::{determine_date, GetDate},
-    extract_from_file::Extract,
-    *,
-};
+use traffic_counts::{determine_date, extract_from_file::Extract, GetDate, *};
 
 // A type just for tests here.
 struct TestCount {
@@ -36,7 +32,7 @@ fn determine_date_skips_sunday() {
         TestCount { date: tuesday },
     ];
 
-    let determined_date = annual_avg::determine_date(test_counts).unwrap();
+    let determined_date = determine_date(test_counts).unwrap();
     assert_eq!(determined_date, monday)
 }
 
@@ -60,7 +56,7 @@ fn determine_date_skips_sat_and_sun() {
         TestCount { date: tuesday },
     ];
 
-    let determined_date = annual_avg::determine_date(test_counts).unwrap();
+    let determined_date = determine_date(test_counts).unwrap();
     assert_eq!(determined_date, monday)
 }
 
@@ -89,7 +85,7 @@ fn determine_date_skips_fri_sat_sun() {
         TestCount { date: tuesday },
     ];
 
-    let determined_date = annual_avg::determine_date(test_counts).unwrap();
+    let determined_date = determine_date(test_counts).unwrap();
     assert_eq!(determined_date, monday)
 }
 
@@ -119,7 +115,7 @@ fn determine_date_skips_one_during_week_day() {
         TestCount { date: tuesday },
     ];
 
-    let determined_date = annual_avg::determine_date(test_counts).unwrap();
+    let determined_date = determine_date(test_counts).unwrap();
     assert_eq!(determined_date, friday)
 }
 
@@ -149,14 +145,14 @@ fn determine_date_skips_one_during_week_day_when_dates_out_of_order() {
         TestCount { date: sunday },
     ];
 
-    let determined_date = annual_avg::determine_date(test_counts).unwrap();
+    let determined_date = determine_date(test_counts).unwrap();
     assert_eq!(determined_date, friday)
 }
 
 #[test]
 fn determine_date_returns_none_when_count_empty() {
     let test_counts: Vec<TestCount> = vec![];
-    assert!(annual_avg::determine_date(test_counts).is_none())
+    assert!(determine_date(test_counts).is_none())
 }
 
 #[test]
@@ -167,7 +163,7 @@ fn determine_date_returns_none_when_only_one_count() {
     assert_eq!(monday.weekday(), Weekday::Monday);
 
     let test_counts = vec![TestCount { date: monday }];
-    assert!(annual_avg::determine_date(test_counts).is_none())
+    assert!(determine_date(test_counts).is_none())
 }
 
 #[test]
