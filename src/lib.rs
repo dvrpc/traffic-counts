@@ -50,14 +50,24 @@ pub enum CountError<'a> {
     BadLocation(String),
     #[error("no matching count type for header in `{0}`")]
     BadHeader(&'a Path),
+    #[error("no such direction `{0}`")]
+    BadDirection(String),
     #[error("mismatch in count types between file location (`{0}`) and header of that file")]
     LocationHeaderMisMatch(&'a Path),
     #[error("no such vehicle class '{0}'")]
     BadVehicleClass(u8),
+    #[error("unable to determine interval from count")]
+    BadIntervalCount,
     #[error("error converting header row to string")]
     HeadertoStringRecordError(#[from] csv::Error),
+    #[error("invalid MCD (`{0}`)")]
+    InvalidMcd(String),
+    #[error("inconsistent data in database")]
+    InconsistentData,
     #[error("database error `{0}`")]
     DbError(#[from] oracle::Error),
+    #[error("datetime error `{0}`")]
+    TimeError(#[from] time::Error),
 }
 
 /// Identifying the problem when there's an error with a filename.
@@ -177,7 +187,13 @@ impl IndividualVehicle {
     }
 }
 
-/// Pre-binned, 15-minute volume counts (TC_15MINVOLCOUNT table).
+/// Pre-binned, 15-minute bicycle volume counts (TC_BIKECOUNT table).
+pub struct FifteenMinuteBicycle;
+
+/// Pre-binned, 15-minute pedestrian volume counts (TC_PEDCOUNT table).
+pub struct FifteenMinutePedestrian;
+
+/// Pre-binned, 15-minute motor vehicle volume counts (TC_15MINVOLCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
     pub dvrpc_num: i32,
@@ -337,6 +353,18 @@ pub enum Direction {
     East,
     South,
     West,
+}
+
+impl Direction {
+    fn from_string(dir: String) -> Result<Direction, CountError<'static>> {
+        match dir.to_lowercase().as_str() {
+            "north" | "n" => Ok(Direction::North),
+            "east" | "e" => Ok(Direction::East),
+            "south" | "s" => Ok(Direction::South),
+            "west" | "w" => Ok(Direction::West),
+            _ => Err(CountError::BadDirection(dir.to_string())),
+        }
+    }
 }
 
 impl Display for Direction {

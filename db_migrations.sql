@@ -92,3 +92,9 @@ alter table tc_15minvolcount
 /*
   END PRIMARY KEY
 */
+
+-- Add columns for more generic annual average volumes (not specific to count type), 
+-- and also for directions
+alter table tc_header add aadv number;
+alter table tc_header add aadv_dir1 number;
+alter table tc_header add aadv_dir2 number;
