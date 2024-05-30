@@ -135,7 +135,7 @@ pub trait TimeBinned {
         // Get dates that have full counts so we only get totals for them.
         let dates = Self::get_full_dates(recordnum, conn)?;
 
-        let results = conn.query_as::<(Timestamp, usize, String)>(
+        let results = conn.query_as::<(Timestamp, usize, Option<String>)>(
             &format!(
                 "select countdate, sum({}), {} from {} where {} = :1 group by countdate, {}",
                 &Self::TOTAL_FIELD,
@@ -165,7 +165,9 @@ pub trait TimeBinned {
             }
 
             // Insert value for each date/direction.
-            totals.insert((date, Some(Direction::from_string(direction)?)), total);
+            if let Some(v) = direction {
+                totals.insert((date, Some(Direction::from_string(v)?)), total);
+            }
 
             // Insert or update value date/overall.
             totals
