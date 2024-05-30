@@ -204,7 +204,6 @@ impl TimeBinned for TimeBinnedVehicleClassCount {
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>) = ("ctdir", None);
     const FACTOR_TABLE: &'static str = "tc_factor";
 
-    /// Calculate average annual daily volume.
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
@@ -212,7 +211,7 @@ impl TimeBinned for TimeBinnedVehicleClassCount {
         // Get day counts for full days.
         let day_counts = Self::get_total_by_date(recordnum, conn)?;
 
-        // Get metadata fields in order to get factors from another table.
+        // Get additional fields required to get factors from factor table.
         // mcd contains state code
         // fc is "road functional classification"
         let (mcd, fc) = conn.query_row_as::<(String, u8)>(
@@ -220,7 +219,7 @@ impl TimeBinned for TimeBinnedVehicleClassCount {
             &[&recordnum],
         )?;
 
-        // Get season factor and axle from TC_FACTOR table.
+        // Set column name for factor from factor table.
         let season_factor_col = if mcd.starts_with("42") {
             "pafactor"
         } else if mcd.starts_with("34") {
@@ -232,6 +231,8 @@ impl TimeBinned for TimeBinnedVehicleClassCount {
         let mut daily_aadv: HashMap<(Date, Option<Direction>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
+            // Get season factor from factor table. No need to get axle factor, as that
+            // is only for non-class (and non-loop) types of counts.
             let season_factor = conn.query_row_as::<f32>(
                 &format!(
                     "select {} from {} WHERE fc = :1 and year = :2 and month = :3 and dayofweek = :4",
@@ -246,8 +247,6 @@ impl TimeBinned for TimeBinnedVehicleClassCount {
                 ],
             )?;
 
-            // Because this is a class count, we use an axle factor of 1, and so it's excluded.
-            // Other types (aside from loop) use axle factor from table.
             daily_aadv.insert((date, direction), total as f32 * season_factor);
         }
 
@@ -283,7 +282,6 @@ impl TimeBinned for FifteenMinuteVehicle {
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>) = ("cntdir", None);
     const FACTOR_TABLE: &'static str = "tc_factor";
 
-    /// Calculate average annual daily volume.
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
@@ -291,7 +289,7 @@ impl TimeBinned for FifteenMinuteVehicle {
         // Get day counts for full days.
         let day_counts = Self::get_total_by_date(recordnum, conn)?;
 
-        // Get metadata fields in order to get factors from another table.
+        // Get additional fields required to get factors from factor table.
         // mcd contains state code
         // fc is "road functional classification"
         let (mcd, fc) = conn.query_row_as::<(String, u8)>(
@@ -299,7 +297,7 @@ impl TimeBinned for FifteenMinuteVehicle {
             &[&recordnum],
         )?;
 
-        // Get season factor and axle from TC_FACTOR table.
+        // Set column names for factors from factor table.
         let (season_factor_col, axle_factor_col) = if mcd.starts_with("42") {
             ("pafactor", "paaxle")
         } else if mcd.starts_with("34") {
@@ -311,6 +309,7 @@ impl TimeBinned for FifteenMinuteVehicle {
         let mut daily_aadv: HashMap<(Date, Option<Direction>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
+            // Get season and axle factors from factor table.
             let (season_factor, axle_factor) = conn.query_row_as::<(f32, f32)>(
                 &format!(
                     "select {}, {} from {} WHERE fc = :1 and year = :2 and month = :3 and dayofweek = :4",
@@ -364,7 +363,6 @@ impl TimeBinned for FifteenMinuteBicycle {
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>) = ("INCOUNT", Some("outcount"));
     const FACTOR_TABLE: &'static str = "tc_bikefactor";
 
-    /// Get totals by date.
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
@@ -381,85 +379,60 @@ impl TimeBinned for FifteenMinuteBicycle {
             conn,
         )
     }
-    /// Calculate average annual daily volume.
+
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
     ) -> Result<HashMap<Option<Direction>, f32>, CountError> {
         // Get day counts for full days.
-        todo!()
+        let day_counts = Self::get_total_by_date(recordnum, conn)?;
+
+        // Get additional fields required to get factors from factor table.
+        let bikepedgroup = conn.query_row_as::<String>(
+            "select bikepedgroup from tc_header where recordnum = :1",
+            &[&recordnum],
+        )?;
+
+        let mut daily_aadv: HashMap<(Date, Option<Direction>), f32> = HashMap::new();
+
+        for ((date, direction), total) in day_counts {
+            // Get factor from factor table.
+            let factor = conn.query_row_as::<f32>(
+                &format!(
+                    "select factor from {} WHERE type = :1 and year = :2 and monthnum = :3 and dayofweeknum = :4",
+                    Self::FACTOR_TABLE,
+                ),
+                &[
+                    &bikepedgroup,
+                    &date.year(),
+                    &(date.month() as u32),
+                    &(date.weekday().number_from_sunday() as u32), // DVRPC uses 1-7 for SUN to SAT
+                ],
+            )?;
+
+            daily_aadv.insert((date, direction), total as f32 * factor);
+        }
+
+        // Determine the divisor by which we'll average the counts.
+        let directions_per_day = daily_aadv
+            .keys()
+            .map(|(_date, direction)| direction)
+            .collect::<HashSet<_>>();
+        let divisor = (daily_aadv.len() / directions_per_day.len()) as f32;
+
+        // Average totals from each day over each Option<Direction>.
+        let mut aadv = HashMap::new();
+        for direction in directions_per_day {
+            let aadv_per_dir: f32 = daily_aadv
+                .iter()
+                .filter(|((_date, dir), _total)| dir == direction)
+                .map(|((_date, _dir), total)| total)
+                .sum();
+            aadv.insert(*direction, aadv_per_dir / divisor);
+        }
+
+        Ok(aadv)
     }
-
-    // old
-    // fn calculate_aadv(recordnum: u32, conn: &Connection) -> Result<Statement, CountError> {
-    //     // Get totals for each full date.
-    //     // let dates = Self::get_full_dates(recordnum, conn)?;
-    //     let day_counts = Self::get_total_by_date(recordnum, conn)?;
-
-    //     // Get metadata fields in order to get factors from another table.
-    //     // TODO: make this an enum?
-    //     let bikepedgroup = conn.query_row_as::<String>(
-    //         "select bikepedgroup from tc_header where recordnum = :1",
-    //         &[&recordnum],
-    //     )?;
-
-    //     let mut aadv = vec![];
-    //     for day_count in day_counts {
-    //         let factor = conn.query_row_as::<f32>(
-    //             &format!(
-    //                 "select FACTOR from {} WHERE year = :1 and monthnum = :2 and dayofweeknum = :3 and type = :4",
-    //                 Self::FACTOR_TABLE,
-    //             ),
-    //             &[
-    //                 &day_count.date.year(),
-    //                 &(day_count.date.month() as u32),
-    //                 &(day_count.date.weekday().number_from_sunday() as u32), // DVRPC uses 1-7 for SUN to SAT
-    //                 &bikepedgroup,
-    //             ],
-    //         )?;
-
-    //         if let Some(v) = day_count.dir2 {
-    //             aadv.push(Aadv {
-    //                 overall: ((day_count.dir1.0 + v.0) as f32) * factor,
-    //                 dir1: ((day_count.dir1.0 as f32) * factor, day_count.dir1.1),
-    //                 dir2: Some((v.0 as f32 * factor, v.1)),
-    //             })
-    //         } else {
-    //             let one_aadv = day_count.dir1.0 as f32 * factor;
-    //             aadv.push(Aadv {
-    //                 overall: one_aadv,
-    //                 dir1: (one_aadv, day_count.dir1.1),
-    //                 dir2: None,
-    //             })
-    //         }
-    //     }
-
-    //     let divisor = aadv.len() as f32;
-    //     let aadv_overall = aadv.iter().map(|aadv| aadv.overall).sum::<f32>() / divisor;
-    //     let aadv_dir1 = aadv.iter().map(|aadv| aadv.dir1.0).sum::<f32>() / divisor;
-
-    //     dbg!(&aadv_overall);
-    //     dbg!(&aadv_dir1);
-
-    //     // If there is a second direction, also calculate aadv for it.
-    //     // (If the first one is Some, then they all are - this is verified in fn that gets totals.)
-    //     match aadv[0].dir2 {
-    //         Some(_) => {
-    //             dbg!("ok");
-
-    //             let aadv_dir2 = aadv.iter().map(|aadv| aadv.dir2.unwrap().0).sum::<f32>() / divisor;
-    //             dbg!(&aadv_dir2);
-    //             Ok(conn.execute(
-    //                 "update tc_header SET aadv = :1, aadv_dir1 = :2, aadv_dir2 = :3 where recordnum = :4",
-    //                 &[&aadv_overall, &aadv_dir1, &aadv_dir2, &recordnum],
-    //             )?)
-    //         }
-    //         None => Ok(conn.execute(
-    //             "update tc_header SET aadv = :1, aadv_dir1 = :2 where recordnum = :3",
-    //             &[&aadv_overall, &aadv_dir1, &recordnum],
-    //         )?),
-    //     }
-    // }
 }
 
 impl TimeBinned for FifteenMinutePedestrian {
@@ -469,7 +442,6 @@ impl TimeBinned for FifteenMinutePedestrian {
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>) = ("IN", Some("OUT"));
     const FACTOR_TABLE: &'static str = "tc_pedfactor";
 
-    /// Get totals by date.
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
@@ -487,13 +459,43 @@ impl TimeBinned for FifteenMinutePedestrian {
         )
     }
 
-    /// Calculate average annual daily volume.
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
     ) -> Result<HashMap<Option<Direction>, f32>, CountError> {
         // Get day counts for full days.
-        todo!()
+        let day_counts = Self::get_total_by_date(recordnum, conn)?;
+
+        let mut daily_aadv: HashMap<(Date, Option<Direction>), f32> = HashMap::new();
+
+        for ((date, direction), total) in day_counts {
+            // Get factor from factor table.
+            let factor = conn.query_row_as::<f32>(
+                &format!("select factor from {} WHERE month = :1", Self::FACTOR_TABLE,),
+                &[&(date.month() as u32)],
+            )?;
+            daily_aadv.insert((date, direction), total as f32 * factor);
+        }
+
+        // Determine the divisor by which we'll average the counts.
+        let directions_per_day = daily_aadv
+            .keys()
+            .map(|(_date, direction)| direction)
+            .collect::<HashSet<_>>();
+        let divisor = (daily_aadv.len() / directions_per_day.len()) as f32;
+
+        // Average totals from each day over each Option<Direction>.
+        let mut aadv = HashMap::new();
+        for direction in directions_per_day {
+            let aadv_per_dir: f32 = daily_aadv
+                .iter()
+                .filter(|((_date, dir), _total)| dir == direction)
+                .map(|((_date, _dir), total)| total)
+                .sum();
+            aadv.insert(*direction, aadv_per_dir / divisor);
+        }
+
+        Ok(aadv)
     }
 }
 
@@ -1356,19 +1358,81 @@ mod tests {
         let conn = pool.get().unwrap();
 
         let aadv = TimeBinnedVehicleClassCount::calculate_aadv(166905, &conn).unwrap();
-        assert_eq!(aadv.get(&None).unwrap(), &3880.4);
-        assert_eq!(aadv.get(&Some(Direction::East)).unwrap(), &1783.24);
-        assert_eq!(aadv.get(&Some(Direction::West)).unwrap(), &2097.16);
+        assert_eq!(aadv.get(&None).unwrap().round() as u32, 3880);
+        assert_eq!(
+            aadv.get(&Some(Direction::East)).unwrap().round() as u32,
+            1783
+        );
+        assert_eq!(
+            aadv.get(&Some(Direction::West)).unwrap().round() as u32,
+            2097
+        );
 
         // 141216: fc 17, PA, 2018-08-01 (4th day of week from Sunday) only full day
         // pafactor = 0.863; paaxle = 0.976; total for 2018-08-01 (no directionality, because
         // not done by previous import process): 7460
         let aadv = FifteenMinuteVehicle::calculate_aadv(141216, &conn).unwrap();
-        assert_eq!(*aadv.get(&None).unwrap() as u32, 6283_u32);
+        assert_eq!(aadv.get(&None).unwrap().round() as u32, 6283);
 
-        // let aadv = FifteenMinuteBicycle::calculate_aadv(156238, &conn).unwrap();
+        // 156238: bikpedgroup Mixed; full days from Nov 22, 2020 to Nov 28, 2020 inclusive
+        /* Here's how it was manually calculated:
+        // full day date, total, in, out, dayofweeknum, factor from tc_bikefactor
+        let data = [
+            (2020 - 11 - 22, 84, 50, 34, 1, 2.068),
+            (2020 - 11 - 23, 23, 16, 7, 2, 1.654),
+            (2020 - 11 - 24, 40, 32, 8, 3, 1.835),
+            (2020 - 11 - 25, 67, 43, 24, 4, 2.017),
+            (2020 - 11 - 26, 23, 17, 6, 5, 2.316),
+            (2020 - 11 - 27, 92, 67, 25, 6, 2.169),
+            (2020 - 11 - 28, 83, 53, 30, 7, 2.006),
+        ];
+        let manual_aadv_overall: f32 = data.iter().map(|each| each.1 as f32 * each.5).sum();
+        let manual_aadv_east: f32 = data.iter().map(|each| each.2 as f32 * each.5).sum();
+        let manual_aadv_west: f32 = data.iter().map(|each| each.3 as f32 * each.5).sum();
+        let manual_aadv_overall = manual_aadv_overall / 7.0;
+        let manual_aadv_east = manual_aadv_east / 7.0;
+        let manual_aadv_west = manual_aadv_west / 7.0;
+        dbg!(&manual_aadv_overall); // 119.944
+        dbg!(&manual_aadv_east); //  80.904
+        dbg!(&manual_aadv_west); //  39.040
+        */
+        let aadv = FifteenMinuteBicycle::calculate_aadv(156238, &conn).unwrap();
+        assert_eq!(aadv.get(&None).unwrap().round() as u32, 120);
+        assert_eq!(aadv.get(&Some(Direction::East)).unwrap().round() as u32, 81);
+        assert_eq!(aadv.get(&Some(Direction::West)).unwrap().round() as u32, 39);
 
-        // let aadv = FifteenMinuteBicycle::calculate_aadv(160252, &conn).unwrap();
-        // let aadv = FifteenMinutePedestrian::calculate_aadv(136271, &conn).unwrap();
+        // 136271: full days from Oct 15, 2015 to Oct 21, 2015, inclusive.
+        /* Here's how it was manually calculated:
+        // full day date, total, in, out, factor from tc_pedfactor
+        let data = [
+            (2015 - 10 - 15, 36, 21, 15),
+            (2015 - 10 - 16, 22, 13, 9),
+            (2015 - 10 - 17, 68, 36, 32),
+            (2015 - 10 - 18, 81, 38, 43),
+            (2015 - 10 - 19, 25, 14, 11),
+            (2015 - 10 - 20, 134, 110, 24),
+            (2015 - 10 - 21, 76, 52, 24),
+        ];
+        let factor = 0.968; // for October
+        let manual_aadv_overall: f32 = data.iter().map(|each| each.1 as f32 * factor).sum();
+        let manual_aadv_south: f32 = data.iter().map(|each| each.2 as f32 * factor).sum();
+        let manual_aadv_north: f32 = data.iter().map(|each| each.3 as f32 * factor).sum();
+        let manual_aadv_overall = manual_aadv_overall / 7.0;
+        let manual_aadv_east = manual_aadv_east / 7.0;
+        let manual_aadv_west = manual_aadv_west / 7.0;
+        dbg!(&manual_aadv_overall); // 61.122
+        dbg!(&manual_aadv_south); // 39.273
+        dbg!(&manual_aadv_north); // 21.849
+        */
+        let aadv = FifteenMinutePedestrian::calculate_aadv(136271, &conn).unwrap();
+        assert_eq!(aadv.get(&None).unwrap().round() as u32, 61);
+        assert_eq!(
+            aadv.get(&Some(Direction::South)).unwrap().round() as u32,
+            39
+        );
+        assert_eq!(
+            aadv.get(&Some(Direction::North)).unwrap().round() as u32,
+            22
+        );
     }
 }
