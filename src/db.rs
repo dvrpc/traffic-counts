@@ -6,7 +6,9 @@ use oracle::{
     sql_type::Timestamp,
     Connection, Error as OracleError, Statement,
 };
-use time::{format_description::BorrowedFormatItem, macros::format_description, Date};
+use time::{
+    format_description::BorrowedFormatItem, macros::format_description, Date, OffsetDateTime,
+};
 
 use crate::*;
 
@@ -186,15 +188,38 @@ pub trait TimeBinned {
     ) -> Result<HashMap<Option<Direction>, f32>, CountError>;
 
     // Insert/update the set of AADVs (per direction/overall) into the database.
-    // fn insert_aadv(recordnum: u32, aadv: Vec<f32>) -> Result<(), CountError> {
-    //     for aadv in aadv {
-    //         Ok(conn.execute(
-    //             "update tc_aadv SET aadv = :1 where recordnum = :2",
-    //             &[&aadv, &recordnum],
-    //         )?);
-    //     }
-    //     conn.commit()?
-    // }
+    fn insert_aadv(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
+        let aadv = &Self::calculate_aadv(recordnum, conn)?;
+        let date = match OffsetDateTime::now_local() {
+            Ok(v) => v.date(),
+            Err(_) => OffsetDateTime::now_utc().date(), // fallback to UTC
+        };
+
+        let date = Timestamp::new(
+            date.year(),
+            date.month() as u32,
+            date.day() as u32,
+            0,
+            0,
+            0,
+            0,
+        );
+
+        // Delete any existing AADVs for same recordnum and date
+        let sql = "delete from tc_aadv where recordnum = :1 and date_calculated = TO_DATE(:2, 'YYYY-MM-DD')";
+        conn.execute(sql, &[&recordnum, &date])?;
+        conn.commit()?;
+
+        for (direction, aadv) in aadv {
+            let direction = direction.map(|v| format!("{v}"));
+            conn.execute(
+                "insert into tc_aadv (recordnum, aadv, direction, date_calculated) VALUES (:1, :2, :3, :4)",
+                &[&recordnum, aadv, &direction, &date],
+            )?;
+        }
+        conn.commit()?;
+        Ok(())
+    }
 }
 
 impl TimeBinned for TimeBinnedVehicleClassCount {

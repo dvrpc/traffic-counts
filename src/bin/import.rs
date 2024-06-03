@@ -63,6 +63,7 @@ use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
 
+use traffic_counts::db::TimeBinned;
 use traffic_counts::{
     db::{create_pool, CountTable},
     extract_from_file::Extract,
@@ -259,6 +260,7 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
+                FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn).unwrap();
             }
             InputCount::FifteenMinuteBicycle => (),
             InputCount::FifteenMinutePedestrian => (),
