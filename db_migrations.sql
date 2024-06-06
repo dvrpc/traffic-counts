@@ -100,3 +100,35 @@ create table tc_aadv (
     direction varchar2(4),
     date_calculated date not null
 );
+
+
+/*
+ Begin enabling custom factors
+ Factors for 5 NJ municipalities have been kept out of the database since 2017, include them.
+ (If more are needed, we will add additional columns to tc_factor and update the records
+ in the tc_mcd table to note which MCDs they apply to.)
+*/
+alter table tc_factor add nj_region4_factor number;
+alter table tc_factor add nj_region4_axle number;
+
+alter table tc_mcd add custom_factor varchar2(100);
+alter table tc_mcd add custom_axle_factor varchar2(100);
+
+-- "dvrpc" column here is MCD
+UPDATE tc_mcd
+    SET custom_factor = 'nj_region4_factor', custom_axle_factor = 'nj_region4_axle' 
+    where dvrpc = 3400503370; -- Bass River Twp, Burlington
+UPDATE tc_mcd
+    set custom_factor = 'nj_region4_factor', custom_axle_factor = 'nj_region4_axle' 
+    where dvrpc = '3400577150'; -- Washington Twp, Burlington
+update tc_mcd
+    set custom_factor = 'nj_region4_factor',  custom_axle_factor = 'nj_region4_axle' 
+    where dvrpc = '3400582420'; -- Woodland Twp, Burlington
+update tc_mcd
+    set custom_factor = 'nj_region4_factor', custom_axle_factor = 'nj_region4_axle' 
+    where dvrpc = '3401524840'; -- Franklin Twp, Gloucester
+update tc_mcd
+    set custom_factor = 'nj_region4_factor', custom_axle_factor = 'nj_region4_axle' 
+    where dvrpc = '3401551390'; -- Newfield Boro, Gloucester
+
+-- End enabling custom factors
