@@ -117,7 +117,7 @@ impl Extract for IndividualVehicle {
 }
 
 /// Create CSV reader from file.
-fn create_reader(file: &File) -> Reader<&File> {
+pub fn create_reader(file: &File) -> Reader<&File> {
     ReaderBuilder::new()
         .has_headers(false)
         .trim(csv::Trim::All)
