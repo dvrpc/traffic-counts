@@ -264,6 +264,7 @@ fn main() {
             }
             InputCount::FifteenMinuteBicycle => (),
             InputCount::FifteenMinutePedestrian => (),
+            InputCount::FifteenMinuteBicycleOrPedestrian => (),
         }
     }
 }

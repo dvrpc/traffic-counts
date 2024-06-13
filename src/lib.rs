@@ -29,10 +29,9 @@ pub mod intermediate;
 use intermediate::*;
 
 // headers stripped of double quotes and spaces
-// TODO: the headers for FifteenMinuteBicycle and FifteenMinutePedestrian
-// still need to be added
 const FIFTEEN_MINUTE_VEHICLE_HEADER: &str = "Number,Date,Time,Channel1";
 const INDIVIDUAL_VEHICLE_HEADER: &str = "Veh.No.,Date,Time,Channel,Class,Speed";
+const FIFTEEN_MINUTE_BIKE_OR_PED_HEADER: &str = "Time,";
 
 /// Various errors that can occur.
 #[derive(Debug, Error)]
@@ -86,8 +85,17 @@ pub enum FileNameProblem {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InputCount {
     /// Eco-Counter
+    ///
+    /// There's no difference in the headers for the exported CSV, so this is used to partially
+    /// identify the type.
+    FifteenMinuteBicycleOrPedestrian,
+    /// Pre-binned, 15-minute volume counts from Eco-Counter
+    ///
+    /// See [`FifteenMinutePedestrian`], the corresponding type.
     FifteenMinuteBicycle,
-    /// Eco-Counter
+    /// Pre-binned, 15-minute volume counts from Eco-Counter
+    ///
+    /// See [`FifteenMinuteBicycle`], the corresponding type.
     FifteenMinutePedestrian,
     /// Pre-binned, 15-minute volume counts from StarNext/Jamar.
     ///
@@ -135,7 +143,16 @@ impl InputCount {
     pub fn from_parent_dir_and_header(path: &Path) -> Result<InputCount, CountError> {
         let count_type_from_location = InputCount::from_parent_dir(path)?;
         let count_type_from_header = InputCount::from_header(path)?;
-        if count_type_from_location != count_type_from_header {
+
+        // For bicycle and pedestrian counts from Eco-Counter, there is no difference between
+        // the header, so the `from_header` method can only partially determine the type.
+        if count_type_from_header == InputCount::FifteenMinuteBicycleOrPedestrian {
+            if count_type_from_location != InputCount::FifteenMinuteBicycle
+                && count_type_from_location != InputCount::FifteenMinutePedestrian
+            {
+                return Err(CountError::LocationHeaderMisMatch(path));
+            }
+        } else if count_type_from_location != count_type_from_header {
             return Err(CountError::LocationHeaderMisMatch(path));
         }
         Ok(count_type_from_location)
@@ -1295,12 +1312,13 @@ fn count_type_and_num_nondata_rows(path: &Path) -> Result<(InputCount, usize), C
     for line in contents.lines().take(50) {
         num_rows += 1;
         let line = line.replace(['"', ' '], "");
-        if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) {
+        if line.starts_with(FIFTEEN_MINUTE_BIKE_OR_PED_HEADER) {
+            return Ok((InputCount::FifteenMinuteBicycleOrPedestrian, num_rows));
+        } else if line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER) {
             return Ok((InputCount::FifteenMinuteVehicle, num_rows));
         } else if line.contains(INDIVIDUAL_VEHICLE_HEADER) {
             return Ok((InputCount::IndividualVehicle, num_rows));
         }
-        // TODO: other header checks/types to be added
     }
     Err(CountError::BadHeader(path))
 }
@@ -1483,6 +1501,22 @@ mod tests {
     }
 
     #[test]
+    fn count_type_and_num_nondata_rows_correct_15min_bicycle_sample() {
+        let path = Path::new("test_files/15minutebicycle/vg-167607-ns-4175-na.csv");
+        let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
+        assert_eq!(count_type, InputCount::FifteenMinuteBicycleOrPedestrian);
+        assert_eq!(num_rows, 3);
+    }
+
+    #[test]
+    fn count_type_and_num_nondata_rows_correct_15min_pedestrian_sample() {
+        let path = Path::new("test_files/15minutepedestrian/vg-167297-ns-4874-na.csv");
+        let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
+        assert_eq!(count_type, InputCount::FifteenMinuteBicycleOrPedestrian);
+        assert_eq!(num_rows, 3);
+    }
+
+    #[test]
     fn count_type_and_num_nondata_rows_errs_if_no_matching_header() {
         let path = Path::new("test_files/bad_header.txt");
         assert!(matches!(
@@ -1510,6 +1544,20 @@ mod tests {
         let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
         let ct_from_header = InputCount::from_header(path).unwrap();
         assert_eq!(ct_from_header, InputCount::FifteenMinuteVehicle);
+    }
+
+    #[test]
+    fn count_type_15min_bicycle_from_header_correct() {
+        let path = Path::new("test_files/15minutebicycle/vg-167607-ns-4175-na.csv");
+        let ct_from_header = InputCount::from_header(path).unwrap();
+        assert_eq!(ct_from_header, InputCount::FifteenMinuteBicycleOrPedestrian);
+    }
+
+    #[test]
+    fn count_type_15min_pedestrian_from_header_correct() {
+        let path = Path::new("test_files/15minutepedestrian/vg-167297-ns-4874-na.csv");
+        let ct_from_header = InputCount::from_header(path).unwrap();
+        assert_eq!(ct_from_header, InputCount::FifteenMinuteBicycleOrPedestrian);
     }
 
     #[test]
@@ -1545,6 +1593,20 @@ mod tests {
     }
 
     #[test]
+    fn count_type_from_parent_dir_and_header_15min_bicycle_correct() {
+        let path = Path::new("test_files/15minutebicycle/vg-167607-ns-4175-na.csv");
+        let count_type = InputCount::from_parent_dir_and_header(path).unwrap();
+        assert_eq!(count_type, InputCount::FifteenMinuteBicycle);
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_header_15min_pedestrian_correct() {
+        let path = Path::new("test_files/15minutepedestrian/vg-167297-ns-4874-na.csv");
+        let count_type = InputCount::from_parent_dir_and_header(path).unwrap();
+        assert_eq!(count_type, InputCount::FifteenMinutePedestrian);
+    }
+
+    #[test]
     fn count_type_from_parent_dir_and_errs_if_mismatch1() {
         let path = Path::new("test_files/15minutevehicle/ind_veh_count.txt");
         let count_type = InputCount::from_parent_dir_and_header(path);
@@ -1557,6 +1619,46 @@ mod tests {
     #[test]
     fn count_type_from_parent_dir_and_errs_if_mismatch2() {
         let path = Path::new("test_files/vehicle/15min_veh_count.txt");
+        let count_type = InputCount::from_parent_dir_and_header(path);
+        assert!(matches!(
+            count_type,
+            Err(CountError::LocationHeaderMisMatch(_))
+        ))
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_errs_if_mismatch3() {
+        let path = Path::new("test_files/15minutebicycle/15min_veh_count.txt");
+        let count_type = InputCount::from_parent_dir_and_header(path);
+        assert!(matches!(
+            count_type,
+            Err(CountError::LocationHeaderMisMatch(_))
+        ))
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_errs_if_mismatch5() {
+        let path = Path::new("test_files/15minutevehicle/15min_pedestrian_count.csv");
+        let count_type = InputCount::from_parent_dir_and_header(path);
+        assert!(matches!(
+            count_type,
+            Err(CountError::LocationHeaderMisMatch(_))
+        ))
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_errs_if_mismatch6() {
+        let path = Path::new("test_files/15minutepedestrian/15min_veh_count.txt");
+        let count_type = InputCount::from_parent_dir_and_header(path);
+        assert!(matches!(
+            count_type,
+            Err(CountError::LocationHeaderMisMatch(_))
+        ))
+    }
+
+    #[test]
+    fn count_type_from_parent_dir_and_errs_if_mismatch4() {
+        let path = Path::new("test_files/15minutevehicle/15min_bicycle_count.txt");
         let count_type = InputCount::from_parent_dir_and_header(path);
         assert!(matches!(
             count_type,
