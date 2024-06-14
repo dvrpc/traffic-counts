@@ -52,6 +52,11 @@
 //!   - w
 //!   - n
 //!   - s
+//!
+//! Note that for bicycle and pedestrian counts that are unidirectional, the program will use
+//! the total for each period, capturing both in/out directions and thus any wrong-way travel.
+//! In terms of the filename, this would mean using a single direction in that position,
+//! e.g. like the last example above.
 
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -165,7 +170,6 @@ fn main() {
                         continue;
                     }
                 };
-                dbg!(individual_vehicles.len());
 
                 // Create two counts from this: 15-minute speed count and 15-minute class count
                 let (speed_range_count, vehicle_class_count) = create_speed_and_class_count(
@@ -174,9 +178,6 @@ fn main() {
                     TimeInterval::FifteenMin,
                 );
                 // let date = determine_date(individual_vehicles.clone());
-
-                dbg!(vehicle_class_count.len());
-                dbg!(speed_range_count.len());
 
                 // Create records for the non-normalized TC_VOLCOUNT table.
                 // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
@@ -262,7 +263,30 @@ fn main() {
                 conn.commit().unwrap();
                 FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn).unwrap();
             }
-            InputCount::FifteenMinuteBicycle => (),
+            InputCount::FifteenMinuteBicycle => {
+                // Extract data from CSV/text file
+                let fifteen_min_volcount = match FifteenMinuteBicycle::extract(path) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("{path:?} not processed: {e}");
+                        continue;
+                    }
+                };
+                // As they are already binned by 15-minute period, these need no further
+                // processing; just insert into database.
+                FifteenMinuteBicycle::delete(&conn, record_num).unwrap();
+                let mut prepared = FifteenMinuteBicycle::prepare_insert(&conn).unwrap();
+                for count in fifteen_min_volcount {
+                    match count.insert(&mut prepared) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Error inserting count {count:?}: {e}");
+                        }
+                    }
+                }
+                conn.commit().unwrap();
+                FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn).unwrap();
+            }
             InputCount::FifteenMinutePedestrian => (),
             InputCount::FifteenMinuteBicycleOrPedestrian => (),
         }

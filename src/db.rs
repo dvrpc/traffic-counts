@@ -22,7 +22,7 @@ pub trait TimeBinned {
     /// Field in BINNED_TABLE containing the total count for the period.
     const TOTAL_FIELD: &'static str;
     /// Field in BINNED_TABLE with recordnum/dvrpcnum.
-    const RECORDNUM_FIELD: &'static str;
+    const BINNED_RECORDNUM_FIELD: &'static str;
     /// Tables that store data in rows per direction (TC_CLACOUNT, TC_15MINVOLCOUNT) will only use
     /// the first element of this tuple, while those that store directions and total in each row
     /// (TC_BIKECOUNT, TC_PEDCOUNT) will use both.    
@@ -40,7 +40,7 @@ pub trait TimeBinned {
         // and get individual component from each for backwards compatibility.
         let results = conn
             .query_as::<(Timestamp, Timestamp)>(
-                &format!("select countdate, counttime from {} where {} = :1 order by countdate ASC, counttime ASC", &Self::BINNED_TABLE, &Self::RECORDNUM_FIELD),
+                &format!("select countdate, counttime from {} where {} = :1 order by countdate ASC, counttime ASC", &Self::BINNED_TABLE, &Self::BINNED_RECORDNUM_FIELD),
                 &[&recordnum],
             )?;
 
@@ -143,7 +143,7 @@ pub trait TimeBinned {
                 &Self::TOTAL_FIELD,
                 &Self::COUNT_DIR_FIELD.0,
                 &Self::BINNED_TABLE,
-                &Self::RECORDNUM_FIELD,
+                &Self::BINNED_RECORDNUM_FIELD,
                 &Self::COUNT_DIR_FIELD.0,
             ),
             &[&recordnum],
@@ -224,7 +224,7 @@ pub trait TimeBinned {
 impl TimeBinned for TimeBinnedVehicleClassCount {
     const BINNED_TABLE: &'static str = "tc_clacount";
     const TOTAL_FIELD: &'static str = "total";
-    const RECORDNUM_FIELD: &'static str = "recordnum";
+    const BINNED_RECORDNUM_FIELD: &'static str = "recordnum";
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>) = ("ctdir", None);
     const FACTOR_TABLE: &'static str = "tc_factor";
 
@@ -311,7 +311,7 @@ impl TimeBinned for TimeBinnedVehicleClassCount {
 impl TimeBinned for FifteenMinuteVehicle {
     const BINNED_TABLE: &'static str = "tc_15minvolcount";
     const TOTAL_FIELD: &'static str = "volcount";
-    const RECORDNUM_FIELD: &'static str = "recordnum";
+    const BINNED_RECORDNUM_FIELD: &'static str = "recordnum";
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>) = ("cntdir", None);
     const FACTOR_TABLE: &'static str = "tc_factor";
 
@@ -404,7 +404,7 @@ impl TimeBinned for FifteenMinuteVehicle {
 impl TimeBinned for FifteenMinuteBicycle {
     const BINNED_TABLE: &'static str = "tc_bikecount";
     const TOTAL_FIELD: &'static str = "total";
-    const RECORDNUM_FIELD: &'static str = "dvrpcnum";
+    const BINNED_RECORDNUM_FIELD: &'static str = "dvrpcnum";
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>) = ("INCOUNT", Some("outcount"));
     const FACTOR_TABLE: &'static str = "tc_bikefactor";
 
@@ -420,7 +420,7 @@ impl TimeBinned for FifteenMinuteBicycle {
             Self::BINNED_TABLE,
             Self::COUNT_DIR_FIELD.0,
             Self::COUNT_DIR_FIELD.1.unwrap(),
-            Self::RECORDNUM_FIELD,
+            Self::BINNED_RECORDNUM_FIELD,
             conn,
         )
     }
@@ -492,7 +492,7 @@ impl TimeBinned for FifteenMinuteBicycle {
 impl TimeBinned for FifteenMinutePedestrian {
     const BINNED_TABLE: &'static str = "tc_pedcount";
     const TOTAL_FIELD: &'static str = "total";
-    const RECORDNUM_FIELD: &'static str = "dvrpcnum";
+    const BINNED_RECORDNUM_FIELD: &'static str = "dvrpcnum";
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>) = ("IN", Some("OUT"));
     const FACTOR_TABLE: &'static str = "tc_pedfactor";
 
@@ -508,7 +508,7 @@ impl TimeBinned for FifteenMinutePedestrian {
             Self::BINNED_TABLE,
             Self::COUNT_DIR_FIELD.0,
             Self::COUNT_DIR_FIELD.1.unwrap(),
-            Self::RECORDNUM_FIELD,
+            Self::BINNED_RECORDNUM_FIELD,
             conn,
         )
     }
@@ -572,11 +572,17 @@ impl TimeBinned for FifteenMinutePedestrian {
 /// A trait for database operations on output count types.
 pub trait CountTable {
     /// The name of the table in the database that this count type corresponds to.
-    const TABLE_NAME: &'static str; // associated constant
+    const COUNT_TABLE: &'static str; // associated constant
+    /// Field in COUNT_TABLE with recordnum/dvrpcnum.
+    const COUNT_RECORDNUM_FIELD: &'static str;
 
     /// Delete all records in the table with a particular recordnum.
     fn delete(conn: &Connection, recordnum: i32) -> Result<(), oracle::Error> {
-        let sql = &format!("delete from {} where recordnum = :1", &Self::TABLE_NAME);
+        let sql = &format!(
+            "delete from {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
         conn.execute(sql, &[&recordnum])?;
         conn.commit()
     }
@@ -589,7 +595,8 @@ pub trait CountTable {
 }
 
 impl CountTable for TimeBinnedVehicleClassCount {
-    const TABLE_NAME: &'static str = "tc_clacount";
+    const COUNT_TABLE: &'static str = "tc_clacount";
+    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
         let sql = &format!(
@@ -600,7 +607,7 @@ impl CountTable for TimeBinnedVehicleClassCount {
             VALUES \
             (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
             :19, :20)",
-            &Self::TABLE_NAME,
+            &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
     }
@@ -650,7 +657,9 @@ impl CountTable for TimeBinnedVehicleClassCount {
     }
 }
 impl CountTable for TimeBinnedSpeedRangeCount {
-    const TABLE_NAME: &'static str = "tc_specount";
+    const COUNT_TABLE: &'static str = "tc_specount";
+    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
+
     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
         let sql = &format!(
             "insert into {} (
@@ -659,7 +668,7 @@ impl CountTable for TimeBinnedSpeedRangeCount {
             VALUES \
             (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
             :19, :20)",
-            &Self::TABLE_NAME,
+            &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
     }
@@ -710,7 +719,9 @@ impl CountTable for TimeBinnedSpeedRangeCount {
 }
 
 impl CountTable for NonNormalAvgSpeedCount {
-    const TABLE_NAME: &'static str = "tc_spesum";
+    const COUNT_TABLE: &'static str = "tc_spesum";
+    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
+
     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -720,7 +731,7 @@ impl CountTable for NonNormalAvgSpeedCount {
             VALUES \
             (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
             :19, :20, :21, :22, :23, :24, :25, :26, :27, :28)",
-            &Self::TABLE_NAME,
+            &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
     }
@@ -770,7 +781,8 @@ impl CountTable for NonNormalAvgSpeedCount {
 }
 
 impl CountTable for NonNormalVolCount {
-    const TABLE_NAME: &'static str = "tc_volcount";
+    const COUNT_TABLE: &'static str = "tc_volcount";
+    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
         let sql = &format!(
@@ -781,7 +793,7 @@ impl CountTable for NonNormalVolCount {
             VALUES \
             (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
             :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31)",
-            &Self::TABLE_NAME,
+            &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
     }
@@ -834,13 +846,15 @@ impl CountTable for NonNormalVolCount {
 }
 
 impl CountTable for FifteenMinuteVehicle {
-    const TABLE_NAME: &'static str = "tc_15minvolcount";
+    const COUNT_TABLE: &'static str = "tc_15minvolcount";
+    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
+
     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
         let sql = &format!(
             "insert into {}
             (recordnum, countdate, counttime, volcount, cntdir, countlane) \
             VALUES (:1, :2, :3, :4, :5, :6)",
-            &Self::TABLE_NAME,
+            &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
     }
@@ -877,6 +891,51 @@ impl CountTable for FifteenMinuteVehicle {
     }
 }
 
+impl CountTable for FifteenMinuteBicycle {
+    const COUNT_TABLE: &'static str = "tc_bikecount";
+    const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
+
+    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+        let sql = &format!(
+            "insert into {}
+            (dvrpcnum, countdate, counttime, total, outcount, incount) \
+            VALUES (:1, :2, :3, :4, :5, :6)",
+            &Self::COUNT_TABLE,
+        );
+        conn.statement(sql).build()
+    }
+
+    fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
+        let oracle_date = Timestamp::new(
+            self.date.year(),
+            self.date.month() as u32,
+            self.date.day() as u32,
+            0,
+            0,
+            0,
+            0,
+        );
+        // COUNTTIME is ok to be full datetime
+        let oracle_dt = Timestamp::new(
+            self.date.year(),
+            self.date.month() as u32,
+            self.date.day() as u32,
+            self.time.hour() as u32,
+            self.time.minute() as u32,
+            self.time.second() as u32,
+            0,
+        );
+
+        stmt.execute(&[
+            &self.dvrpc_num,
+            &oracle_date,
+            &oracle_dt,
+            &self.total,
+            &self.indir,
+            &self.outdir,
+        ])
+    }
+}
 /// Create a connection pool.
 pub fn create_pool(username: String, password: String) -> Result<Pool, OracleError> {
     PoolBuilder::new(username, password, "dvrpcprod_tp_tls")

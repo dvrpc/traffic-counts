@@ -205,7 +205,41 @@ impl IndividualVehicle {
 }
 
 /// Pre-binned, 15-minute bicycle volume counts (TC_BIKECOUNT table).
-pub struct FifteenMinuteBicycle;
+#[derive(Debug, Clone)]
+pub struct FifteenMinuteBicycle {
+    pub dvrpc_num: i32,
+    pub date: Date,
+    pub time: Time,
+    pub total: u16,
+    pub indir: Option<u16>,
+    pub outdir: Option<u16>,
+}
+
+impl GetDate for FifteenMinuteBicycle {
+    fn get_date(&self) -> Date {
+        self.date.to_owned()
+    }
+}
+
+impl FifteenMinuteBicycle {
+    pub fn new(
+        dvrpc_num: i32,
+        date: Date,
+        time: Time,
+        total: u16,
+        indir: Option<u16>,
+        outdir: Option<u16>,
+    ) -> Result<Self, CountError<'static>> {
+        Ok(Self {
+            dvrpc_num,
+            date,
+            time,
+            total,
+            indir,
+            outdir,
+        })
+    }
+}
 
 /// Pre-binned, 15-minute pedestrian volume counts (TC_PEDCOUNT table).
 pub struct FifteenMinutePedestrian;

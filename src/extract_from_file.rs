@@ -4,9 +4,12 @@ use std::path::Path;
 
 use csv::{Reader, ReaderBuilder};
 use log::error;
-use time::{macros::format_description, Date, Time};
+use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
-use crate::{num_nondata_rows, CountError, CountMetadata, FifteenMinuteVehicle, IndividualVehicle};
+use crate::{
+    num_nondata_rows, CountError, CountMetadata, FifteenMinuteBicycle, FifteenMinuteVehicle,
+    IndividualVehicle,
+};
 
 pub trait Extract {
     type Item;
@@ -111,6 +114,66 @@ impl Extract for IndividualVehicle {
             };
 
             counts.push(count);
+        }
+        Ok(counts)
+    }
+}
+
+/// Extract FifteenMinuteBicycle records from a file.
+impl Extract for FifteenMinuteBicycle {
+    type Item = FifteenMinuteBicycle;
+
+    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+        let data_file = File::open(path)?;
+        let mut rdr = create_reader(&data_file);
+        let metadata = CountMetadata::from_path(path)?;
+
+        // Iterate through data rows.
+        let mut counts = vec![];
+        for row in rdr.records().skip(num_nondata_rows(path)?) {
+            // Parse datetime.
+            let datetime_format =
+                format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
+            let datetime_col = &row.as_ref().unwrap()[0];
+            let count_dt = PrimitiveDateTime::parse(datetime_col, &datetime_format).unwrap();
+
+            // Determine which fields to collect depending on direction(s) of count.
+            match metadata.directions.direction2 {
+                // If there's only one direction for this count, we only need the total.
+                None => {
+                    match FifteenMinuteBicycle::new(
+                        metadata.dvrpc_num,
+                        count_dt.date(),
+                        count_dt.time(),
+                        row.as_ref().unwrap()[1].parse().unwrap(),
+                        None,
+                        None,
+                    ) {
+                        Ok(v) => counts.push(v),
+                        Err(e) => {
+                            error!("{e}");
+                            continue;
+                        }
+                    };
+                }
+                // If there are two directions, we need total, indir, and outdir.
+                Some(_) => {
+                    match FifteenMinuteBicycle::new(
+                        metadata.dvrpc_num,
+                        count_dt.date(),
+                        count_dt.time(),
+                        row.as_ref().unwrap()[1].parse().unwrap(),
+                        Some(row.as_ref().unwrap()[2].parse().unwrap()),
+                        Some(row.as_ref().unwrap()[3].parse().unwrap()),
+                    ) {
+                        Ok(v) => counts.push(v),
+                        Err(e) => {
+                            error!("{e}");
+                            continue;
+                        }
+                    };
+                }
+            }
         }
         Ok(counts)
     }

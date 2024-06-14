@@ -165,17 +165,13 @@ fn main() {
         }
     }
 
-    // dbg!(&set_clause);
-
     // TODO:
     // Created prepared statement.
 
     // TODO: upsert instead of update
     // Iterate through data rows and insert into table.
-    for row in rdr.records().take(5) {
+    for row in rdr.records() {
         let row = row.unwrap();
-
-        dbg!(&row[3]);
 
         let mut params: Vec<(&str, &dyn ToSql)> = vec![];
 
@@ -196,7 +192,6 @@ fn main() {
         params.push(("dayofweek", &dayofweek));
 
         let sql = format!("update TC_FACTOR {set_clause} where year = :year and month = :month and fc = :fc and dayofweek = :dayofweek");
-        dbg!(&sql);
         conn.execute_named(&sql, params.as_slice()).unwrap();
     }
     conn.commit().unwrap();
