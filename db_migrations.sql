@@ -93,7 +93,7 @@ alter table tc_15minvolcount
   END PRIMARY KEY
 */
 
--- Create table average annual daily volume, by directionality.
+-- Create table annual average daily volume, by directionality.
 create table tc_aadv (
     recordnum number not null,
     aadv number not null,

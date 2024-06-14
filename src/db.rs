@@ -15,7 +15,7 @@ use crate::*;
 const YYYY_MM_DD_FMT: &[BorrowedFormatItem<'_>] =
     format_description!("[year]-[month padding:none]-[day padding:none]");
 
-/// A trait for calculating and inserting average annual daily volume.
+/// A trait for calculating and inserting annual average daily volume.
 pub trait Aadv {
     /// The name of the table in the db that this corresponds to. Must be time-binned count.
     const BINNED_TABLE: &'static str; // associated constant
@@ -27,7 +27,7 @@ pub trait Aadv {
     /// the first element of this tuple, while those that store directions and total in each row
     /// (TC_BIKECOUNT, TC_PEDCOUNT) will use both.    
     const COUNT_DIR_FIELD: (&'static str, Option<&'static str>);
-    /// Table containing factors for average annual daily volume calculation.
+    /// Table containing factors for annual average daily volume calculation.
     const FACTOR_TABLE: &'static str;
 
     /// Get dates of full-day counts.
@@ -181,7 +181,7 @@ pub trait Aadv {
         Ok(totals)
     }
 
-    /// Calculate average annual daily volume.
+    /// Calculate annual average daily volume.
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
