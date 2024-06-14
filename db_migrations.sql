@@ -97,7 +97,7 @@ alter table tc_15minvolcount
 create table tc_aadv (
     recordnum number not null,
     aadv number not null,
-    direction varchar2(4),
+    direction varchar2(5),
     date_calculated date not null
 );
 
