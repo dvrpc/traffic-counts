@@ -1,15 +1,15 @@
 //! This library contains data structures related to DVRPC's traffic counts
-//! and performing various kinds of operations on them, like
+//! and enables performing various kinds of operations on them, like
 //! [extracting][`extract_from_file::Extract`] data from files,
 //! [inserting/replacing][`db::CountInsert`] count data,
-//! and [calculating the average annual daily traffic][`db::Aadv`].
+//! and [calculating][`db::Aadv`] the average annual daily traffic.
 //!
 //! The [import](../import/index.html) program implements extracting data from files
 //! and inserting it into our database. See its documentation for further details, including
 //! the filename specification and the types of counts it can create.
 //!
 //! An additional program, currently named [upsert_factors](../upsert_factors/index.html) - though
-//! that may changed in the future to better reflect what it does - updates factors used to
+//! that may be changed in the future to better reflect what it does - updates factors used to
 //! calculate average annual daily volumes. Extended documentation forthcoming.
 //!
 //! This library also lays the foundations for the inverse need - getting data from the database
