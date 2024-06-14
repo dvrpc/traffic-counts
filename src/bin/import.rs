@@ -68,9 +68,9 @@ use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
 
-use traffic_counts::db::TimeBinned;
+use traffic_counts::db::Aadv;
 use traffic_counts::{
-    db::{create_pool, CountTable},
+    db::{create_pool, CountInsert},
     extract_from_file::Extract,
     *,
 };

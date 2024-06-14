@@ -15,8 +15,8 @@ use crate::*;
 const YYYY_MM_DD_FMT: &[BorrowedFormatItem<'_>] =
     format_description!("[year]-[month padding:none]-[day padding:none]");
 
-/// A trait for tables that contain time-binned (hourly or 15-minute) data.
-pub trait TimeBinned {
+/// A trait for calculating and inserting average annual daily volume.
+pub trait Aadv {
     /// The name of the table in the db that this corresponds to. Must be time-binned count.
     const BINNED_TABLE: &'static str; // associated constant
     /// Field in BINNED_TABLE containing the total count for the period.
@@ -221,7 +221,7 @@ pub trait TimeBinned {
     }
 }
 
-impl TimeBinned for TimeBinnedVehicleClassCount {
+impl Aadv for TimeBinnedVehicleClassCount {
     const BINNED_TABLE: &'static str = "tc_clacount";
     const TOTAL_FIELD: &'static str = "total";
     const BINNED_RECORDNUM_FIELD: &'static str = "recordnum";
@@ -308,7 +308,7 @@ impl TimeBinned for TimeBinnedVehicleClassCount {
     }
 }
 
-impl TimeBinned for FifteenMinuteVehicle {
+impl Aadv for FifteenMinuteVehicle {
     const BINNED_TABLE: &'static str = "tc_15minvolcount";
     const TOTAL_FIELD: &'static str = "volcount";
     const BINNED_RECORDNUM_FIELD: &'static str = "recordnum";
@@ -401,7 +401,7 @@ impl TimeBinned for FifteenMinuteVehicle {
     }
 }
 
-impl TimeBinned for FifteenMinuteBicycle {
+impl Aadv for FifteenMinuteBicycle {
     const BINNED_TABLE: &'static str = "tc_bikecount";
     const TOTAL_FIELD: &'static str = "total";
     const BINNED_RECORDNUM_FIELD: &'static str = "dvrpcnum";
@@ -489,7 +489,7 @@ impl TimeBinned for FifteenMinuteBicycle {
     }
 }
 
-impl TimeBinned for FifteenMinutePedestrian {
+impl Aadv for FifteenMinutePedestrian {
     const BINNED_TABLE: &'static str = "tc_pedcount";
     const TOTAL_FIELD: &'static str = "total";
     const BINNED_RECORDNUM_FIELD: &'static str = "dvrpcnum";
@@ -569,8 +569,8 @@ impl TimeBinned for FifteenMinutePedestrian {
     }
 }
 
-/// A trait for database operations on output count types.
-pub trait CountTable {
+/// A trait for inserting/replacing count data.
+pub trait CountInsert {
     /// The name of the table in the database that this count type corresponds to.
     const COUNT_TABLE: &'static str; // associated constant
     /// Field in COUNT_TABLE with recordnum/dvrpcnum.
@@ -594,7 +594,7 @@ pub trait CountTable {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error>;
 }
 
-impl CountTable for TimeBinnedVehicleClassCount {
+impl CountInsert for TimeBinnedVehicleClassCount {
     const COUNT_TABLE: &'static str = "tc_clacount";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
@@ -656,7 +656,7 @@ impl CountTable for TimeBinnedVehicleClassCount {
         ])
     }
 }
-impl CountTable for TimeBinnedSpeedRangeCount {
+impl CountInsert for TimeBinnedSpeedRangeCount {
     const COUNT_TABLE: &'static str = "tc_specount";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
@@ -718,7 +718,7 @@ impl CountTable for TimeBinnedSpeedRangeCount {
     }
 }
 
-impl CountTable for NonNormalAvgSpeedCount {
+impl CountInsert for NonNormalAvgSpeedCount {
     const COUNT_TABLE: &'static str = "tc_spesum";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
@@ -780,7 +780,7 @@ impl CountTable for NonNormalAvgSpeedCount {
     }
 }
 
-impl CountTable for NonNormalVolCount {
+impl CountInsert for NonNormalVolCount {
     const COUNT_TABLE: &'static str = "tc_volcount";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
@@ -845,7 +845,7 @@ impl CountTable for NonNormalVolCount {
     }
 }
 
-impl CountTable for FifteenMinuteVehicle {
+impl CountInsert for FifteenMinuteVehicle {
     const COUNT_TABLE: &'static str = "tc_15minvolcount";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
@@ -891,7 +891,7 @@ impl CountTable for FifteenMinuteVehicle {
     }
 }
 
-impl CountTable for FifteenMinuteBicycle {
+impl CountInsert for FifteenMinuteBicycle {
     const COUNT_TABLE: &'static str = "tc_bikecount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
