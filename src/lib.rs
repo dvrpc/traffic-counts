@@ -247,7 +247,41 @@ impl FifteenMinuteBicycle {
 }
 
 /// Pre-binned, 15-minute pedestrian volume counts (TC_PEDCOUNT table).
-pub struct FifteenMinutePedestrian;
+#[derive(Debug, Clone)]
+pub struct FifteenMinutePedestrian {
+    pub dvrpc_num: i32,
+    pub date: Date,
+    pub time: Time,
+    pub total: u16,
+    pub indir: Option<u16>,
+    pub outdir: Option<u16>,
+}
+
+impl GetDate for FifteenMinutePedestrian {
+    fn get_date(&self) -> Date {
+        self.date.to_owned()
+    }
+}
+
+impl FifteenMinutePedestrian {
+    pub fn new(
+        dvrpc_num: i32,
+        date: Date,
+        time: Time,
+        total: u16,
+        indir: Option<u16>,
+        outdir: Option<u16>,
+    ) -> Result<Self, CountError<'static>> {
+        Ok(Self {
+            dvrpc_num,
+            date,
+            time,
+            total,
+            indir,
+            outdir,
+        })
+    }
+}
 
 /// Pre-binned, 15-minute motor vehicle volume counts (TC_15MINVOLCOUNT table).
 #[derive(Debug, Clone)]
@@ -1676,6 +1710,16 @@ mod tests {
     }
 
     #[test]
+    fn count_type_from_parent_dir_and_errs_if_mismatch4() {
+        let path = Path::new("test_files/15minutevehicle/15min_bicycle_count.txt");
+        let count_type = InputCount::from_parent_dir_and_header(path);
+        assert!(matches!(
+            count_type,
+            Err(CountError::LocationHeaderMisMatch(_))
+        ))
+    }
+
+    #[test]
     fn count_type_from_parent_dir_and_errs_if_mismatch5() {
         let path = Path::new("test_files/15minutevehicle/15min_pedestrian_count.csv");
         let count_type = InputCount::from_parent_dir_and_header(path);
@@ -1688,16 +1732,6 @@ mod tests {
     #[test]
     fn count_type_from_parent_dir_and_errs_if_mismatch6() {
         let path = Path::new("test_files/15minutepedestrian/15min_veh_count.txt");
-        let count_type = InputCount::from_parent_dir_and_header(path);
-        assert!(matches!(
-            count_type,
-            Err(CountError::LocationHeaderMisMatch(_))
-        ))
-    }
-
-    #[test]
-    fn count_type_from_parent_dir_and_errs_if_mismatch4() {
-        let path = Path::new("test_files/15minutevehicle/15min_bicycle_count.txt");
         let count_type = InputCount::from_parent_dir_and_header(path);
         assert!(matches!(
             count_type,

@@ -261,7 +261,9 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
-                FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn).unwrap();
+                if let Err(e) = FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
+                    error!("failed to calculate/insert AADV for {path:?}: {e}")
+                }
             }
             InputCount::FifteenMinuteBicycle => {
                 // Extract data from CSV/text file
@@ -285,9 +287,36 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
-                FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn).unwrap();
+                if let Err(e) = FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn) {
+                    error!("failed to calculate/insert AADV for {path:?}: {e}")
+                }
             }
-            InputCount::FifteenMinutePedestrian => (),
+            InputCount::FifteenMinutePedestrian => {
+                // Extract data from CSV/text file
+                let fifteen_min_volcount = match FifteenMinutePedestrian::extract(path) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("{path:?} not processed: {e}");
+                        continue;
+                    }
+                };
+                // As they are already binned by 15-minute period, these need no further
+                // processing; just insert into database.
+                FifteenMinutePedestrian::delete(&conn, record_num).unwrap();
+                let mut prepared = FifteenMinutePedestrian::prepare_insert(&conn).unwrap();
+                for count in fifteen_min_volcount {
+                    match count.insert(&mut prepared) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Error inserting count {count:?}: {e}");
+                        }
+                    }
+                }
+                conn.commit().unwrap();
+                if let Err(e) = FifteenMinutePedestrian::insert_aadv(record_num as u32, &conn) {
+                    error!("failed to calculate/insert AADV for {path:?}: {e}")
+                }
+            }
             InputCount::FifteenMinuteBicycleOrPedestrian => (),
         }
     }

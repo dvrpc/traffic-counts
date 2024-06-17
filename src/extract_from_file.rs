@@ -7,8 +7,8 @@ use log::error;
 use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
 use crate::{
-    num_nondata_rows, CountError, CountMetadata, FifteenMinuteBicycle, FifteenMinuteVehicle,
-    IndividualVehicle,
+    num_nondata_rows, CountError, CountMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian,
+    FifteenMinuteVehicle, IndividualVehicle,
 };
 
 pub trait Extract {
@@ -179,6 +179,66 @@ impl Extract for FifteenMinuteBicycle {
     }
 }
 
+/// Extract FifteenMinutePedestrian records from a file.
+impl Extract for FifteenMinutePedestrian {
+    type Item = FifteenMinutePedestrian;
+
+    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+        let data_file = File::open(path)?;
+        let mut rdr = create_reader(&data_file);
+        let metadata = CountMetadata::from_path(path)?;
+
+        // Iterate through data rows.
+        let mut counts = vec![];
+        for row in rdr.records().skip(num_nondata_rows(path)?) {
+            // Parse datetime.
+            let datetime_format =
+                format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
+            let datetime_col = &row.as_ref().unwrap()[0];
+            let count_dt = PrimitiveDateTime::parse(datetime_col, &datetime_format).unwrap();
+
+            // Determine which fields to collect depending on direction(s) of count.
+            match metadata.directions.direction2 {
+                // If there's only one direction for this count, we only need the total.
+                None => {
+                    match FifteenMinutePedestrian::new(
+                        metadata.dvrpc_num,
+                        count_dt.date(),
+                        count_dt.time(),
+                        row.as_ref().unwrap()[1].parse().unwrap(),
+                        None,
+                        None,
+                    ) {
+                        Ok(v) => counts.push(v),
+                        Err(e) => {
+                            error!("{e}");
+                            continue;
+                        }
+                    };
+                }
+                // If there are two directions, we need total, indir, and outdir.
+                Some(_) => {
+                    match FifteenMinutePedestrian::new(
+                        metadata.dvrpc_num,
+                        count_dt.date(),
+                        count_dt.time(),
+                        row.as_ref().unwrap()[1].parse().unwrap(),
+                        Some(row.as_ref().unwrap()[2].parse().unwrap()),
+                        Some(row.as_ref().unwrap()[3].parse().unwrap()),
+                    ) {
+                        Ok(v) => counts.push(v),
+                        Err(e) => {
+                            error!("{e}");
+                            continue;
+                        }
+                    };
+                }
+            }
+        }
+        Ok(counts)
+    }
+}
+
 /// Create CSV reader from file.
 pub fn create_reader(file: &File) -> Reader<&File> {
     ReaderBuilder::new()
@@ -204,5 +264,51 @@ mod tests {
         let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
         let fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 384)
+    }
+
+    #[test]
+    fn extract_fifteen_min_bicycle_gets_correct_number_of_counts() {
+        let path = Path::new("test_files/15minutebicycle/vg-167607-ns-4175-na.csv");
+        let fifteen_min_volcount = FifteenMinuteBicycle::extract(path).unwrap();
+        assert_eq!(fifteen_min_volcount.len(), 480);
+
+        let in_sum = fifteen_min_volcount
+            .iter()
+            .map(|count| count.indir.unwrap())
+            .sum::<u16>();
+        let out_sum = fifteen_min_volcount
+            .iter()
+            .map(|count| count.outdir.unwrap())
+            .sum::<u16>();
+        let sum = fifteen_min_volcount
+            .iter()
+            .map(|count| count.total)
+            .sum::<u16>();
+        assert_eq!(in_sum, 491);
+        assert_eq!(out_sum, 20);
+        assert_eq!(sum, 511);
+    }
+
+    #[test]
+    fn extract_fifteen_min_pedestrian_gets_correct_number_of_counts() {
+        let path = Path::new("test_files/15minutepedestrian/vg-167297-ns-4874-na.csv");
+        let fifteen_min_volcount = FifteenMinutePedestrian::extract(path).unwrap();
+        assert_eq!(fifteen_min_volcount.len(), 768);
+
+        let in_sum = fifteen_min_volcount
+            .iter()
+            .map(|count| count.indir.unwrap())
+            .sum::<u16>();
+        let out_sum = fifteen_min_volcount
+            .iter()
+            .map(|count| count.outdir.unwrap())
+            .sum::<u16>();
+        let sum = fifteen_min_volcount
+            .iter()
+            .map(|count| count.total)
+            .sum::<u16>();
+        assert_eq!(in_sum, 1281);
+        assert_eq!(out_sum, 1201);
+        assert_eq!(sum, 2482);
     }
 }

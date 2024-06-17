@@ -898,7 +898,7 @@ impl CountInsert for FifteenMinuteBicycle {
     fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
         let sql = &format!(
             "insert into {}
-            (dvrpcnum, countdate, counttime, total, outcount, incount) \
+            (dvrpcnum, countdate, counttime, total, incount, outcount) \
             VALUES (:1, :2, :3, :4, :5, :6)",
             &Self::COUNT_TABLE,
         );
@@ -936,6 +936,53 @@ impl CountInsert for FifteenMinuteBicycle {
         ])
     }
 }
+
+impl CountInsert for FifteenMinutePedestrian {
+    const COUNT_TABLE: &'static str = "tc_pedcount";
+    const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
+
+    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+        let sql = &format!(
+            "insert into {}
+            (dvrpcnum, countdate, counttime, total, \"IN\", \"OUT\") \
+            VALUES (:1, :2, :3, :4, :5, :6)",
+            &Self::COUNT_TABLE,
+        );
+        conn.statement(sql).build()
+    }
+
+    fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
+        let oracle_date = Timestamp::new(
+            self.date.year(),
+            self.date.month() as u32,
+            self.date.day() as u32,
+            0,
+            0,
+            0,
+            0,
+        );
+        // COUNTTIME is ok to be full datetime
+        let oracle_dt = Timestamp::new(
+            self.date.year(),
+            self.date.month() as u32,
+            self.date.day() as u32,
+            self.time.hour() as u32,
+            self.time.minute() as u32,
+            self.time.second() as u32,
+            0,
+        );
+
+        stmt.execute(&[
+            &self.dvrpc_num,
+            &oracle_date,
+            &oracle_dt,
+            &self.total,
+            &self.indir,
+            &self.outdir,
+        ])
+    }
+}
+
 /// Create a connection pool.
 pub fn create_pool(username: String, password: String) -> Result<Pool, OracleError> {
     PoolBuilder::new(username, password, "dvrpcprod_tp_tls")
@@ -985,12 +1032,18 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     conn: &'conn Connection,
 ) -> Result<HashMap<(Date, Option<Direction>), usize>, CountError<'conn>> {
     // Get direction of incount and outcount.
-    let (incount_dir, outcount_dir) = conn.query_row_as::<(String, String)>(
+    let (incount_dir, outcount_dir) = conn.query_row_as::<(Option<String>, Option<String>)>(
         "select indir, outdir from tc_header where recordnum = :1",
         &[&recordnum],
     )?;
-    let incount_dir = Direction::from_string(incount_dir)?;
-    let outcount_dir = Direction::from_string(outcount_dir)?;
+
+    if incount_dir.is_none() || outcount_dir.is_none() {
+        error!("TC_HEADER has null value for INDIR or OUTDIR");
+        return Err(CountError::DbError(OracleError::NullValue));
+    }
+
+    let incount_dir = Direction::from_string(incount_dir.unwrap())?;
+    let outcount_dir = Direction::from_string(outcount_dir.unwrap())?;
 
     let results = conn.query_as::<(Timestamp, usize, usize, usize)>(
         &format!(
