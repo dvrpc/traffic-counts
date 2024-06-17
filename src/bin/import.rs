@@ -159,10 +159,11 @@ fn main() {
             }
         };
         let record_num = metadata.clone().dvrpc_num;
+
         // Process the file according to InputCount.
         match count_type {
             InputCount::IndividualVehicle => {
-                // Extract data from CSV/text file
+                // Extract data from CSV/text file.
                 let individual_vehicles = match IndividualVehicle::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
@@ -177,16 +178,14 @@ fn main() {
                     individual_vehicles.clone(),
                     TimeInterval::FifteenMin,
                 );
-                // let date = determine_date(individual_vehicles.clone());
 
-                // Create records for the non-normalized TC_VOLCOUNT table.
-                // (the one with specific hourly fields - AM12, AM1, etc. - rather than a single
-                // hour field and count)
+                // Create records for the non-normalized TC_VOLCOUNT table (the one with specific
+                // hourly fields - AM12, AM1, etc. - rather than a single hour field and count).
                 let non_normal_vol_count =
                     create_non_normal_vol_count(metadata.clone(), individual_vehicles.clone());
 
-                // Create records for the non-normalized TC_SPESUM table
-                // (another one with specific hourly fields, this time for average speed/hour)
+                // Create records for the non-normalized TC_SPESUM table (another one with specific
+                // hourly fields, this time for average speed/hour).
                 let non_normal_speedavg_count =
                     create_non_normal_speedavg_count(metadata.clone(), individual_vehicles);
 
@@ -238,8 +237,14 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
+
+                // Calculate and insert the annual average daily volume.
+                if let Err(e) = TimeBinnedVehicleClassCount::insert_aadv(record_num as u32, &conn) {
+                    error!("failed to calculate/insert AADV for {path:?}: {e}")
+                }
             }
             InputCount::FifteenMinuteVehicle => {
+                // Extract data from CSV/text file.
                 let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
@@ -261,12 +266,14 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
+
+                // Calculate and insert the annual average daily volume.
                 if let Err(e) = FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
                     error!("failed to calculate/insert AADV for {path:?}: {e}")
                 }
             }
             InputCount::FifteenMinuteBicycle => {
-                // Extract data from CSV/text file
+                // Extract data from CSV/text file.
                 let fifteen_min_volcount = match FifteenMinuteBicycle::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
@@ -274,6 +281,7 @@ fn main() {
                         continue;
                     }
                 };
+
                 // As they are already binned by 15-minute period, these need no further
                 // processing; just insert into database.
                 FifteenMinuteBicycle::delete(&conn, record_num).unwrap();
@@ -287,12 +295,14 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
+
+                // Calculate and insert the annual average daily volume.
                 if let Err(e) = FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn) {
                     error!("failed to calculate/insert AADV for {path:?}: {e}")
                 }
             }
             InputCount::FifteenMinutePedestrian => {
-                // Extract data from CSV/text file
+                // Extract data from CSV/text file.
                 let fifteen_min_volcount = match FifteenMinutePedestrian::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
@@ -300,6 +310,7 @@ fn main() {
                         continue;
                     }
                 };
+
                 // As they are already binned by 15-minute period, these need no further
                 // processing; just insert into database.
                 FifteenMinutePedestrian::delete(&conn, record_num).unwrap();
@@ -313,10 +324,13 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
+
+                // Calculate and insert the annual average daily volume.
                 if let Err(e) = FifteenMinutePedestrian::insert_aadv(record_num as u32, &conn) {
                     error!("failed to calculate/insert AADV for {path:?}: {e}")
                 }
             }
+            // Nothing to do here.
             InputCount::FifteenMinuteBicycleOrPedestrian => (),
         }
     }
