@@ -253,7 +253,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extract_counted_vehicle_gets_correct_number_of_counts() {
+    fn extract_ind_vehicle_gets_correct_number_of_counts() {
         let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
         let counted_vehicles = IndividualVehicle::extract(path).unwrap();
         assert_eq!(counted_vehicles.len(), 8706);
