@@ -38,6 +38,11 @@ const FIFTEEN_MINUTE_VEHICLE_HEADER: &str = "Number,Date,Time,Channel1";
 const INDIVIDUAL_VEHICLE_HEADER: &str = "Veh.No.,Date,Time,Channel,Class,Speed";
 const FIFTEEN_MINUTE_BIKE_OR_PED_HEADER: &str = "Time,";
 
+/// A trait for getting a [`Date`](https://docs.rs/time/latest/time/struct.Date.html) from a type.
+pub trait GetDate {
+    fn get_date(&self) -> Date;
+}
+
 /// Various errors that can occur.
 #[derive(Debug, Error)]
 pub enum CountError<'a> {
@@ -1400,11 +1405,6 @@ fn count_type_and_num_nondata_rows(path: &Path) -> Result<(InputCount, usize), C
 pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
     let (_, num_rows) = count_type_and_num_nondata_rows(path)?;
     Ok(num_rows)
-}
-
-/// A trait for getting a [`Date`](https://docs.rs/time/latest/time/struct.Date.html) from a type.
-pub trait GetDate {
-    fn get_date(&self) -> Date;
 }
 
 /// Determine the date to use for the annual average calculation.
