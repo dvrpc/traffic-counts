@@ -1,9 +1,11 @@
 //! Import traffic counts to our database from files.
 //! This program watches a directory for files to be uploaded to one of the following subdirectories:
-//!   - vehicle/  - for raw, unbinned records of [individual vehicles][IndividualVehicle] containing vehicle class and speed, from STARnext/JAMAR
-//!   - 15minutevehicle/ - for [pre-binned, 15-minute volume counts][FifteenMinuteVehicle] from STARnext/JAMAR
-//!   - 15minutebicycle/ - for pre-binned bicycle data from Eco-Counter
-//!   - 15minutepedestrian/ - for pre-binned pedestrian data from Eco-Counter
+//!   - vehicle/  - for raw, unbinned records of [individual vehicles][IndividualVehicle] containing vehicle class and speed, from STARneXt/JAMAR
+//!   - 15minutevehicle/ - for [pre-binned, 15-minute volume counts][FifteenMinuteVehicle] from STARneXt/JAMAR
+//!   - 15minutebicycle/ - for [pre-binned, 15-minute bicycle counts][FifteenMinuteBicycle] from
+//! Eco-Counter
+//!   - 15minutepedestrian/ - for [pre-binned, 15-minute pedestrian counts][FifteenMinutePedestrian]
+//! from Eco-Counter
 //!
 //! When a file is found, the program verifies that it contains the correct/expected kind of data,
 //! derives the appropriate counts from it, and then inserts these into our database and removes
@@ -16,23 +18,27 @@
 //! once started successfully, it should run indefinitely.
 //!
 //! ## Filename specification
-//! The names of uploaded files should be in the form
-//! [tech initials]-[record num]-[direction(s)]-[physical counter id]-[speed limit].txt.
+//!
+//! The names of all exported files (see below for export process) should be in the form
+//! [tech initials]-[record num]-[direction(s)]-[physical counter id]-[speed limit].csv.
+//!
+//! (.txt can also be used for the file extension rater than .csv.)
+//!
 //! All components must be present, separated by a dash (-).
 //! Here are several examples:
-//!   - rc-166905-ew-40972-35.txt
+//!   - rc-166905-ew-40972-35.csv
 //!     - "rc" is the technician's initials.
 //!     - "166905" is the recordnum of the count.
 //!     - "ew" is the direction. In this case, two lanes going opposite directions.
 //!     - "40972" is the physical machine the count was taken on.
 //!     - "35" is the speed limit.
-//!   - kh-165367-ee-40972-35.txt
+//!   - kh-165367-ee-40972-35.csv
 //!     - "kh" is the technician's initials.
 //!     - "165367" is the recordnum of the count.
 //!     - "ee" is the direction. In this case, two lanes going the same direction.
 //!     - "40972" is the physical machine the count was taken on.
 //!     - "35" is the speed limit.
-//!   - kw-123456-s-101-na.txt
+//!   - kw-123456-s-101-na.csv
 //!     - "kw" is the technician's initials.
 //!     - "123456" is the recordnum of the count.
 //!     - "s" is the direction. In this case, only one lane, going south.
@@ -57,6 +63,48 @@
 //! the total for each period, capturing both in/out directions and thus any wrong-way travel.
 //! In terms of the filename, this would mean using a single direction in that position,
 //! e.g. like the last example above.
+//!
+//! ## Exporting from STARneXt
+//!
+//! The process is the same whether doing class/speed or simple volume counts.
+//!
+//!   - open STARneXt, open a .snj file.
+//!   - click the **Process** button from the top menu to transform tube pulses to
+//! vehicle counts. This will take you to a "Per Vehicle Records" tab.
+//!   - click the **Export** button from the top menu, selecting *ASCII (CSV)*
+//! as the format. Then:
+//!     - leave the radio button checked for *Export all vehicles*
+//!     - click **Next**
+//!     - click the checkboxes for all channels available
+//!     - click the **Output Format** button, and then choose the following settings:
+//!       - under the "Header Fields" column:
+//!         - *Start Date and Time*
+//!       - under "Included Data":
+//!         - *Class*
+//!         - *Speed*
+//!       - under "Options", use the defaults:
+//!         - *Date and Time Separate*
+//!         - *Header Titles Separate*
+//!         - *Include Vehicle No*
+//!         - *Comma* for the *Delimiter* field
+//!         - *Channel Number* rather than *Channel Name*
+//!    - click **Done** to return from the Output Format menu
+//!    - click **Export** to save the file locally.
+//!
+//! ## Exporting from Eco-Counter
+//!
+//! For both bicycle and pedestrian counts, in [Eco-Vizio](https://www.eco-visio.net):
+//!   - go to the Analysis tab
+//!   - set the (custom) time period covered
+//!   - choose the counter the count was taken on
+//!   - choose *15 min* from the **Traffic** dropdown menu.
+//!
+//! A visualization will then appear in the main area of the site. Do the following:
+//!   - By default the visualization is set to *Curve*; change it to *Table*.
+//!   - Select **Options** and ensure that *Total per site* and *Directions* are
+//! both toggled on and that both directions (in/out) are included.
+//!   - click on the **Download** (⤓) button, choosing *Spreadsheet (CSV)* as the format, comma as
+//! the delimiter, and save locally.
 
 use std::env;
 use std::fs::{self, OpenOptions};
