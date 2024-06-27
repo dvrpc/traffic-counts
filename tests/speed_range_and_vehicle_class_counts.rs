@@ -92,24 +92,28 @@ fn empty_periods_created_correctly_166905() {
     let individual_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
 
-    let (speed_range_count, vehicle_class_count) =
+    let (mut speed_range_count, mut vehicle_class_count) =
         create_speed_and_class_count(metadata, individual_vehicles, TimeInterval::FifteenMin);
 
+    speed_range_count.sort_unstable_by_key(|count| (count.datetime, count.channel));
+    vehicle_class_count.sort_unstable_by_key(|count| (count.datetime, count.channel));
+
     // total number of periods
-    assert_eq!(speed_range_count.len(), 382);
+    assert_eq!(speed_range_count.len(), 386);
+
     // periods with 0 vehicles
     let empty_periods = speed_range_count.iter().filter(|c| c.total == 0).count();
     assert_eq!(empty_periods, 23);
 
     // total number of periods
-    assert_eq!(vehicle_class_count.len(), 382);
+    assert_eq!(vehicle_class_count.len(), 386);
 
     // periods with 0 vehicles
     let empty_periods = vehicle_class_count.iter().filter(|c| c.total == 0).count();
     assert_eq!(empty_periods, 23);
 
     // first and last periods
-    let expected_first_dt = datetime!(2023-11-06 11:00);
+    let expected_first_dt = datetime!(2023-11-06 10:45);
     assert_eq!(
         speed_range_count.first().unwrap().datetime,
         expected_first_dt
@@ -118,7 +122,7 @@ fn empty_periods_created_correctly_166905() {
         vehicle_class_count.first().unwrap().datetime,
         expected_first_dt
     );
-    let expected_last_dt = datetime!(2023-11-08 10:30);
+    let expected_last_dt = datetime!(2023-11-08 10:45);
     assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
     assert_eq!(
         vehicle_class_count.last().unwrap().datetime,
@@ -126,8 +130,8 @@ fn empty_periods_created_correctly_166905() {
     );
 
     // verify last period total (channel 2)
-    assert_eq!(speed_range_count.last().unwrap().total, 26);
-    assert_eq!(vehicle_class_count.last().unwrap().total, 26);
+    assert_eq!(speed_range_count.last().unwrap().total, 17);
+    assert_eq!(vehicle_class_count.last().unwrap().total, 17);
 }
 
 #[test]
@@ -136,30 +140,34 @@ fn counts_created_correctly_165367() {
     let individual_vehicles = IndividualVehicle::extract(path).unwrap();
     let metadata = CountMetadata::from_path(path).unwrap();
 
-    let (speed_range_count, vehicle_class_count) =
+    let (mut speed_range_count, mut vehicle_class_count) =
         create_speed_and_class_count(metadata, individual_vehicles, TimeInterval::FifteenMin);
 
+    speed_range_count.sort_unstable_by_key(|count| (count.datetime, count.channel));
+    vehicle_class_count.sort_unstable_by_key(|count| (count.datetime, count.channel));
+
     // total number of periods
-    assert_eq!(speed_range_count.len(), 752);
+    assert_eq!(speed_range_count.len(), 756);
     // periods with 0 vehicles
     let empty_periods = speed_range_count.iter().filter(|c| c.total == 0).count();
     assert_eq!(empty_periods, 15);
 
     // total number of periods
-    assert_eq!(vehicle_class_count.len(), 752);
+    assert_eq!(vehicle_class_count.len(), 756);
 
     // periods with 0 vehicles, including verifying the time of the first occurence
-    let empty_periods = vehicle_class_count
+    let mut empty_periods = vehicle_class_count
         .iter()
         .filter(|c| c.total == 0)
         .collect::<Vec<_>>();
+    empty_periods.sort_unstable_by_key(|count| (count.datetime, count.channel));
     assert_eq!(empty_periods.len(), 15);
     assert_eq!(empty_periods[0].total, 0);
     assert_eq!(empty_periods[0].datetime, datetime!(2023-11-07 1:00));
     assert_eq!(empty_periods[0].channel, 1);
 
     // first and last periods
-    let expected_first_dt = datetime!(2023-11-06 12:00);
+    let expected_first_dt = datetime!(2023-11-06 11:45);
     assert_eq!(
         speed_range_count.first().unwrap().datetime,
         expected_first_dt
@@ -168,7 +176,7 @@ fn counts_created_correctly_165367() {
         vehicle_class_count.first().unwrap().datetime,
         expected_first_dt
     );
-    let expected_last_dt = datetime!(2023-11-10 9:45);
+    let expected_last_dt = datetime!(2023-11-10 10:00);
     assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
     assert_eq!(
         vehicle_class_count.last().unwrap().datetime,
@@ -176,6 +184,6 @@ fn counts_created_correctly_165367() {
     );
 
     // verify last period total (channel 2)
-    assert_eq!(speed_range_count.last().unwrap().total, 117);
-    assert_eq!(vehicle_class_count.last().unwrap().total, 117);
+    assert_eq!(speed_range_count.last().unwrap().total, 36);
+    assert_eq!(vehicle_class_count.last().unwrap().total, 36);
 }

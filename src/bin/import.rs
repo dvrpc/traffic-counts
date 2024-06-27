@@ -118,7 +118,7 @@ use simplelog::{
 
 use traffic_counts::db::Aadv;
 use traffic_counts::{
-    db::{create_pool, CountInsert},
+    db::{create_pool, CountInsert, Denormalize},
     extract_from_file::Extract,
     *,
 };
@@ -227,20 +227,14 @@ fn main() {
                     TimeInterval::FifteenMin,
                 );
 
-                // Create records for the non-normalized TC_VOLCOUNT table (the one with specific
-                // hourly fields - AM12, AM1, etc. - rather than a single hour field and count).
-                let non_normal_vol_count =
-                    create_non_normal_vol_count(metadata.clone(), individual_vehicles.clone());
-
-                // Create records for the non-normalized TC_SPESUM table (another one with specific
-                // hourly fields, this time for average speed/hour).
+                // Create records for the non-normalized TC_SPESUM table (another one with
+                // specific hourly fields, this time for average speed/hour).
                 let non_normal_speedavg_count =
                     create_non_normal_speedavg_count(metadata.clone(), individual_vehicles);
 
                 // Delete existing records from db.
                 TimeBinnedVehicleClassCount::delete(&conn, record_num).unwrap();
                 TimeBinnedSpeedRangeCount::delete(&conn, record_num).unwrap();
-                NonNormalVolCount::delete(&conn, record_num).unwrap();
                 NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
 
                 // Create prepared statments and use them to insert counts.
@@ -265,8 +259,17 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
+
+                // Denormalize this data to insert into tc_volcount table.
+                let denormalized_volcount =
+                    TimeBinnedVehicleClassCount::denormalize_vol_count(record_num, &conn).unwrap();
+
+                // Delete existing records from db.
+                NonNormalVolCount::delete(&conn, record_num).unwrap();
+
+                // Create prepared statments and use them to insert counts.
                 let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
-                for count in non_normal_vol_count {
+                for count in denormalized_volcount {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
@@ -275,6 +278,7 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
+
                 let mut prepared = NonNormalAvgSpeedCount::prepare_insert(&conn).unwrap();
                 for count in non_normal_speedavg_count {
                     match count.insert(&mut prepared) {
@@ -319,6 +323,25 @@ fn main() {
                 if let Err(e) = FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
                     error!("failed to calculate/insert AADV for {path:?}: {e}")
                 }
+
+                // Denormalize this data to insert into tc_volcount table.
+                let denormalized_volcount =
+                    FifteenMinuteVehicle::denormalize_vol_count(record_num, &conn).unwrap();
+
+                // Delete existing records from db.
+                NonNormalVolCount::delete(&conn, record_num).unwrap();
+
+                // Create prepared statments and use them to insert counts.
+                let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
+                for count in denormalized_volcount {
+                    match count.insert(&mut prepared) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!("Error inserting count {count:?}: {e}");
+                        }
+                    }
+                }
+                conn.commit().unwrap();
             }
             InputCount::FifteenMinuteBicycle => {
                 // Extract data from CSV/text file.

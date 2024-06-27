@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
-
 //! Interact with database.
+
 use oracle::{
     pool::{Pool, PoolBuilder},
     sql_type::Timestamp,
@@ -14,6 +14,177 @@ use crate::*;
 
 const YYYY_MM_DD_FMT: &[BorrowedFormatItem<'_>] =
     format_description!("[year]-[month padding:none]-[day padding:none]");
+
+#[derive(Debug, Clone)]
+pub struct HourlyCount {
+    pub recordnum: i32,
+    pub datetime: PrimitiveDateTime,
+    pub count: u32,
+    pub dir: Direction,
+    pub lane: u8,
+}
+
+/// Get hourly counts from a database table.
+pub fn hourly_counts<'a, 'conn>(
+    recordnum: i32,
+    table: &'a str,
+    dir_field: &'a str,
+    vol_field: &'a str,
+    conn: &'conn Connection,
+) -> Result<Vec<HourlyCount>, CountError<'conn>> {
+    let results = conn.query_as::<(Timestamp, Timestamp, u32, String, u32)>(
+        &format!(
+            "select TRUNC(counttime, 'HH24'), countdate, sum({}), {}, countlane 
+                from {} 
+                where recordnum = :1 
+                group by (countdate, trunc(counttime, 'HH24')), {}, countlane 
+                order by countdate",
+            &vol_field, &dir_field, &table, &dir_field
+        ),
+        &[&recordnum],
+    )?;
+
+    let mut hourly_counts = vec![];
+    for result in results {
+        let (counttime, countdate, count, dir, lane) = result?;
+
+        let date = Date::parse(
+            &format!(
+                "{}-{}-{}",
+                countdate.year(),
+                countdate.month(),
+                countdate.day()
+            ),
+            YYYY_MM_DD_FMT,
+        )
+        .unwrap();
+        let time = Time::from_hms(counttime.hour() as u8, counttime.minute() as u8, 0).unwrap();
+
+        hourly_counts.push(HourlyCount {
+            recordnum,
+            datetime: PrimitiveDateTime::new(date, time),
+            count,
+            dir: Direction::from_string(dir).unwrap(),
+            lane: lane as u8,
+        });
+    }
+
+    Ok(hourly_counts)
+}
+
+pub trait Denormalize {
+    /// The name of the table that the data will get denormalized from.
+    const NORMALIZED_TABLE: &'static str;
+    /// Field in table containing the direction of the count.
+    const DIR_FIELD: &'static str;
+    /// Field containing the (total) volume count.
+    const VOL_FIELD: &'static str;
+
+    /// Create denormalized volume counts from [`HourlyCount`]s.
+    fn denormalize_vol_count(
+        record_num: i32,
+        conn: &Connection,
+    ) -> Result<Vec<NonNormalVolCount>, CountError> {
+        let counts = db::hourly_counts(
+            record_num,
+            Self::NORMALIZED_TABLE,
+            Self::DIR_FIELD,
+            Self::VOL_FIELD,
+            conn,
+        )?;
+
+        let mut non_normal_vol_map: HashMap<NonNormalCountKey, NonNormalVolCountValue> =
+            HashMap::new();
+
+        if counts.is_empty() {
+            return Ok(vec![]);
+        }
+
+        for count in counts {
+            let key = NonNormalCountKey {
+                dvrpc_num: count.recordnum,
+                date: count.datetime.date(),
+                direction: count.dir,
+                channel: count.lane,
+            };
+
+            // Add new entry if necessary, then insert data.
+            non_normal_vol_map
+                .entry(key)
+                .and_modify(|c| {
+                    c.totalcount = c
+                        .totalcount
+                        .map_or(Some(count.count as i32), |c| Some(c + count.count as i32));
+                    match count.datetime.hour() {
+                        0 => c.am12 = Some(count.count as i32),
+                        1 => c.am1 = Some(count.count as i32),
+                        2 => c.am2 = Some(count.count as i32),
+                        3 => c.am3 = Some(count.count as i32),
+                        4 => c.am4 = Some(count.count as i32),
+                        5 => c.am5 = Some(count.count as i32),
+                        6 => c.am6 = Some(count.count as i32),
+                        7 => c.am7 = Some(count.count as i32),
+                        8 => c.am8 = Some(count.count as i32),
+                        9 => c.am9 = Some(count.count as i32),
+                        10 => c.am10 = Some(count.count as i32),
+                        11 => c.am11 = Some(count.count as i32),
+                        12 => c.pm12 = Some(count.count as i32),
+                        13 => c.pm1 = Some(count.count as i32),
+                        14 => c.pm2 = Some(count.count as i32),
+                        15 => c.pm3 = Some(count.count as i32),
+                        16 => c.pm4 = Some(count.count as i32),
+                        17 => c.pm5 = Some(count.count as i32),
+                        18 => c.pm6 = Some(count.count as i32),
+                        19 => c.pm7 = Some(count.count as i32),
+                        20 => c.pm8 = Some(count.count as i32),
+                        21 => c.pm9 = Some(count.count as i32),
+                        22 => c.pm10 = Some(count.count as i32),
+                        23 => c.pm11 = Some(count.count as i32),
+                        _ => (),
+                    };
+                })
+                .or_insert(NonNormalVolCountValue::first(&count));
+        }
+        // Convert HashMap to Vec of structs.
+        let mut non_normal_vol_count = vec![];
+        for (key, value) in non_normal_vol_map {
+            non_normal_vol_count.push(NonNormalVolCount {
+                dvrpc_num: key.dvrpc_num,
+                date: key.date,
+                direction: key.direction,
+                channel: key.channel,
+                setflag: None,
+                totalcount: value.totalcount,
+                weather: value.weather,
+                am12: value.am12,
+                am1: value.am1,
+                am2: value.am2,
+                am3: value.am3,
+                am4: value.am4,
+                am5: value.am5,
+                am6: value.am6,
+                am7: value.am7,
+                am8: value.am8,
+                am9: value.am9,
+                am10: value.am10,
+                am11: value.am11,
+                pm12: value.pm12,
+                pm1: value.pm1,
+                pm2: value.pm2,
+                pm3: value.pm3,
+                pm4: value.pm4,
+                pm5: value.pm5,
+                pm6: value.pm6,
+                pm7: value.pm7,
+                pm8: value.pm8,
+                pm9: value.pm9,
+                pm10: value.pm10,
+                pm11: value.pm11,
+            })
+        }
+        Ok(non_normal_vol_count)
+    }
+}
 
 /// A trait for calculating and inserting annual average daily volume.
 pub trait Aadv {
@@ -1635,6 +1806,119 @@ mod tests {
         assert_eq!(
             aadv.get(&Some(Direction::North)).unwrap().round() as u32,
             23
+        );
+    }
+
+    #[ignore]
+    #[test]
+    fn denormalize_vol_count_correct_num_records_and_total_count_166905() {
+        let (username, password) = get_creds();
+        let pool = create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+
+        // two directions, two lanes
+        let mut non_normal_count =
+            TimeBinnedVehicleClassCount::denormalize_vol_count(166905, &conn).unwrap();
+        assert_eq!(non_normal_count.len(), 6);
+
+        // Sort by date, and then channel, so elements of the vec are in an expected order to test.
+        non_normal_count.sort_unstable_by_key(|count| (count.date, count.channel));
+
+        // Ensure order is what we expect/count starts at correct times.
+        assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
+        assert!(non_normal_count[0].am9.is_none());
+        assert!(non_normal_count[0].am10.is_some());
+        assert_eq!(non_normal_count[0].direction, Direction::East);
+        assert_eq!(non_normal_count[0].channel, 1);
+
+        assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
+        assert!(non_normal_count[1].am9.is_none());
+        assert!(non_normal_count[1].am10.is_some());
+        assert_eq!(non_normal_count[1].direction, Direction::West);
+        assert_eq!(non_normal_count[1].channel, 2);
+
+        assert!(non_normal_count[4].am10.is_some());
+        assert!(non_normal_count[4].am11.is_none());
+        assert_eq!(non_normal_count[5].date, date!(2023 - 11 - 08));
+        assert!(non_normal_count[5].am10.is_some());
+        assert!(non_normal_count[5].am11.is_none());
+        assert_eq!(non_normal_count[5].direction, Direction::West);
+        assert_eq!(non_normal_count[5].channel, 2);
+
+        // Test total counts.
+        assert_eq!(
+            non_normal_count[0].totalcount.unwrap() + non_normal_count[1].totalcount.unwrap(),
+            2897
+        );
+        assert_eq!(
+            non_normal_count[2].totalcount.unwrap() + non_normal_count[3].totalcount.unwrap(),
+            4450
+        );
+        assert_eq!(
+            non_normal_count[4].totalcount.unwrap() + non_normal_count[5].totalcount.unwrap(),
+            1359
+        );
+    }
+
+    #[test]
+    fn denormalize_vol_count_correct_num_records_and_total_count_165367() {
+        let (username, password) = get_creds();
+        let pool = create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+
+        // one direction, two lanes
+        let mut non_normal_count =
+            TimeBinnedVehicleClassCount::denormalize_vol_count(165367, &conn).unwrap();
+        assert_eq!(non_normal_count.len(), 10);
+
+        // Sort by date, and then channel, so elements of the vec are in an expected order to test.
+        non_normal_count.sort_unstable_by_key(|count| (count.date, count.channel));
+
+        // Ensure order is what we expect/count starts at correct times.
+        assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
+        assert!(non_normal_count[0].am10.is_none());
+        assert!(non_normal_count[0].am11.is_some());
+        assert_eq!(non_normal_count[0].direction, Direction::East);
+        assert_eq!(non_normal_count[0].channel, 1);
+
+        assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
+        assert!(non_normal_count[1].am10.is_none());
+        assert!(non_normal_count[1].am11.is_some());
+        assert_eq!(non_normal_count[1].direction, Direction::East);
+        assert_eq!(non_normal_count[1].channel, 2);
+
+        assert_eq!(non_normal_count[8].date, date!(2023 - 11 - 10));
+        assert!(non_normal_count[8].am10.is_some());
+        assert!(non_normal_count[8].am11.is_none());
+        assert_eq!(non_normal_count[8].direction, Direction::East);
+        assert_eq!(non_normal_count[8].channel, 1);
+
+        assert_eq!(non_normal_count[9].date, date!(2023 - 11 - 10));
+        assert!(non_normal_count[9].am10.is_some());
+        assert!(non_normal_count[9].am11.is_none());
+        assert_eq!(non_normal_count[9].direction, Direction::East);
+        assert_eq!(non_normal_count[9].channel, 2);
+
+        // Test total counts.
+        assert_eq!(
+            non_normal_count[0].totalcount.unwrap() + non_normal_count[1].totalcount.unwrap(),
+            8712
+        );
+        assert_eq!(
+            non_normal_count[2].totalcount.unwrap() + non_normal_count[3].totalcount.unwrap(),
+            14751
+        );
+        assert_eq!(
+            non_normal_count[4].totalcount.unwrap() + non_normal_count[5].totalcount.unwrap(),
+            15298
+        );
+        assert_eq!(
+            non_normal_count[6].totalcount.unwrap() + non_normal_count[7].totalcount.unwrap(),
+            15379
+        );
+        assert_eq!(
+            non_normal_count[8].totalcount.unwrap() + non_normal_count[9].totalcount.unwrap(),
+            4278
         );
     }
 }

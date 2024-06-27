@@ -17,6 +17,14 @@
 //! uses.
 //!
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
+//!
+//! ## A Note about Data Entry/Completness
+//!
+//! Data for counts are inserted into the database without checking for complete periods. For
+//! example, if the count starts at 10:55am, any records for vehicles counted between 10:55 and
+//! 11am will be added to the database, even though it is not a full 15-minute period. Similarly,
+//! when data is aggregated by hour and inserted into the TC_VOLCOUNT table, the first and last
+//! hours may not be a full hour of count data.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
@@ -31,6 +39,7 @@ use time::{Date, Duration, PrimitiveDateTime, Time, Weekday};
 pub mod db;
 pub mod extract_from_file;
 pub mod intermediate;
+use db::Denormalize;
 use intermediate::*;
 
 // headers stripped of double quotes and spaces
@@ -305,6 +314,12 @@ impl GetDate for FifteenMinuteVehicle {
     }
 }
 
+impl Denormalize for FifteenMinuteVehicle {
+    const NORMALIZED_TABLE: &'static str = "tc_15minvolcount";
+    const DIR_FIELD: &'static str = "cntdir";
+    const VOL_FIELD: &'static str = "volcount";
+}
+
 impl FifteenMinuteVehicle {
     pub fn new(
         dvrpc_num: i32,
@@ -327,6 +342,8 @@ impl FifteenMinuteVehicle {
 
 /// The metadata of an input count, including technician, id, direction(s), count machine id,
 /// and - potentially - the speed limit.
+///
+/// See the [import](../import/index.html) program for filename specification.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CountMetadata {
     pub technician: String, // initials
@@ -338,10 +355,6 @@ pub struct CountMetadata {
 
 impl CountMetadata {
     /// Get an input count's metadata from its path.
-    ///
-    /// In the filename, each field is separate by a dash (-).
-    /// technician-dvrpc_num-directions-counter_id-speed_limit.csv/txt
-    /// e.g. rc-166905-ew-40972-35.txt
     pub fn from_path(path: &Path) -> Result<Self, CountError> {
         let parts: Vec<&str> = path
             .file_stem()
@@ -442,7 +455,7 @@ impl CountMetadata {
 }
 
 /// The direction of a lane.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Direction {
     North,
     East,
@@ -569,6 +582,12 @@ pub struct TimeBinnedVehicleClassCount {
     pub total: i32,
 }
 
+impl Denormalize for TimeBinnedVehicleClassCount {
+    const NORMALIZED_TABLE: &'static str = "tc_clacount";
+    const DIR_FIELD: &'static str = "ctdir";
+    const VOL_FIELD: &'static str = "total";
+}
+
 /// Count of vehicles by speed range,
 /// binned into 15-minute or hourly intervals (TC_SPECOUNT table).
 ///
@@ -597,8 +616,6 @@ pub struct TimeBinnedSpeedRangeCount {
 }
 
 /// Create time-binned speed and class counts from [`IndividualVehicle`]s.
-///
-/// The first and last records are dropped, as they likely contain incomplete data.
 pub fn create_speed_and_class_count(
     metadata: CountMetadata,
     mut counts: Vec<IndividualVehicle>,
@@ -765,28 +782,6 @@ pub fn create_speed_and_class_count(
         });
     }
 
-    // Drop the first and last one periods (will have incomplete data).
-    // May need to drop two records if there are counts in both directions.
-    speed_range_count.sort_unstable_by_key(|c| (c.datetime, c.channel));
-    vehicle_class_count.sort_unstable_by_key(|c| (c.datetime, c.channel));
-    if metadata.directions.direction2.is_some() {
-        speed_range_count.remove(0);
-        speed_range_count.remove(0);
-        speed_range_count.pop();
-        speed_range_count.pop();
-
-        vehicle_class_count.remove(0);
-        vehicle_class_count.remove(0);
-        vehicle_class_count.pop();
-        vehicle_class_count.pop();
-    } else {
-        speed_range_count.remove(0);
-        speed_range_count.pop();
-
-        vehicle_class_count.remove(0);
-        vehicle_class_count.pop();
-    }
-
     (speed_range_count, vehicle_class_count)
 }
 
@@ -839,140 +834,6 @@ pub struct NonNormalVolCount {
     pub pm11: Option<i32>,
 }
 
-/// Create non-normalized volume counts from [`IndividualVehicle`]s.
-///
-/// This excludes the first and last hour of the overall count,
-/// as they are unlikely to be a full hour of data.
-pub fn create_non_normal_vol_count(
-    metadata: CountMetadata,
-    counts: Vec<IndividualVehicle>,
-) -> Vec<NonNormalVolCount> {
-    let mut non_normal_vol_map: HashMap<NonNormalCountKey, NonNormalVolCountValue> = HashMap::new();
-
-    if counts.is_empty() {
-        return vec![];
-    }
-
-    // Determine first and last date/hour of count.
-    // (The unwraps are ok, b/c only would be `None` (which would cause panic in following set of
-    // assignments) if `counts` empty, and we explicitly check this above and return early if that
-    // is the case.)
-    let first_count = counts
-        .iter()
-        .min_by_key(|x| PrimitiveDateTime::new(x.date, x.time))
-        .unwrap();
-
-    let last_count = counts
-        .iter()
-        .max_by_key(|x| PrimitiveDateTime::new(x.date, x.time))
-        .unwrap();
-
-    let first_date = first_count.date;
-    let first_hour = first_count.time.hour();
-    let last_date = last_count.date;
-    let last_hour = last_count.time.hour();
-
-    for count in counts {
-        // Ignore counts in first and last hour of overall count.
-        if (count.date == first_date && count.time.hour() == first_hour)
-            || (count.date == last_date && count.time.hour() == last_hour)
-        {
-            continue;
-        }
-
-        // Get the direction from the channel of count/metadata of filename.
-        // Channel 1 is first direction, Channel 2 is the second (if any)
-        let direction = match count.channel {
-            1 => metadata.directions.direction1,
-            2 => metadata.directions.direction2.unwrap(),
-            _ => {
-                error!("Unable to determine channel/direction.");
-                continue;
-            }
-        };
-
-        let key = NonNormalCountKey {
-            dvrpc_num: metadata.dvrpc_num,
-            date: count.date,
-            direction,
-            channel: count.channel,
-        };
-
-        // Add new entry if necessary, then insert data.
-        non_normal_vol_map
-            .entry(key)
-            .and_modify(|c| {
-                c.totalcount = c.totalcount.map_or(Some(1), |c| Some(c + 1));
-                match count.time.hour() {
-                    0 => c.am12 = c.am12.map_or(Some(1), |c| Some(c + 1)),
-                    1 => c.am1 = c.am1.map_or(Some(1), |c| Some(c + 1)),
-                    2 => c.am2 = c.am2.map_or(Some(1), |c| Some(c + 1)),
-                    3 => c.am3 = c.am3.map_or(Some(1), |c| Some(c + 1)),
-                    4 => c.am4 = c.am4.map_or(Some(1), |c| Some(c + 1)),
-                    5 => c.am5 = c.am5.map_or(Some(1), |c| Some(c + 1)),
-                    6 => c.am6 = c.am6.map_or(Some(1), |c| Some(c + 1)),
-                    7 => c.am7 = c.am7.map_or(Some(1), |c| Some(c + 1)),
-                    8 => c.am8 = c.am8.map_or(Some(1), |c| Some(c + 1)),
-                    9 => c.am9 = c.am9.map_or(Some(1), |c| Some(c + 1)),
-                    10 => c.am10 = c.am10.map_or(Some(1), |c| Some(c + 1)),
-                    11 => c.am11 = c.am11.map_or(Some(1), |c| Some(c + 1)),
-                    12 => c.pm12 = c.pm12.map_or(Some(1), |c| Some(c + 1)),
-                    13 => c.pm1 = c.pm1.map_or(Some(1), |c| Some(c + 1)),
-                    14 => c.pm2 = c.pm2.map_or(Some(1), |c| Some(c + 1)),
-                    15 => c.pm3 = c.pm3.map_or(Some(1), |c| Some(c + 1)),
-                    16 => c.pm4 = c.pm4.map_or(Some(1), |c| Some(c + 1)),
-                    17 => c.pm5 = c.pm5.map_or(Some(1), |c| Some(c + 1)),
-                    18 => c.pm6 = c.pm6.map_or(Some(1), |c| Some(c + 1)),
-                    19 => c.pm7 = c.pm7.map_or(Some(1), |c| Some(c + 1)),
-                    20 => c.pm8 = c.pm8.map_or(Some(1), |c| Some(c + 1)),
-                    21 => c.pm9 = c.pm9.map_or(Some(1), |c| Some(c + 1)),
-                    22 => c.pm10 = c.pm10.map_or(Some(1), |c| Some(c + 1)),
-                    23 => c.pm11 = c.pm11.map_or(Some(1), |c| Some(c + 1)),
-                    _ => (),
-                };
-            })
-            .or_insert(NonNormalVolCountValue::first(count.time.hour()));
-    }
-    // Convert HashMap to Vec of structs.
-    let mut non_normal_vol_count = vec![];
-    for (key, value) in non_normal_vol_map {
-        non_normal_vol_count.push(NonNormalVolCount {
-            dvrpc_num: key.dvrpc_num,
-            date: key.date,
-            direction: key.direction,
-            channel: key.channel,
-            setflag: None,
-            totalcount: value.totalcount,
-            weather: value.weather,
-            am12: value.am12,
-            am1: value.am1,
-            am2: value.am2,
-            am3: value.am3,
-            am4: value.am4,
-            am5: value.am5,
-            am6: value.am6,
-            am7: value.am7,
-            am8: value.am8,
-            am9: value.am9,
-            am10: value.am10,
-            am11: value.am11,
-            pm12: value.pm12,
-            pm1: value.pm1,
-            pm2: value.pm2,
-            pm3: value.pm3,
-            pm4: value.pm4,
-            pm5: value.pm5,
-            pm6: value.pm6,
-            pm7: value.pm7,
-            pm8: value.pm8,
-            pm9: value.pm9,
-            pm10: value.pm10,
-            pm11: value.pm11,
-        })
-    }
-    non_normal_vol_count
-}
-
 /// Non-normalized average speed counts (TC_SPESUM table).
 ///
 /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
@@ -1010,9 +871,6 @@ pub struct NonNormalAvgSpeedCount {
 }
 
 /// Create non-normalized average speed counts from [`IndividualVehicle`]s.
-///
-/// This excludes the first and last hour of the overall count,
-/// as they are unlikely to be a full hour of data.
 pub fn create_non_normal_speedavg_count(
     metadata: CountMetadata,
     counts: Vec<IndividualVehicle>,
@@ -1026,34 +884,8 @@ pub fn create_non_normal_speedavg_count(
         return vec![];
     }
 
-    // Determine first and last date/hour of count.
-    // (The unwraps are ok, b/c only would be `None` (which would cause panic in following set of
-    // assignments) if `counts` empty, and we explicitly check this above and return early if that
-    // is the case.)
-    let first_count = counts
-        .iter()
-        .min_by_key(|x| PrimitiveDateTime::new(x.date, x.time))
-        .unwrap();
-
-    let last_count = counts
-        .iter()
-        .max_by_key(|x| PrimitiveDateTime::new(x.date, x.time))
-        .unwrap();
-
-    let first_date = first_count.date;
-    let first_hour = first_count.time.hour();
-    let last_date = last_count.date;
-    let last_hour = last_count.time.hour();
-
     // Collect all the speeds per fields in key.
     for count in counts {
-        // Ignore counts in first and last hour of overall count.
-        if (count.date == first_date && count.time.hour() == first_hour)
-            || (count.date == last_date && count.time.hour() == last_hour)
-        {
-            continue;
-        }
-
         // Get the direction from the channel of count/metadata of filename.
         // Channel 1 is first direction, Channel 2 is the second (if any)
         let direction = match count.channel {

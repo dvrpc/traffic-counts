@@ -13,6 +13,7 @@
 //! [`NonNormalCountKey`] + [`NonNormalAvgSpeedValue`] = [`crate::NonNormalAvgSpeedCount`].
 //!
 //! [`NonNormalCountKey`] + [`NonNormalVolCountValue`] = [`crate::NonNormalVolCount`].
+use crate::db::HourlyCount;
 use crate::{Direction, VehicleClass, Weather};
 use time::{Date, PrimitiveDateTime};
 
@@ -252,40 +253,42 @@ pub struct NonNormalVolCountValue {
 
 impl NonNormalVolCountValue {
     /// Create a NonNormalVolCountValue with `None` for everything except
-    /// the total and the first hour/count, which will be `Some(1)`.
+    /// the total and the first hour/count.
     /// (For the first time a new key is created in a HashMap.)
-    pub fn first(hour: u8) -> Self {
+    pub fn first(count: &HourlyCount) -> Self {
         let mut value = Self {
             ..Default::default()
         };
 
-        value.totalcount = Some(1);
+        let volume = count.count as i32;
 
-        match hour {
-            0 => value.am12 = Some(1),
-            1 => value.am1 = Some(1),
-            2 => value.am2 = Some(1),
-            3 => value.am3 = Some(1),
-            4 => value.am4 = Some(1),
-            5 => value.am5 = Some(1),
-            6 => value.am6 = Some(1),
-            7 => value.am7 = Some(1),
-            8 => value.am8 = Some(1),
-            9 => value.am9 = Some(1),
-            10 => value.am10 = Some(1),
-            11 => value.am11 = Some(1),
-            12 => value.pm12 = Some(1),
-            13 => value.pm1 = Some(1),
-            14 => value.pm2 = Some(1),
-            15 => value.pm3 = Some(1),
-            16 => value.pm4 = Some(1),
-            17 => value.pm5 = Some(1),
-            18 => value.pm6 = Some(1),
-            19 => value.pm7 = Some(1),
-            20 => value.pm8 = Some(1),
-            21 => value.pm9 = Some(1),
-            22 => value.pm10 = Some(1),
-            23 => value.pm11 = Some(1),
+        value.totalcount = Some(volume);
+
+        match count.datetime.hour() {
+            0 => value.am12 = Some(volume),
+            1 => value.am1 = Some(volume),
+            2 => value.am2 = Some(volume),
+            3 => value.am3 = Some(volume),
+            4 => value.am4 = Some(volume),
+            5 => value.am5 = Some(volume),
+            6 => value.am6 = Some(volume),
+            7 => value.am7 = Some(volume),
+            8 => value.am8 = Some(volume),
+            9 => value.am9 = Some(volume),
+            10 => value.am10 = Some(volume),
+            11 => value.am11 = Some(volume),
+            12 => value.pm12 = Some(volume),
+            13 => value.pm1 = Some(volume),
+            14 => value.pm2 = Some(volume),
+            15 => value.pm3 = Some(volume),
+            16 => value.pm4 = Some(volume),
+            17 => value.pm5 = Some(volume),
+            18 => value.pm6 = Some(volume),
+            19 => value.pm7 = Some(volume),
+            20 => value.pm8 = Some(volume),
+            21 => value.pm9 = Some(volume),
+            22 => value.pm10 = Some(volume),
+            23 => value.pm11 = Some(volume),
             _ => (), // ok, because time.hour() can only be 0-23
         }
         value
