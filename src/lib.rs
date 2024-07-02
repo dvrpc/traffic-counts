@@ -230,7 +230,7 @@ impl IndividualVehicle {
 /// Pre-binned, 15-minute bicycle volume counts (TC_BIKECOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteBicycle {
-    pub record_num: i32,
+    pub record_num: u32,
     pub date: Date,
     pub time: Time,
     pub total: u16,
@@ -246,7 +246,7 @@ impl GetDate for FifteenMinuteBicycle {
 
 impl FifteenMinuteBicycle {
     pub fn new(
-        record_num: i32,
+        record_num: u32,
         date: Date,
         time: Time,
         total: u16,
@@ -267,7 +267,7 @@ impl FifteenMinuteBicycle {
 /// Pre-binned, 15-minute pedestrian volume counts (TC_PEDCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinutePedestrian {
-    pub record_num: i32,
+    pub record_num: u32,
     pub date: Date,
     pub time: Time,
     pub total: u16,
@@ -283,7 +283,7 @@ impl GetDate for FifteenMinutePedestrian {
 
 impl FifteenMinutePedestrian {
     pub fn new(
-        record_num: i32,
+        record_num: u32,
         date: Date,
         time: Time,
         total: u16,
@@ -304,7 +304,7 @@ impl FifteenMinutePedestrian {
 /// Pre-binned, 15-minute motor vehicle volume counts (TC_15MINVOLCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
-    pub record_num: i32,
+    pub record_num: u32,
     pub date: Date,
     pub time: Time,
     pub count: u16,
@@ -320,7 +320,7 @@ impl GetDate for FifteenMinuteVehicle {
 
 impl FifteenMinuteVehicle {
     pub fn new(
-        record_num: i32,
+        record_num: u32,
         date: Date,
         time: Time,
         count: u16,
@@ -345,10 +345,10 @@ impl FifteenMinuteVehicle {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CountMetadata {
     pub technician: String, // initials
-    pub record_num: i32,
+    pub record_num: u32,
     pub directions: Directions,
-    pub counter_id: i32,
-    pub speed_limit: Option<i32>,
+    pub counter_id: u32,
+    pub speed_limit: Option<u8>,
 }
 
 impl CountMetadata {
@@ -376,7 +376,7 @@ impl CountMetadata {
         }
 
         // `technician` should be letters. If parseable as int, then they aren't letters.
-        if parts[0].parse::<i32>().is_ok() {
+        if parts[0].parse::<u32>().is_ok() {
             return Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidTech,
                 path,
@@ -561,23 +561,23 @@ impl VehicleClass {
 pub struct TimeBinnedVehicleClassCount {
     pub datetime: PrimitiveDateTime,
     pub channel: u8,
-    pub record_num: i32,
+    pub record_num: u32,
     pub direction: Direction,
-    pub c1: i32,
-    pub c2: i32,
-    pub c3: i32,
-    pub c4: i32,
-    pub c5: i32,
-    pub c6: i32,
-    pub c7: i32,
-    pub c8: i32,
-    pub c9: i32,
-    pub c10: i32,
-    pub c11: i32,
-    pub c12: i32,
-    pub c13: i32,
-    pub c15: i32,
-    pub total: i32,
+    pub c1: u32,
+    pub c2: u32,
+    pub c3: u32,
+    pub c4: u32,
+    pub c5: u32,
+    pub c6: u32,
+    pub c7: u32,
+    pub c8: u32,
+    pub c9: u32,
+    pub c10: u32,
+    pub c11: u32,
+    pub c12: u32,
+    pub c13: u32,
+    pub c15: u32,
+    pub total: u32,
 }
 
 /// Count of vehicles by speed range,
@@ -588,23 +588,23 @@ pub struct TimeBinnedVehicleClassCount {
 pub struct TimeBinnedSpeedRangeCount {
     pub datetime: PrimitiveDateTime,
     pub channel: u8,
-    pub record_num: i32,
+    pub record_num: u32,
     pub direction: Direction,
-    pub s1: i32,
-    pub s2: i32,
-    pub s3: i32,
-    pub s4: i32,
-    pub s5: i32,
-    pub s6: i32,
-    pub s7: i32,
-    pub s8: i32,
-    pub s9: i32,
-    pub s10: i32,
-    pub s11: i32,
-    pub s12: i32,
-    pub s13: i32,
-    pub s14: i32,
-    pub total: i32,
+    pub s1: u32,
+    pub s2: u32,
+    pub s3: u32,
+    pub s4: u32,
+    pub s5: u32,
+    pub s6: u32,
+    pub s7: u32,
+    pub s8: u32,
+    pub s9: u32,
+    pub s10: u32,
+    pub s11: u32,
+    pub s12: u32,
+    pub s13: u32,
+    pub s14: u32,
+    pub total: u32,
 }
 
 /// Create time-binned speed and class counts from [`IndividualVehicle`]s.

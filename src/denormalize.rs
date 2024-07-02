@@ -12,7 +12,7 @@ pub trait Denormalize {
 
     /// Create denormalized volume counts from [`HourlyCount`]s.
     fn denormalize_vol_count(
-        record_num: i32,
+        record_num: u32,
         conn: &Connection,
     ) -> Result<Vec<NonNormalVolCount>, CountError> {
         let counts = hourly_counts(
@@ -44,32 +44,32 @@ pub trait Denormalize {
                 .and_modify(|c| {
                     c.totalcount = c
                         .totalcount
-                        .map_or(Some(count.count as i32), |c| Some(c + count.count as i32));
+                        .map_or(Some(count.count), |c| Some(c + count.count));
                     match count.datetime.hour() {
-                        0 => c.am12 = Some(count.count as i32),
-                        1 => c.am1 = Some(count.count as i32),
-                        2 => c.am2 = Some(count.count as i32),
-                        3 => c.am3 = Some(count.count as i32),
-                        4 => c.am4 = Some(count.count as i32),
-                        5 => c.am5 = Some(count.count as i32),
-                        6 => c.am6 = Some(count.count as i32),
-                        7 => c.am7 = Some(count.count as i32),
-                        8 => c.am8 = Some(count.count as i32),
-                        9 => c.am9 = Some(count.count as i32),
-                        10 => c.am10 = Some(count.count as i32),
-                        11 => c.am11 = Some(count.count as i32),
-                        12 => c.pm12 = Some(count.count as i32),
-                        13 => c.pm1 = Some(count.count as i32),
-                        14 => c.pm2 = Some(count.count as i32),
-                        15 => c.pm3 = Some(count.count as i32),
-                        16 => c.pm4 = Some(count.count as i32),
-                        17 => c.pm5 = Some(count.count as i32),
-                        18 => c.pm6 = Some(count.count as i32),
-                        19 => c.pm7 = Some(count.count as i32),
-                        20 => c.pm8 = Some(count.count as i32),
-                        21 => c.pm9 = Some(count.count as i32),
-                        22 => c.pm10 = Some(count.count as i32),
-                        23 => c.pm11 = Some(count.count as i32),
+                        0 => c.am12 = Some(count.count),
+                        1 => c.am1 = Some(count.count),
+                        2 => c.am2 = Some(count.count),
+                        3 => c.am3 = Some(count.count),
+                        4 => c.am4 = Some(count.count),
+                        5 => c.am5 = Some(count.count),
+                        6 => c.am6 = Some(count.count),
+                        7 => c.am7 = Some(count.count),
+                        8 => c.am8 = Some(count.count),
+                        9 => c.am9 = Some(count.count),
+                        10 => c.am10 = Some(count.count),
+                        11 => c.am11 = Some(count.count),
+                        12 => c.pm12 = Some(count.count),
+                        13 => c.pm1 = Some(count.count),
+                        14 => c.pm2 = Some(count.count),
+                        15 => c.pm3 = Some(count.count),
+                        16 => c.pm4 = Some(count.count),
+                        17 => c.pm5 = Some(count.count),
+                        18 => c.pm6 = Some(count.count),
+                        19 => c.pm7 = Some(count.count),
+                        20 => c.pm8 = Some(count.count),
+                        21 => c.pm9 = Some(count.count),
+                        22 => c.pm10 = Some(count.count),
+                        23 => c.pm11 = Some(count.count),
                         _ => (),
                     };
                 })
@@ -131,7 +131,7 @@ impl Denormalize for FifteenMinuteVehicle {
 /// Counts aggregated by hour.
 #[derive(Debug, Clone)]
 pub struct HourlyCount {
-    pub recordnum: i32,
+    pub recordnum: u32,
     pub datetime: PrimitiveDateTime,
     pub count: u32,
     pub dir: Direction,
@@ -144,37 +144,37 @@ pub struct HourlyCount {
 /// the following day - can start and stop at any time.
 #[derive(Debug, Clone)]
 pub struct NonNormalVolCount {
-    pub record_num: i32,
+    pub record_num: u32,
     pub date: Date,
     pub direction: Direction,
     pub channel: u8,
-    pub setflag: Option<i32>,
-    pub totalcount: Option<i32>,
+    pub setflag: Option<i8>,
+    pub totalcount: Option<u32>,
     pub weather: Option<Weather>,
-    pub am12: Option<i32>,
-    pub am1: Option<i32>,
-    pub am2: Option<i32>,
-    pub am3: Option<i32>,
-    pub am4: Option<i32>,
-    pub am5: Option<i32>,
-    pub am6: Option<i32>,
-    pub am7: Option<i32>,
-    pub am8: Option<i32>,
-    pub am9: Option<i32>,
-    pub am10: Option<i32>,
-    pub am11: Option<i32>,
-    pub pm12: Option<i32>,
-    pub pm1: Option<i32>,
-    pub pm2: Option<i32>,
-    pub pm3: Option<i32>,
-    pub pm4: Option<i32>,
-    pub pm5: Option<i32>,
-    pub pm6: Option<i32>,
-    pub pm7: Option<i32>,
-    pub pm8: Option<i32>,
-    pub pm9: Option<i32>,
-    pub pm10: Option<i32>,
-    pub pm11: Option<i32>,
+    pub am12: Option<u32>,
+    pub am1: Option<u32>,
+    pub am2: Option<u32>,
+    pub am3: Option<u32>,
+    pub am4: Option<u32>,
+    pub am5: Option<u32>,
+    pub am6: Option<u32>,
+    pub am7: Option<u32>,
+    pub am8: Option<u32>,
+    pub am9: Option<u32>,
+    pub am10: Option<u32>,
+    pub am11: Option<u32>,
+    pub pm12: Option<u32>,
+    pub pm1: Option<u32>,
+    pub pm2: Option<u32>,
+    pub pm3: Option<u32>,
+    pub pm4: Option<u32>,
+    pub pm5: Option<u32>,
+    pub pm6: Option<u32>,
+    pub pm7: Option<u32>,
+    pub pm8: Option<u32>,
+    pub pm9: Option<u32>,
+    pub pm10: Option<u32>,
+    pub pm11: Option<u32>,
 }
 
 /// Non-normalized average speed counts (TC_SPESUM table).
@@ -183,7 +183,7 @@ pub struct NonNormalVolCount {
 /// the following day - can start and stop at any time.
 #[derive(Debug, Clone)]
 pub struct NonNormalAvgSpeedCount {
-    pub record_num: i32,
+    pub record_num: u32,
     pub date: Date,
     pub direction: Direction,
     pub channel: u8,
@@ -496,7 +496,7 @@ pub fn create_non_normal_speedavg_count(
 
 /// Get hourly counts from a database table.
 pub fn hourly_counts<'a, 'conn>(
-    recordnum: i32,
+    recordnum: u32,
     table: &'a str,
     dir_field: &'a str,
     vol_field: &'a str,

@@ -15,7 +15,7 @@ pub trait CountInsert {
     const COUNT_RECORDNUM_FIELD: &'static str;
 
     /// Delete all records in the table with a particular recordnum.
-    fn delete(conn: &Connection, recordnum: i32) -> Result<(), oracle::Error> {
+    fn delete(conn: &Connection, recordnum: u32) -> Result<(), oracle::Error> {
         let sql = &format!(
             "delete from {} where {} = :1",
             &Self::COUNT_TABLE,

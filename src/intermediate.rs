@@ -33,28 +33,28 @@ pub struct BinnedCountKey {
 /// unclassified vehicles.
 #[derive(Debug, Clone, Copy)]
 pub struct VehicleClassCount {
-    pub record_num: i32,
+    pub record_num: u32,
     pub direction: Direction,
-    pub c1: i32,
-    pub c2: i32,
-    pub c3: i32,
-    pub c4: i32,
-    pub c5: i32,
-    pub c6: i32,
-    pub c7: i32,
-    pub c8: i32,
-    pub c9: i32,
-    pub c10: i32,
-    pub c11: i32,
-    pub c12: i32,
-    pub c13: i32,
-    pub c15: i32,
-    pub total: i32,
+    pub c1: u32,
+    pub c2: u32,
+    pub c3: u32,
+    pub c4: u32,
+    pub c5: u32,
+    pub c6: u32,
+    pub c7: u32,
+    pub c8: u32,
+    pub c9: u32,
+    pub c10: u32,
+    pub c11: u32,
+    pub c12: u32,
+    pub c13: u32,
+    pub c15: u32,
+    pub total: u32,
 }
 
 impl VehicleClassCount {
     /// Create one with 0 count for all classes.
-    pub fn new(record_num: i32, direction: Direction) -> Self {
+    pub fn new(record_num: u32, direction: Direction) -> Self {
         Self {
             record_num,
             direction,
@@ -76,7 +76,7 @@ impl VehicleClassCount {
         }
     }
     /// Create one with its first count inserted.
-    pub fn first(record_num: i32, direction: Direction, class: VehicleClass) -> Self {
+    pub fn first(record_num: u32, direction: Direction, class: VehicleClass) -> Self {
         let mut count = Self::new(record_num, direction);
         count.insert(class);
         count
@@ -112,28 +112,28 @@ impl VehicleClassCount {
 /// This is generally - but not always - for 15-minute intervals.
 #[derive(Debug, Clone, Copy)]
 pub struct SpeedRangeCount {
-    pub record_num: i32,
+    pub record_num: u32,
     pub direction: Direction,
-    pub s1: i32,
-    pub s2: i32,
-    pub s3: i32,
-    pub s4: i32,
-    pub s5: i32,
-    pub s6: i32,
-    pub s7: i32,
-    pub s8: i32,
-    pub s9: i32,
-    pub s10: i32,
-    pub s11: i32,
-    pub s12: i32,
-    pub s13: i32,
-    pub s14: i32,
-    pub total: i32,
+    pub s1: u32,
+    pub s2: u32,
+    pub s3: u32,
+    pub s4: u32,
+    pub s5: u32,
+    pub s6: u32,
+    pub s7: u32,
+    pub s8: u32,
+    pub s9: u32,
+    pub s10: u32,
+    pub s11: u32,
+    pub s12: u32,
+    pub s13: u32,
+    pub s14: u32,
+    pub total: u32,
 }
 
 impl SpeedRangeCount {
     /// Create one with 0 count for all speed ranges.
-    pub fn new(record_num: i32, direction: Direction) -> Self {
+    pub fn new(record_num: u32, direction: Direction) -> Self {
         Self {
             record_num,
             direction,
@@ -156,7 +156,7 @@ impl SpeedRangeCount {
     }
 
     /// Create one with its first count inserted.
-    pub fn first(record_num: i32, direction: Direction, speed: f32) -> Self {
+    pub fn first(record_num: u32, direction: Direction, speed: f32) -> Self {
         let mut value = Self::new(record_num, direction);
         value.insert(speed);
         value
@@ -210,7 +210,7 @@ impl SpeedRangeCount {
 /// The key for records of the TC_VOLCOUNT and TC_SPESUM tables.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NonNormalCountKey {
-    pub record_num: i32,
+    pub record_num: u32,
     pub date: Date,
     pub direction: Direction,
     pub channel: u8,
@@ -222,33 +222,33 @@ pub struct NonNormalCountKey {
 /// the following day - can start and stop at any time.
 #[derive(Debug, Clone, Default)]
 pub struct NonNormalVolCountValue {
-    pub setflag: Option<i32>,
-    pub totalcount: Option<i32>,
+    pub setflag: Option<i8>,
+    pub totalcount: Option<u32>,
     pub weather: Option<Weather>,
-    pub am12: Option<i32>,
-    pub am1: Option<i32>,
-    pub am2: Option<i32>,
-    pub am3: Option<i32>,
-    pub am4: Option<i32>,
-    pub am5: Option<i32>,
-    pub am6: Option<i32>,
-    pub am7: Option<i32>,
-    pub am8: Option<i32>,
-    pub am9: Option<i32>,
-    pub am10: Option<i32>,
-    pub am11: Option<i32>,
-    pub pm12: Option<i32>,
-    pub pm1: Option<i32>,
-    pub pm2: Option<i32>,
-    pub pm3: Option<i32>,
-    pub pm4: Option<i32>,
-    pub pm5: Option<i32>,
-    pub pm6: Option<i32>,
-    pub pm7: Option<i32>,
-    pub pm8: Option<i32>,
-    pub pm9: Option<i32>,
-    pub pm10: Option<i32>,
-    pub pm11: Option<i32>,
+    pub am12: Option<u32>,
+    pub am1: Option<u32>,
+    pub am2: Option<u32>,
+    pub am3: Option<u32>,
+    pub am4: Option<u32>,
+    pub am5: Option<u32>,
+    pub am6: Option<u32>,
+    pub am7: Option<u32>,
+    pub am8: Option<u32>,
+    pub am9: Option<u32>,
+    pub am10: Option<u32>,
+    pub am11: Option<u32>,
+    pub pm12: Option<u32>,
+    pub pm1: Option<u32>,
+    pub pm2: Option<u32>,
+    pub pm3: Option<u32>,
+    pub pm4: Option<u32>,
+    pub pm5: Option<u32>,
+    pub pm6: Option<u32>,
+    pub pm7: Option<u32>,
+    pub pm8: Option<u32>,
+    pub pm9: Option<u32>,
+    pub pm10: Option<u32>,
+    pub pm11: Option<u32>,
 }
 
 impl NonNormalVolCountValue {
@@ -260,7 +260,7 @@ impl NonNormalVolCountValue {
             ..Default::default()
         };
 
-        let volume = count.count as i32;
+        let volume = count.count;
 
         value.totalcount = Some(volume);
 
