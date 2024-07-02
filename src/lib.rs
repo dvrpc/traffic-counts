@@ -230,7 +230,7 @@ impl IndividualVehicle {
 /// Pre-binned, 15-minute bicycle volume counts (TC_BIKECOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteBicycle {
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub date: Date,
     pub time: Time,
     pub total: u16,
@@ -246,7 +246,7 @@ impl GetDate for FifteenMinuteBicycle {
 
 impl FifteenMinuteBicycle {
     pub fn new(
-        dvrpc_num: i32,
+        record_num: i32,
         date: Date,
         time: Time,
         total: u16,
@@ -254,7 +254,7 @@ impl FifteenMinuteBicycle {
         outdir: Option<u16>,
     ) -> Result<Self, CountError<'static>> {
         Ok(Self {
-            dvrpc_num,
+            record_num,
             date,
             time,
             total,
@@ -267,7 +267,7 @@ impl FifteenMinuteBicycle {
 /// Pre-binned, 15-minute pedestrian volume counts (TC_PEDCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinutePedestrian {
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub date: Date,
     pub time: Time,
     pub total: u16,
@@ -283,7 +283,7 @@ impl GetDate for FifteenMinutePedestrian {
 
 impl FifteenMinutePedestrian {
     pub fn new(
-        dvrpc_num: i32,
+        record_num: i32,
         date: Date,
         time: Time,
         total: u16,
@@ -291,7 +291,7 @@ impl FifteenMinutePedestrian {
         outdir: Option<u16>,
     ) -> Result<Self, CountError<'static>> {
         Ok(Self {
-            dvrpc_num,
+            record_num,
             date,
             time,
             total,
@@ -304,7 +304,7 @@ impl FifteenMinutePedestrian {
 /// Pre-binned, 15-minute motor vehicle volume counts (TC_15MINVOLCOUNT table).
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub date: Date,
     pub time: Time,
     pub count: u16,
@@ -320,7 +320,7 @@ impl GetDate for FifteenMinuteVehicle {
 
 impl FifteenMinuteVehicle {
     pub fn new(
-        dvrpc_num: i32,
+        record_num: i32,
         date: Date,
         time: Time,
         count: u16,
@@ -328,7 +328,7 @@ impl FifteenMinuteVehicle {
         channel: u8,
     ) -> Result<Self, CountError<'static>> {
         Ok(Self {
-            dvrpc_num,
+            record_num,
             date,
             time,
             count,
@@ -345,7 +345,7 @@ impl FifteenMinuteVehicle {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CountMetadata {
     pub technician: String, // initials
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub directions: Directions,
     pub counter_id: i32,
     pub speed_limit: Option<i32>,
@@ -385,7 +385,7 @@ impl CountMetadata {
 
         let technician = parts[0].to_string();
 
-        let dvrpc_num = match parts[1].parse() {
+        let record_num = match parts[1].parse() {
             Ok(v) => v,
             Err(_) => {
                 return Err(CountError::InvalidFileName {
@@ -442,7 +442,7 @@ impl CountMetadata {
 
         let metadata = Self {
             technician,
-            dvrpc_num,
+            record_num,
             directions,
             counter_id,
             speed_limit,
@@ -561,7 +561,7 @@ impl VehicleClass {
 pub struct TimeBinnedVehicleClassCount {
     pub datetime: PrimitiveDateTime,
     pub channel: u8,
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub direction: Direction,
     pub c1: i32,
     pub c2: i32,
@@ -588,7 +588,7 @@ pub struct TimeBinnedVehicleClassCount {
 pub struct TimeBinnedSpeedRangeCount {
     pub datetime: PrimitiveDateTime,
     pub channel: u8,
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub direction: Direction,
     pub s1: i32,
     pub s2: i32,
@@ -653,7 +653,7 @@ pub fn create_speed_and_class_count(
             .entry(key)
             .and_modify(|c| c.insert(count.speed))
             .or_insert(SpeedRangeCount::first(
-                metadata.dvrpc_num,
+                metadata.record_num,
                 direction,
                 count.speed,
             ));
@@ -663,7 +663,7 @@ pub fn create_speed_and_class_count(
             .entry(key)
             .and_modify(|c| c.insert(count.class.clone()))
             .or_insert(VehicleClassCount::first(
-                metadata.dvrpc_num,
+                metadata.record_num,
                 direction,
                 count.class,
             ));
@@ -715,10 +715,10 @@ pub fn create_speed_and_class_count(
             };
             speed_range_map
                 .entry(key)
-                .or_insert(SpeedRangeCount::new(metadata.dvrpc_num, direction));
+                .or_insert(SpeedRangeCount::new(metadata.record_num, direction));
             vehicle_class_map
                 .entry(key)
-                .or_insert(VehicleClassCount::new(metadata.dvrpc_num, direction));
+                .or_insert(VehicleClassCount::new(metadata.record_num, direction));
         }
     }
 
@@ -728,7 +728,7 @@ pub fn create_speed_and_class_count(
         speed_range_count.push(TimeBinnedSpeedRangeCount {
             datetime: key.datetime,
             channel: key.channel,
-            dvrpc_num: value.dvrpc_num,
+            record_num: value.record_num,
             direction: value.direction,
             s1: value.s1,
             s2: value.s2,
@@ -754,7 +754,7 @@ pub fn create_speed_and_class_count(
         vehicle_class_count.push(TimeBinnedVehicleClassCount {
             datetime: key.datetime,
             channel: key.channel,
-            dvrpc_num: value.dvrpc_num,
+            record_num: value.record_num,
             direction: value.direction,
             c1: value.c1,
             c2: value.c2,

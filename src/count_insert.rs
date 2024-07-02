@@ -11,7 +11,7 @@ use crate::{
 pub trait CountInsert {
     /// The name of the table in the database that this count type corresponds to.
     const COUNT_TABLE: &'static str; // associated constant
-    /// Field in COUNT_TABLE with recordnum/dvrpcnum.
+    /// Field in COUNT_TABLE with recordnum.
     const COUNT_RECORDNUM_FIELD: &'static str;
 
     /// Delete all records in the table with a particular recordnum.
@@ -71,7 +71,7 @@ impl CountInsert for TimeBinnedVehicleClassCount {
         );
 
         stmt.execute(&[
-            &self.dvrpc_num,
+            &self.record_num,
             &oracle_date,
             &oracle_dt,
             &self.channel,
@@ -132,7 +132,7 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
         );
 
         stmt.execute(&[
-            &self.dvrpc_num,
+            &self.record_num,
             &oracle_date,
             &oracle_dt,
             &self.channel,
@@ -186,7 +186,7 @@ impl CountInsert for NonNormalAvgSpeedCount {
         );
 
         stmt.execute(&[
-            &self.dvrpc_num,
+            &self.record_num,
             &oracle_date,
             &format!("{}", self.direction),
             &self.channel,
@@ -248,7 +248,7 @@ impl CountInsert for NonNormalVolCount {
         );
 
         stmt.execute(&[
-            &self.dvrpc_num,
+            &self.record_num,
             &oracle_date,
             &"", // setflag
             &self.totalcount,
@@ -319,7 +319,7 @@ impl CountInsert for FifteenMinuteVehicle {
         );
 
         stmt.execute(&[
-            &self.dvrpc_num,
+            &self.record_num,
             &oracle_date,
             &oracle_dt,
             &self.count,
@@ -365,7 +365,7 @@ impl CountInsert for FifteenMinuteBicycle {
         );
 
         stmt.execute(&[
-            &self.dvrpc_num,
+            &self.record_num,
             &oracle_date,
             &oracle_dt,
             &self.total,
@@ -411,7 +411,7 @@ impl CountInsert for FifteenMinutePedestrian {
         );
 
         stmt.execute(&[
-            &self.dvrpc_num,
+            &self.record_num,
             &oracle_date,
             &oracle_dt,
             &self.total,

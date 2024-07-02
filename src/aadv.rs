@@ -10,7 +10,7 @@ pub trait Aadv {
     const BINNED_TABLE: &'static str;
     /// Field in BINNED_TABLE containing the total count for the period.
     const TOTAL_FIELD: &'static str;
-    /// Field in BINNED_TABLE with recordnum/dvrpcnum.
+    /// Field in BINNED_TABLE with recordnum.
     const BINNED_RECORDNUM_FIELD: &'static str;
     /// Tables that store data in rows per direction (TC_CLACOUNT, TC_15MINVOLCOUNT) will only use
     /// the first element of this tuple, while those that store directions and total in each row

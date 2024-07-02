@@ -33,7 +33,7 @@ pub struct BinnedCountKey {
 /// unclassified vehicles.
 #[derive(Debug, Clone, Copy)]
 pub struct VehicleClassCount {
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub direction: Direction,
     pub c1: i32,
     pub c2: i32,
@@ -54,9 +54,9 @@ pub struct VehicleClassCount {
 
 impl VehicleClassCount {
     /// Create one with 0 count for all classes.
-    pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
+    pub fn new(record_num: i32, direction: Direction) -> Self {
         Self {
-            dvrpc_num,
+            record_num,
             direction,
             c1: 0,
             c2: 0,
@@ -76,8 +76,8 @@ impl VehicleClassCount {
         }
     }
     /// Create one with its first count inserted.
-    pub fn first(dvrpc_num: i32, direction: Direction, class: VehicleClass) -> Self {
-        let mut count = Self::new(dvrpc_num, direction);
+    pub fn first(record_num: i32, direction: Direction, class: VehicleClass) -> Self {
+        let mut count = Self::new(record_num, direction);
         count.insert(class);
         count
     }
@@ -112,7 +112,7 @@ impl VehicleClassCount {
 /// This is generally - but not always - for 15-minute intervals.
 #[derive(Debug, Clone, Copy)]
 pub struct SpeedRangeCount {
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub direction: Direction,
     pub s1: i32,
     pub s2: i32,
@@ -133,9 +133,9 @@ pub struct SpeedRangeCount {
 
 impl SpeedRangeCount {
     /// Create one with 0 count for all speed ranges.
-    pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
+    pub fn new(record_num: i32, direction: Direction) -> Self {
         Self {
-            dvrpc_num,
+            record_num,
             direction,
             s1: 0,
             s2: 0,
@@ -156,8 +156,8 @@ impl SpeedRangeCount {
     }
 
     /// Create one with its first count inserted.
-    pub fn first(dvrpc_num: i32, direction: Direction, speed: f32) -> Self {
-        let mut value = Self::new(dvrpc_num, direction);
+    pub fn first(record_num: i32, direction: Direction, speed: f32) -> Self {
+        let mut value = Self::new(record_num, direction);
         value.insert(speed);
         value
     }
@@ -210,7 +210,7 @@ impl SpeedRangeCount {
 /// The key for records of the TC_VOLCOUNT and TC_SPESUM tables.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NonNormalCountKey {
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub date: Date,
     pub direction: Direction,
     pub channel: u8,

@@ -32,7 +32,7 @@ pub trait Denormalize {
 
         for count in counts {
             let key = NonNormalCountKey {
-                dvrpc_num: count.recordnum,
+                record_num: count.recordnum,
                 date: count.datetime.date(),
                 direction: count.dir,
                 channel: count.lane,
@@ -79,7 +79,7 @@ pub trait Denormalize {
         let mut non_normal_vol_count = vec![];
         for (key, value) in non_normal_vol_map {
             non_normal_vol_count.push(NonNormalVolCount {
-                dvrpc_num: key.dvrpc_num,
+                record_num: key.record_num,
                 date: key.date,
                 direction: key.direction,
                 channel: key.channel,
@@ -144,7 +144,7 @@ pub struct HourlyCount {
 /// the following day - can start and stop at any time.
 #[derive(Debug, Clone)]
 pub struct NonNormalVolCount {
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub date: Date,
     pub direction: Direction,
     pub channel: u8,
@@ -183,7 +183,7 @@ pub struct NonNormalVolCount {
 /// the following day - can start and stop at any time.
 #[derive(Debug, Clone)]
 pub struct NonNormalAvgSpeedCount {
-    pub dvrpc_num: i32,
+    pub record_num: i32,
     pub date: Date,
     pub direction: Direction,
     pub channel: u8,
@@ -241,7 +241,7 @@ pub fn create_non_normal_speedavg_count(
         };
 
         let key = NonNormalCountKey {
-            dvrpc_num: metadata.dvrpc_num,
+            record_num: metadata.record_num,
             date: count.date,
             direction,
             channel: count.channel,
@@ -461,7 +461,7 @@ pub fn create_non_normal_speedavg_count(
     let mut non_normal_speed_avg_count = vec![];
     for (key, value) in non_normal_avg_speed_map {
         non_normal_speed_avg_count.push(NonNormalAvgSpeedCount {
-            dvrpc_num: key.dvrpc_num,
+            record_num: key.record_num,
             date: key.date,
             direction: key.direction,
             channel: key.channel,

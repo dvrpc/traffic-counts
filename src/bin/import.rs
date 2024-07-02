@@ -208,7 +208,7 @@ fn main() {
                 continue;
             }
         };
-        let record_num = metadata.clone().dvrpc_num;
+        let record_num = metadata.clone().record_num;
 
         // Process the file according to InputCount.
         match count_type {

@@ -42,7 +42,7 @@ impl Extract for FifteenMinuteVehicle {
             // There will always be at least one count per row.
             // Extract the first (and perhaps only) direction.
             match FifteenMinuteVehicle::new(
-                metadata.dvrpc_num,
+                metadata.record_num,
                 count_date,
                 count_time,
                 row.as_ref().unwrap()[3].parse().unwrap(),
@@ -59,7 +59,7 @@ impl Extract for FifteenMinuteVehicle {
             // There may also be a second count within the row.
             if let Some(v) = metadata.directions.direction2 {
                 match FifteenMinuteVehicle::new(
-                    metadata.dvrpc_num,
+                    metadata.record_num,
                     count_date,
                     count_time,
                     row.as_ref().unwrap()[4].parse().unwrap(),
@@ -143,7 +143,7 @@ impl Extract for FifteenMinuteBicycle {
                 // If there's only one direction for this count, we only need the total.
                 None => {
                     match FifteenMinuteBicycle::new(
-                        metadata.dvrpc_num,
+                        metadata.record_num,
                         count_dt.date(),
                         count_dt.time(),
                         row.as_ref().unwrap()[1].parse().unwrap(),
@@ -160,7 +160,7 @@ impl Extract for FifteenMinuteBicycle {
                 // If there are two directions, we need total, indir, and outdir.
                 Some(_) => {
                     match FifteenMinuteBicycle::new(
-                        metadata.dvrpc_num,
+                        metadata.record_num,
                         count_dt.date(),
                         count_dt.time(),
                         row.as_ref().unwrap()[1].parse().unwrap(),
@@ -203,7 +203,7 @@ impl Extract for FifteenMinutePedestrian {
                 // If there's only one direction for this count, we only need the total.
                 None => {
                     match FifteenMinutePedestrian::new(
-                        metadata.dvrpc_num,
+                        metadata.record_num,
                         count_dt.date(),
                         count_dt.time(),
                         row.as_ref().unwrap()[1].parse().unwrap(),
@@ -220,7 +220,7 @@ impl Extract for FifteenMinutePedestrian {
                 // If there are two directions, we need total, indir, and outdir.
                 Some(_) => {
                     match FifteenMinutePedestrian::new(
-                        metadata.dvrpc_num,
+                        metadata.record_num,
                         count_dt.date(),
                         count_dt.time(),
                         row.as_ref().unwrap()[1].parse().unwrap(),

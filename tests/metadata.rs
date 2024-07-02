@@ -9,7 +9,7 @@ fn metadata_parse_from_path_ok() {
     let expected_metadata = {
         CountMetadata {
             technician: "rc".to_string(),
-            dvrpc_num: 166905,
+            record_num: 166905,
             directions: Directions::new(Direction::East, Some(Direction::West)),
             counter_id: 40972,
             speed_limit: Some(35),
@@ -25,7 +25,7 @@ fn metadata_parse_from_path_ok_with_na_speed_limit() {
     let expected_metadata = {
         CountMetadata {
             technician: "rc".to_string(),
-            dvrpc_num: 166905,
+            record_num: 166905,
             directions: Directions::new(Direction::East, Some(Direction::West)),
             counter_id: 40972,
             speed_limit: None,
@@ -71,7 +71,7 @@ fn metadata_parse_from_path_errs_if_technician_bad() {
 }
 
 #[test]
-fn metadata_parse_from_path_errs_if_dvrpcnum_bad() {
+fn metadata_parse_from_path_errs_if_record_num_bad() {
     let path = Path::new("some/path/rc-letters-ew-40972-35.txt");
     assert!(matches!(
         CountMetadata::from_path(path),
