@@ -21,7 +21,7 @@ use crate::{denormalize::HourlyCount, Direction, VehicleClass, Weather};
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BinnedCountKey {
     pub datetime: PrimitiveDateTime,
-    pub channel: u8,
+    pub lane: u8,
 }
 
 /// The rest of the fields for the TC_CLACOUNT table.
@@ -213,7 +213,7 @@ pub struct NonNormalCountKey {
     pub record_num: u32,
     pub date: Date,
     pub direction: Direction,
-    pub channel: u8,
+    pub lane: u8,
 }
 
 /// The rest of the fields in the TC_VOLCOUNT table.

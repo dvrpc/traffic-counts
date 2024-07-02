@@ -197,7 +197,7 @@ impl InputCount {
 pub struct IndividualVehicle {
     pub date: Date,
     pub time: Time,
-    pub channel: u8,
+    pub lane: u8,
     pub class: VehicleClass,
     pub speed: f32,
 }
@@ -212,7 +212,7 @@ impl IndividualVehicle {
     pub fn new(
         date: Date,
         time: Time,
-        channel: u8,
+        lane: u8,
         class: u8,
         speed: f32,
     ) -> Result<Self, CountError<'static>> {
@@ -220,7 +220,7 @@ impl IndividualVehicle {
         Ok(Self {
             date,
             time,
-            channel,
+            lane,
             class,
             speed,
         })
@@ -309,7 +309,7 @@ pub struct FifteenMinuteVehicle {
     pub time: Time,
     pub count: u16,
     pub direction: Direction,
-    pub channel: u8,
+    pub lane: u8,
 }
 
 impl GetDate for FifteenMinuteVehicle {
@@ -325,7 +325,7 @@ impl FifteenMinuteVehicle {
         time: Time,
         count: u16,
         direction: Direction,
-        channel: u8,
+        lane: u8,
     ) -> Result<Self, CountError<'static>> {
         Ok(Self {
             record_num,
@@ -333,7 +333,7 @@ impl FifteenMinuteVehicle {
             time,
             count,
             direction,
-            channel,
+            lane,
         })
     }
 }
@@ -560,7 +560,7 @@ impl VehicleClass {
 #[derive(Debug, Clone)]
 pub struct TimeBinnedVehicleClassCount {
     pub datetime: PrimitiveDateTime,
-    pub channel: u8,
+    pub lane: u8,
     pub record_num: u32,
     pub direction: Direction,
     pub c1: u32,
@@ -587,7 +587,7 @@ pub struct TimeBinnedVehicleClassCount {
 #[derive(Debug, Clone)]
 pub struct TimeBinnedSpeedRangeCount {
     pub datetime: PrimitiveDateTime,
-    pub channel: u8,
+    pub lane: u8,
     pub record_num: u32,
     pub direction: Direction,
     pub s1: u32,
@@ -624,13 +624,13 @@ pub fn create_speed_and_class_count(
     let mut vehicle_class_map: HashMap<BinnedCountKey, VehicleClassCount> = HashMap::new();
 
     for count in counts.clone() {
-        // Get the direction from the channel of count/metadata of filename.
-        // Channel 1 is first direction, Channel 2 is the second (if any)
-        let direction = match count.channel {
+        // Get the direction from the lane of count/metadata of filename.
+        // Lane 1 is first direction, Lane 2 is the second (if any)
+        let direction = match count.lane {
             1 => metadata.directions.direction1,
             2 => metadata.directions.direction2.unwrap(),
             _ => {
-                error!("Unable to determine channel/direction.");
+                error!("Unable to determine lane/direction.");
                 continue;
             }
         };
@@ -645,7 +645,7 @@ pub fn create_speed_and_class_count(
         };
         let key = BinnedCountKey {
             datetime: PrimitiveDateTime::new(count.date, time_part),
-            channel: count.channel,
+            lane: count.lane,
         };
 
         // Add new entry to 15-min speed range map or increment existing one.
@@ -688,7 +688,7 @@ pub fn create_speed_and_class_count(
 
     if all_datetimes.len() < speed_range_map.len() {
         let mut all_keys = vec![];
-        let all_channels = if metadata.directions.direction2.is_some() {
+        let all_lanes = if metadata.directions.direction2.is_some() {
             vec![1, 2]
         } else {
             vec![1]
@@ -696,20 +696,20 @@ pub fn create_speed_and_class_count(
 
         // construct all possible keys
         for datetime in all_datetimes.clone() {
-            for channel in all_channels.iter() {
+            for lane in all_lanes.iter() {
                 all_keys.push(BinnedCountKey {
                     datetime,
-                    channel: *channel,
+                    lane: *lane,
                 })
             }
         }
         // Add missing periods for speed range count
         for key in all_keys {
-            let direction = match key.channel {
+            let direction = match key.lane {
                 1 => metadata.directions.direction1,
                 2 => metadata.directions.direction2.unwrap(),
                 _ => {
-                    error!("Unable to determine channel/direction.");
+                    error!("Unable to determine lane/direction.");
                     continue;
                 }
             };
@@ -727,7 +727,7 @@ pub fn create_speed_and_class_count(
     for (key, value) in speed_range_map {
         speed_range_count.push(TimeBinnedSpeedRangeCount {
             datetime: key.datetime,
-            channel: key.channel,
+            lane: key.lane,
             record_num: value.record_num,
             direction: value.direction,
             s1: value.s1,
@@ -753,7 +753,7 @@ pub fn create_speed_and_class_count(
     for (key, value) in vehicle_class_map {
         vehicle_class_count.push(TimeBinnedVehicleClassCount {
             datetime: key.datetime,
-            channel: key.channel,
+            lane: key.lane,
             record_num: value.record_num,
             direction: value.direction,
             c1: value.c1,

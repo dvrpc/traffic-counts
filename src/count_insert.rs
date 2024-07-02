@@ -74,7 +74,7 @@ impl CountInsert for TimeBinnedVehicleClassCount {
             &self.record_num,
             &oracle_date,
             &oracle_dt,
-            &self.channel,
+            &self.lane,
             &self.total,
             &format!("{}", self.direction),
             &self.c1,
@@ -135,7 +135,7 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
             &self.record_num,
             &oracle_date,
             &oracle_dt,
-            &self.channel,
+            &self.lane,
             &self.total,
             &format!("{}", self.direction),
             &self.s1,
@@ -189,7 +189,7 @@ impl CountInsert for NonNormalAvgSpeedCount {
             &self.record_num,
             &oracle_date,
             &format!("{}", self.direction),
-            &self.channel,
+            &self.lane,
             &self.am12,
             &self.am1,
             &self.am2,
@@ -254,7 +254,7 @@ impl CountInsert for NonNormalVolCount {
             &self.totalcount,
             &"", // weather
             &format!("{}", self.direction),
-            &self.channel,
+            &self.lane,
             &self.am12,
             &self.am1,
             &self.am2,
@@ -324,7 +324,7 @@ impl CountInsert for FifteenMinuteVehicle {
             &oracle_dt,
             &self.count,
             &format!("{}", self.direction),
-            &self.channel,
+            &self.lane,
         ])
     }
 }

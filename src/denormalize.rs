@@ -35,7 +35,7 @@ pub trait Denormalize {
                 record_num: count.recordnum,
                 date: count.datetime.date(),
                 direction: count.dir,
-                channel: count.lane,
+                lane: count.lane,
             };
 
             // Add new entry if necessary, then insert data.
@@ -82,7 +82,7 @@ pub trait Denormalize {
                 record_num: key.record_num,
                 date: key.date,
                 direction: key.direction,
-                channel: key.channel,
+                lane: key.lane,
                 setflag: None,
                 totalcount: value.totalcount,
                 weather: value.weather,
@@ -147,7 +147,7 @@ pub struct NonNormalVolCount {
     pub record_num: u32,
     pub date: Date,
     pub direction: Direction,
-    pub channel: u8,
+    pub lane: u8,
     pub setflag: Option<i8>,
     pub totalcount: Option<u32>,
     pub weather: Option<Weather>,
@@ -186,7 +186,7 @@ pub struct NonNormalAvgSpeedCount {
     pub record_num: u32,
     pub date: Date,
     pub direction: Direction,
-    pub channel: u8,
+    pub lane: u8,
     pub am12: Option<f32>,
     pub am1: Option<f32>,
     pub am2: Option<f32>,
@@ -229,13 +229,13 @@ pub fn create_non_normal_speedavg_count(
 
     // Collect all the speeds per fields in key.
     for count in counts {
-        // Get the direction from the channel of count/metadata of filename.
-        // Channel 1 is first direction, Channel 2 is the second (if any)
-        let direction = match count.channel {
+        // Get the direction from the lane of count/metadata of filename.
+        // Lane 1 is first direction, Lane 2 is the second (if any)
+        let direction = match count.lane {
             1 => metadata.directions.direction1,
             2 => metadata.directions.direction2.unwrap(),
             _ => {
-                error!("Unable to determine channel/direction.");
+                error!("Unable to determine lane/direction.");
                 continue;
             }
         };
@@ -244,7 +244,7 @@ pub fn create_non_normal_speedavg_count(
             record_num: metadata.record_num,
             date: count.date,
             direction,
-            channel: count.channel,
+            lane: count.lane,
         };
 
         // Add new entry if necessary, then insert data.
@@ -464,7 +464,7 @@ pub fn create_non_normal_speedavg_count(
             record_num: key.record_num,
             date: key.date,
             direction: key.direction,
-            channel: key.channel,
+            lane: key.lane,
             am12: value.am12,
             am1: value.am1,
             am2: value.am2,
@@ -560,21 +560,21 @@ mod tests {
             TimeBinnedVehicleClassCount::denormalize_vol_count(166905, &conn).unwrap();
         assert_eq!(non_normal_count.len(), 6);
 
-        // Sort by date, and then channel, so elements of the vec are in an expected order to test.
-        non_normal_count.sort_unstable_by_key(|count| (count.date, count.channel));
+        // Sort by date, and then lane, so elements of the vec are in an expected order to test.
+        non_normal_count.sort_unstable_by_key(|count| (count.date, count.lane));
 
         // Ensure order is what we expect/count starts at correct times.
         assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
         assert!(non_normal_count[0].am9.is_none());
         assert!(non_normal_count[0].am10.is_some());
         assert_eq!(non_normal_count[0].direction, Direction::East);
-        assert_eq!(non_normal_count[0].channel, 1);
+        assert_eq!(non_normal_count[0].lane, 1);
 
         assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
         assert!(non_normal_count[1].am9.is_none());
         assert!(non_normal_count[1].am10.is_some());
         assert_eq!(non_normal_count[1].direction, Direction::West);
-        assert_eq!(non_normal_count[1].channel, 2);
+        assert_eq!(non_normal_count[1].lane, 2);
 
         assert!(non_normal_count[4].am10.is_some());
         assert!(non_normal_count[4].am11.is_none());
@@ -582,7 +582,7 @@ mod tests {
         assert!(non_normal_count[5].am10.is_some());
         assert!(non_normal_count[5].am11.is_none());
         assert_eq!(non_normal_count[5].direction, Direction::West);
-        assert_eq!(non_normal_count[5].channel, 2);
+        assert_eq!(non_normal_count[5].lane, 2);
 
         // Test total counts.
         assert_eq!(
@@ -611,33 +611,33 @@ mod tests {
             TimeBinnedVehicleClassCount::denormalize_vol_count(165367, &conn).unwrap();
         assert_eq!(non_normal_count.len(), 10);
 
-        // Sort by date, and then channel, so elements of the vec are in an expected order to test.
-        non_normal_count.sort_unstable_by_key(|count| (count.date, count.channel));
+        // Sort by date, and then lane, so elements of the vec are in an expected order to test.
+        non_normal_count.sort_unstable_by_key(|count| (count.date, count.lane));
 
         // Ensure order is what we expect/count starts at correct times.
         assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
         assert!(non_normal_count[0].am10.is_none());
         assert!(non_normal_count[0].am11.is_some());
         assert_eq!(non_normal_count[0].direction, Direction::East);
-        assert_eq!(non_normal_count[0].channel, 1);
+        assert_eq!(non_normal_count[0].lane, 1);
 
         assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
         assert!(non_normal_count[1].am10.is_none());
         assert!(non_normal_count[1].am11.is_some());
         assert_eq!(non_normal_count[1].direction, Direction::East);
-        assert_eq!(non_normal_count[1].channel, 2);
+        assert_eq!(non_normal_count[1].lane, 2);
 
         assert_eq!(non_normal_count[8].date, date!(2023 - 11 - 10));
         assert!(non_normal_count[8].am10.is_some());
         assert!(non_normal_count[8].am11.is_none());
         assert_eq!(non_normal_count[8].direction, Direction::East);
-        assert_eq!(non_normal_count[8].channel, 1);
+        assert_eq!(non_normal_count[8].lane, 1);
 
         assert_eq!(non_normal_count[9].date, date!(2023 - 11 - 10));
         assert!(non_normal_count[9].am10.is_some());
         assert!(non_normal_count[9].am11.is_none());
         assert_eq!(non_normal_count[9].direction, Direction::East);
-        assert_eq!(non_normal_count[9].channel, 2);
+        assert_eq!(non_normal_count[9].lane, 2);
 
         // Test total counts.
         assert_eq!(

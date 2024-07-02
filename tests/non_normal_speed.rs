@@ -15,27 +15,27 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     let mut non_normal_count = create_non_normal_speedavg_count(metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 6);
 
-    // Sort by date, and then channel, so elements of the vec are in an expected order to test.
-    non_normal_count.sort_unstable_by_key(|count| (count.date, count.channel));
+    // Sort by date, and then lane, so elements of the vec are in an expected order to test.
+    non_normal_count.sort_unstable_by_key(|count| (count.date, count.lane));
 
     // Ensure order is what we expect/count starts at correct times.
     assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
     assert!(non_normal_count[0].am9.is_none());
     assert!(non_normal_count[0].am10.is_some());
     assert_eq!(non_normal_count[0].direction, Direction::East);
-    assert_eq!(non_normal_count[0].channel, 1);
+    assert_eq!(non_normal_count[0].lane, 1);
 
     assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
     assert!(non_normal_count[1].am9.is_none());
     assert!(non_normal_count[1].am10.is_some());
     assert_eq!(non_normal_count[1].direction, Direction::West);
-    assert_eq!(non_normal_count[1].channel, 2);
+    assert_eq!(non_normal_count[1].lane, 2);
 
     assert_eq!(non_normal_count[5].date, date!(2023 - 11 - 08));
     assert!(non_normal_count[5].am10.is_some());
     assert!(non_normal_count[5].am11.is_none());
     assert_eq!(non_normal_count[5].direction, Direction::West);
-    assert_eq!(non_normal_count[5].channel, 2);
+    assert_eq!(non_normal_count[5].lane, 2);
 
     // spotcheck averages
     assert_eq!(format!("{:.2}", non_normal_count[0].am11.unwrap()), "30.36");
@@ -53,27 +53,27 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     let mut non_normal_count = create_non_normal_speedavg_count(metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 10);
 
-    // Sort by date, and then channel, so elements of the vec are in an expected order to test.
-    non_normal_count.sort_unstable_by_key(|count| (count.date, count.channel));
+    // Sort by date, and then lane, so elements of the vec are in an expected order to test.
+    non_normal_count.sort_unstable_by_key(|count| (count.date, count.lane));
 
     // Ensure order is what we expect/count starts at correct times.
     assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
     assert!(non_normal_count[0].am10.is_none());
     assert!(non_normal_count[0].am11.is_some());
     assert_eq!(non_normal_count[0].direction, Direction::East);
-    assert_eq!(non_normal_count[0].channel, 1);
+    assert_eq!(non_normal_count[0].lane, 1);
 
     assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
     assert!(non_normal_count[1].am10.is_none());
     assert!(non_normal_count[1].am11.is_some());
     assert_eq!(non_normal_count[1].direction, Direction::East);
-    assert_eq!(non_normal_count[1].channel, 2);
+    assert_eq!(non_normal_count[1].lane, 2);
 
     assert_eq!(non_normal_count[8].date, date!(2023 - 11 - 10));
     assert!(non_normal_count[8].am10.is_some());
     assert!(non_normal_count[8].am11.is_none());
     assert_eq!(non_normal_count[8].direction, Direction::East);
-    assert_eq!(non_normal_count[8].channel, 1);
+    assert_eq!(non_normal_count[8].lane, 1);
 
     // spotcheck averages
     assert_eq!(format!("{:.2}", non_normal_count[0].pm4.unwrap()), "38.34");
