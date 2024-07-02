@@ -1,4 +1,6 @@
-//! Extract various kinds of counts from files.
+//! Extract count data from files.
+//!
+//! See the [Extract trait implementors](Extract#implementors) for kinds of counts.
 use std::fs::File;
 use std::path::Path;
 

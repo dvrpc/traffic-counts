@@ -1,8 +1,9 @@
 //! This library contains data structures related to DVRPC's traffic counts
 //! and enables performing various kinds of operations on them, like
-//! [extracting][`extract_from_file`] data from files,
-//! [inserting/replacing][`count_insert`] count data,
-//! and [calculating][`aadv`] the annual average daily traffic.
+//! [extracting][extract_from_file] data from files,
+//! [inserting/replacing][count_insert] count data in the database,
+//! [denormalizing][denormalize] count data,
+//! and [calculating/inserting][aadv] the annual average daily traffic volumes.
 //!
 //! The [import](../import/index.html) program implements extracting data from files
 //! and inserting it into our database. See its documentation for further details, including
@@ -184,12 +185,10 @@ impl InputCount {
 /// An individual vehicle that has been counted, with no binning applied to it,
 /// including vehicle classification and speed.
 ///
-/// Three kinds of counts are derived from this type of data:
-///   - volume by class per time period ([`TimeBinnedVehicleClassCount`])
-///   - volume by speed range per time period ([`TimeBinnedSpeedRangeCount`])
-///   - average speed per hour of the day ([`denormalize::NonNormalAvgSpeedCount`])
-///
-/// See [`create_speed_and_class_count`] and [`denormalize::create_non_normal_speedavg_count`].
+/// Three kinds of counts can be derived from this type of data for insertion into the database:
+///   - [TimeBinnedVehicleClassCount] by [create_speed_and_class_count]
+///   - [TimeBinnedSpeedRangeCount] also by [create_speed_and_class_count]  
+///   - [NonNormalAvgSpeedCount](denormalize::NonNormalAvgSpeedCount) by [denormalize::create_non_normal_speedavg_count]
 #[derive(Debug, Clone)]
 pub struct IndividualVehicle {
     pub date: Date,

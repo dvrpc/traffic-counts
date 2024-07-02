@@ -1,4 +1,11 @@
-//! Denormalize count data into shape for TC_VOLCOUNT and TC_SPESUM tables.
+//! Denormalize count data.
+//!
+//! Denormalization is done in two ways:
+//!  * data from some database tables (see [implementors of Denormalize][Denormalize#implementors])
+//!    is transformed into the shape of the TC_VOLCOUNT table ([NonNormalVolCount]).
+//!  * raw data, in the form of [IndividualVehicle]s, is
+//!    [processed and transformed](create_non_normal_speedavg_count)
+//!    into the shape of the TC_SPESUM table ([NonNormalAvgSpeedCount]).
 
 use crate::{db::YYYY_MM_DD_FMT, intermediate::*, *};
 
@@ -129,6 +136,8 @@ impl Denormalize for FifteenMinuteVehicle {
 }
 
 /// Counts aggregated by hour.
+///
+/// The datetime is truncated to the top of the hour - 13:00, 14:00, etc.
 #[derive(Debug, Clone)]
 pub struct HourlyCount {
     pub recordnum: u32,

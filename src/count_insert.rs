@@ -1,4 +1,7 @@
 //! Insert/replace count data in the database.
+//!
+//! See the [CountInsert trait implementors][CountInsert#implementors] for kinds of counts
+//! and associated tables.
 
 use oracle::{sql_type::Timestamp, Connection, Statement};
 

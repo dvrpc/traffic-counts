@@ -1,4 +1,4 @@
-//! Calculate average annual daily volumes.
+//! Calculate average annual daily volumes and insert them into the database.
 
 use time::{Date, OffsetDateTime};
 
