@@ -187,12 +187,12 @@ impl InputCount {
 /// Four different kinds of counts can be derived from this type of data:
 ///   - volume by class per time period ([`TimeBinnedVehicleClassCount`])
 ///   - volume by speed range per time period ([`TimeBinnedSpeedRangeCount`])
-///   - volume per hour of the day ([`NonNormalVolCount`])
-///   - average speed per hour of the day ([`NonNormalAvgSpeedCount`])
+///   - volume per hour of the day ([`denormalize::NonNormalVolCount`])
+///   - average speed per hour of the day ([`denormalize::NonNormalAvgSpeedCount`])
 ///
 /// See [`create_speed_and_class_count`],
-/// [`crate::denormalize::Denormalize::denormalize_vol_count`], and
-/// [`crate::denormalize::create_non_normal_speedavg_count`].
+/// [`denormalize::Denormalize::denormalize_vol_count`], and
+/// [`denormalize::create_non_normal_speedavg_count`].
 #[derive(Debug, Clone)]
 pub struct IndividualVehicle {
     pub date: Date,
