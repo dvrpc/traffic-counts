@@ -1,8 +1,8 @@
 //! This library contains data structures related to DVRPC's traffic counts
 //! and enables performing various kinds of operations on them, like
-//! [extracting][`extract_from_file::Extract`] data from files,
-//! [inserting/replacing][`count_insert::CountInsert`] count data,
-//! and [calculating][`aadv::Aadv`] the annual average daily traffic.
+//! [extracting][`extract_from_file`] data from files,
+//! [inserting/replacing][`count_insert`] count data,
+//! and [calculating][`aadv`] the annual average daily traffic.
 //!
 //! The [import](../import/index.html) program implements extracting data from files
 //! and inserting it into our database. See its documentation for further details, including
