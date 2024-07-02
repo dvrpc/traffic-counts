@@ -18,7 +18,7 @@
 //!
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 //!
-//! ## A Note about Data Entry/Completness
+//! ## A Note about Data Entry/Completeness
 //!
 //! Data for counts are inserted into the database without checking for complete periods. For
 //! example, if the count starts at 10:55am, any records for vehicles counted between 10:55 and
