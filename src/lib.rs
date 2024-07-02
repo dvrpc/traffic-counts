@@ -1,8 +1,8 @@
 //! This library contains data structures related to DVRPC's traffic counts
 //! and enables performing various kinds of operations on them, like
 //! [extracting][`extract_from_file::Extract`] data from files,
-//! [inserting/replacing][`db::CountInsert`] count data,
-//! and [calculating][`db::Aadv`] the annual average daily traffic.
+//! [inserting/replacing][`count_insert::CountInsert`] count data,
+//! and [calculating][`aadv::Aadv`] the annual average daily traffic.
 //!
 //! The [import](../import/index.html) program implements extracting data from files
 //! and inserting it into our database. See its documentation for further details, including
@@ -33,13 +33,16 @@ use std::io;
 use std::path::Path;
 
 use log::error;
+use oracle::{sql_type::Timestamp, Connection, Error as OracleError, Statement};
 use thiserror::Error;
 use time::{Date, Duration, PrimitiveDateTime, Time, Weekday};
 
+pub mod aadv;
+pub mod count_insert;
 pub mod db;
+pub mod denormalize;
 pub mod extract_from_file;
 pub mod intermediate;
-use db::Denormalize;
 use intermediate::*;
 
 // headers stripped of double quotes and spaces
@@ -187,8 +190,9 @@ impl InputCount {
 ///   - volume per hour of the day ([`NonNormalVolCount`])
 ///   - average speed per hour of the day ([`NonNormalAvgSpeedCount`])
 ///
-/// See [`create_speed_and_class_count`], [`create_non_normal_vol_count`], and
-/// [`create_non_normal_speedavg_count`].
+/// See [`create_speed_and_class_count`],
+/// [`crate::denormalize::Denormalize::denormalize_vol_count`], and
+/// [`crate::denormalize::create_non_normal_speedavg_count`].
 #[derive(Debug, Clone)]
 pub struct IndividualVehicle {
     pub date: Date,
@@ -312,12 +316,6 @@ impl GetDate for FifteenMinuteVehicle {
     fn get_date(&self) -> Date {
         self.date.to_owned()
     }
-}
-
-impl Denormalize for FifteenMinuteVehicle {
-    const NORMALIZED_TABLE: &'static str = "tc_15minvolcount";
-    const DIR_FIELD: &'static str = "cntdir";
-    const VOL_FIELD: &'static str = "volcount";
 }
 
 impl FifteenMinuteVehicle {
@@ -582,12 +580,6 @@ pub struct TimeBinnedVehicleClassCount {
     pub total: i32,
 }
 
-impl Denormalize for TimeBinnedVehicleClassCount {
-    const NORMALIZED_TABLE: &'static str = "tc_clacount";
-    const DIR_FIELD: &'static str = "ctdir";
-    const VOL_FIELD: &'static str = "total";
-}
-
 /// Count of vehicles by speed range,
 /// binned into 15-minute or hourly intervals (TC_SPECOUNT table).
 ///
@@ -795,362 +787,6 @@ pub enum Weather {
     Sunny,
 }
 
-/// Non-normalized volume counts (TC_VOLCOUNT table).
-///
-/// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
-/// the following day - can start and stop at any time.
-#[derive(Debug, Clone)]
-pub struct NonNormalVolCount {
-    pub dvrpc_num: i32,
-    pub date: Date,
-    pub direction: Direction,
-    pub channel: u8,
-    pub setflag: Option<i32>,
-    pub totalcount: Option<i32>,
-    pub weather: Option<Weather>,
-    pub am12: Option<i32>,
-    pub am1: Option<i32>,
-    pub am2: Option<i32>,
-    pub am3: Option<i32>,
-    pub am4: Option<i32>,
-    pub am5: Option<i32>,
-    pub am6: Option<i32>,
-    pub am7: Option<i32>,
-    pub am8: Option<i32>,
-    pub am9: Option<i32>,
-    pub am10: Option<i32>,
-    pub am11: Option<i32>,
-    pub pm12: Option<i32>,
-    pub pm1: Option<i32>,
-    pub pm2: Option<i32>,
-    pub pm3: Option<i32>,
-    pub pm4: Option<i32>,
-    pub pm5: Option<i32>,
-    pub pm6: Option<i32>,
-    pub pm7: Option<i32>,
-    pub pm8: Option<i32>,
-    pub pm9: Option<i32>,
-    pub pm10: Option<i32>,
-    pub pm11: Option<i32>,
-}
-
-/// Non-normalized average speed counts (TC_SPESUM table).
-///
-/// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
-/// the following day - can start and stop at any time.
-#[derive(Debug, Clone)]
-pub struct NonNormalAvgSpeedCount {
-    pub dvrpc_num: i32,
-    pub date: Date,
-    pub direction: Direction,
-    pub channel: u8,
-    pub am12: Option<f32>,
-    pub am1: Option<f32>,
-    pub am2: Option<f32>,
-    pub am3: Option<f32>,
-    pub am4: Option<f32>,
-    pub am5: Option<f32>,
-    pub am6: Option<f32>,
-    pub am7: Option<f32>,
-    pub am8: Option<f32>,
-    pub am9: Option<f32>,
-    pub am10: Option<f32>,
-    pub am11: Option<f32>,
-    pub pm12: Option<f32>,
-    pub pm1: Option<f32>,
-    pub pm2: Option<f32>,
-    pub pm3: Option<f32>,
-    pub pm4: Option<f32>,
-    pub pm5: Option<f32>,
-    pub pm6: Option<f32>,
-    pub pm7: Option<f32>,
-    pub pm8: Option<f32>,
-    pub pm9: Option<f32>,
-    pub pm10: Option<f32>,
-    pub pm11: Option<f32>,
-}
-
-/// Create non-normalized average speed counts from [`IndividualVehicle`]s.
-pub fn create_non_normal_speedavg_count(
-    metadata: CountMetadata,
-    counts: Vec<IndividualVehicle>,
-) -> Vec<NonNormalAvgSpeedCount> {
-    let mut non_normal_raw_speed_map: HashMap<NonNormalCountKey, NonNormalRawSpeedValue> =
-        HashMap::new();
-    let mut non_normal_avg_speed_map: HashMap<NonNormalCountKey, NonNormalAvgSpeedValue> =
-        HashMap::default();
-
-    if counts.is_empty() {
-        return vec![];
-    }
-
-    // Collect all the speeds per fields in key.
-    for count in counts {
-        // Get the direction from the channel of count/metadata of filename.
-        // Channel 1 is first direction, Channel 2 is the second (if any)
-        let direction = match count.channel {
-            1 => metadata.directions.direction1,
-            2 => metadata.directions.direction2.unwrap(),
-            _ => {
-                error!("Unable to determine channel/direction.");
-                continue;
-            }
-        };
-
-        let key = NonNormalCountKey {
-            dvrpc_num: metadata.dvrpc_num,
-            date: count.date,
-            direction,
-            channel: count.channel,
-        };
-
-        // Add new entry if necessary, then insert data.
-        non_normal_raw_speed_map
-            .entry(key)
-            .and_modify(|c| {
-                match count.time.hour() {
-                    0 => c.am12.push(count.speed),
-                    1 => c.am1.push(count.speed),
-                    2 => c.am2.push(count.speed),
-                    3 => c.am3.push(count.speed),
-                    4 => c.am4.push(count.speed),
-                    5 => c.am5.push(count.speed),
-                    6 => c.am6.push(count.speed),
-                    7 => c.am7.push(count.speed),
-                    8 => c.am8.push(count.speed),
-                    9 => c.am9.push(count.speed),
-                    10 => c.am10.push(count.speed),
-                    11 => c.am11.push(count.speed),
-                    12 => c.pm12.push(count.speed),
-                    13 => c.pm1.push(count.speed),
-                    14 => c.pm2.push(count.speed),
-                    15 => c.pm3.push(count.speed),
-                    16 => c.pm4.push(count.speed),
-                    17 => c.pm5.push(count.speed),
-                    18 => c.pm6.push(count.speed),
-                    19 => c.pm7.push(count.speed),
-                    20 => c.pm8.push(count.speed),
-                    21 => c.pm9.push(count.speed),
-                    22 => c.pm10.push(count.speed),
-                    23 => c.pm11.push(count.speed),
-                    _ => (),
-                };
-            })
-            .or_insert(NonNormalRawSpeedValue::first(
-                count.time.hour(),
-                count.speed,
-            ));
-    }
-
-    // Calculate the average speed per date/hour from the vecs.
-    for (key, value) in non_normal_raw_speed_map {
-        if !value.am12.is_empty() {
-            let average = value.am12.iter().sum::<f32>() / value.am12.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c: &mut NonNormalAvgSpeedValue| c.am12 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am12", average));
-        }
-        if !value.am1.is_empty() {
-            let average = value.am1.iter().sum::<f32>() / value.am1.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am1 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am1", average));
-        }
-        if !value.am2.is_empty() {
-            let average = value.am2.iter().sum::<f32>() / value.am2.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am2 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am2", average));
-        }
-        if !value.am3.is_empty() {
-            let average = value.am3.iter().sum::<f32>() / value.am3.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am3 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am3", average));
-        }
-        if !value.am4.is_empty() {
-            let average = value.am4.iter().sum::<f32>() / value.am4.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am4 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am4", average));
-        }
-        if !value.am5.is_empty() {
-            let average = value.am5.iter().sum::<f32>() / value.am5.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am5 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am5", average));
-        }
-        if !value.am6.is_empty() {
-            let average = value.am6.iter().sum::<f32>() / value.am6.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am6 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am6", average));
-        }
-        if !value.am7.is_empty() {
-            let average = value.am7.iter().sum::<f32>() / value.am7.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am7 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am7", average));
-        }
-        if !value.am8.is_empty() {
-            let average = value.am8.iter().sum::<f32>() / value.am8.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am8 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am8", average));
-        }
-        if !value.am9.is_empty() {
-            let average = value.am9.iter().sum::<f32>() / value.am9.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am9 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am9", average));
-        }
-        if !value.am10.is_empty() {
-            let average = value.am10.iter().sum::<f32>() / value.am10.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am10 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am10", average));
-        }
-        if !value.am11.is_empty() {
-            let average = value.am11.iter().sum::<f32>() / value.am11.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.am11 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("am11", average));
-        }
-        if !value.pm12.is_empty() {
-            let average = value.pm12.iter().sum::<f32>() / value.pm12.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm12 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm12", average));
-        }
-        if !value.pm1.is_empty() {
-            let average = value.pm1.iter().sum::<f32>() / value.pm1.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm1 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm1", average));
-        }
-        if !value.pm2.is_empty() {
-            let average = value.pm2.iter().sum::<f32>() / value.pm2.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm2 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm2", average));
-        }
-        if !value.pm3.is_empty() {
-            let average = value.pm3.iter().sum::<f32>() / value.pm3.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm3 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm3", average));
-        }
-        if !value.pm4.is_empty() {
-            let average = value.pm4.iter().sum::<f32>() / value.pm4.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm4 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm4", average));
-        }
-        if !value.pm5.is_empty() {
-            let average = value.pm5.iter().sum::<f32>() / value.pm5.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm5 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm5", average));
-        }
-        if !value.pm6.is_empty() {
-            let average = value.pm6.iter().sum::<f32>() / value.pm6.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm6 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm6", average));
-        }
-        if !value.pm7.is_empty() {
-            let average = value.pm7.iter().sum::<f32>() / value.pm7.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm7 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm7", average));
-        }
-        if !value.pm8.is_empty() {
-            let average = value.pm8.iter().sum::<f32>() / value.pm8.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm8 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm8", average));
-        }
-        if !value.pm9.is_empty() {
-            let average = value.pm9.iter().sum::<f32>() / value.pm9.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm9 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm9", average));
-        }
-        if !value.pm10.is_empty() {
-            let average = value.pm10.iter().sum::<f32>() / value.pm10.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm10 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm10", average));
-        }
-        if !value.pm11.is_empty() {
-            let average = value.pm11.iter().sum::<f32>() / value.pm11.len() as f32;
-            non_normal_avg_speed_map
-                .entry(key)
-                .and_modify(|c| c.pm11 = Some(average))
-                .or_insert(NonNormalAvgSpeedValue::first("pm11", average));
-        }
-    }
-
-    // Convert HashMap to Vec of structs.
-    let mut non_normal_speed_avg_count = vec![];
-    for (key, value) in non_normal_avg_speed_map {
-        non_normal_speed_avg_count.push(NonNormalAvgSpeedCount {
-            dvrpc_num: key.dvrpc_num,
-            date: key.date,
-            direction: key.direction,
-            channel: key.channel,
-            am12: value.am12,
-            am1: value.am1,
-            am2: value.am2,
-            am3: value.am3,
-            am4: value.am4,
-            am5: value.am5,
-            am6: value.am6,
-            am7: value.am7,
-            am8: value.am8,
-            am9: value.am9,
-            am10: value.am10,
-            am11: value.am11,
-            pm12: value.pm12,
-            pm1: value.pm1,
-            pm2: value.pm2,
-            pm3: value.pm3,
-            pm4: value.pm4,
-            pm5: value.pm5,
-            pm6: value.pm6,
-            pm7: value.pm7,
-            pm8: value.pm8,
-            pm9: value.pm9,
-            pm10: value.pm10,
-            pm11: value.pm11,
-        })
-    }
-    non_normal_speed_avg_count
-}
-
 /// Time interval to bin data by.
 #[derive(Clone, Copy)]
 pub enum TimeInterval {
@@ -1237,42 +873,6 @@ fn count_type_and_num_nondata_rows(path: &Path) -> Result<(InputCount, usize), C
 pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
     let (_, num_rows) = count_type_and_num_nondata_rows(path)?;
     Ok(num_rows)
-}
-
-/// Determine the date to use for the annual average calculation.
-pub fn determine_date<T>(counts: Vec<T>) -> Option<Date>
-where
-    T: GetDate,
-{
-    if counts.is_empty() {
-        return None;
-    }
-
-    // Get all unique dates of the counts.
-    let mut dates = counts
-        .iter()
-        .map(|count| count.get_date())
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-
-    // Drop the first day, as it won't be full day of data, after sorting to ensure order.
-    dates.sort();
-    dates.remove(0);
-
-    let week_days = [
-        Weekday::Monday,
-        Weekday::Tuesday,
-        Weekday::Wednesday,
-        Weekday::Thursday,
-        Weekday::Friday,
-    ];
-
-    // Return the first date that is a non-weekend weekday.
-    dates
-        .iter()
-        .find(|date| week_days.contains(&date.weekday()))
-        .copied()
 }
 
 #[cfg(test)]

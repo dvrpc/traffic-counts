@@ -2,7 +2,7 @@ use std::path::Path;
 
 use time::{macros::date, Date, Weekday};
 
-use traffic_counts::{determine_date, extract_from_file::Extract, GetDate, *};
+use traffic_counts::{aadv::determine_date, extract_from_file::Extract, GetDate, *};
 
 // A type just for tests here.
 struct TestCount {

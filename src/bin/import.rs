@@ -116,9 +116,11 @@ use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
 
-use traffic_counts::db::Aadv;
 use traffic_counts::{
-    db::{create_pool, CountInsert, Denormalize},
+    aadv::Aadv,
+    count_insert::CountInsert,
+    db::create_pool,
+    denormalize::{Denormalize, *},
     extract_from_file::Extract,
     *,
 };

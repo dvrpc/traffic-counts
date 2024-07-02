@@ -11,6 +11,7 @@ use crate::{
     FifteenMinuteVehicle, IndividualVehicle,
 };
 
+/// A trait for extracting count data from a file.
 pub trait Extract {
     type Item;
     fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError>;

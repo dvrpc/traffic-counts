@@ -10,12 +10,12 @@
 //!
 //! [`BinnedCountKey`] + [`SpeedRangeCount`] = [`crate::TimeBinnedSpeedRangeCount`].
 //!
-//! [`NonNormalCountKey`] + [`NonNormalAvgSpeedValue`] = [`crate::NonNormalAvgSpeedCount`].
+//! [`NonNormalCountKey`] + [`NonNormalAvgSpeedValue`] = [`crate::denormalize::NonNormalAvgSpeedCount`].
 //!
-//! [`NonNormalCountKey`] + [`NonNormalVolCountValue`] = [`crate::NonNormalVolCount`].
-use crate::db::HourlyCount;
-use crate::{Direction, VehicleClass, Weather};
+//! [`NonNormalCountKey`] + [`NonNormalVolCountValue`] = [`crate::denormalize::NonNormalVolCount`].
 use time::{Date, PrimitiveDateTime};
+
+use crate::{denormalize::HourlyCount, Direction, VehicleClass, Weather};
 
 /// The key for records of the TC_SPECOUNT and TC_CLACOUNT tables.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -53,7 +53,7 @@ pub struct VehicleClassCount {
 }
 
 impl VehicleClassCount {
-    /// Create one with 0 count for all speed ranges.
+    /// Create one with 0 count for all classes.
     pub fn new(dvrpc_num: i32, direction: Direction) -> Self {
         Self {
             dvrpc_num,

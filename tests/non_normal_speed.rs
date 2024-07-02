@@ -2,7 +2,9 @@ use std::path::Path;
 
 use time::macros::date;
 
-use traffic_counts::{extract_from_file::Extract, Direction, *};
+use traffic_counts::{
+    denormalize::create_non_normal_speedavg_count, extract_from_file::Extract, Direction, *,
+};
 
 #[test]
 fn create_non_normal_avgspeed_count_166905_is_correct() {
