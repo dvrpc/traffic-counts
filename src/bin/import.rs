@@ -46,6 +46,10 @@
 //!     - "na" for unknown/not available speed limit.
 //!
 //! All possible sets of directions:
+//!   - e
+//!   - w
+//!   - n
+//!   - s
 //!   - ew
 //!   - we
 //!   - ns
@@ -54,15 +58,14 @@
 //!   - ww
 //!   - nn
 //!   - ss
-//!   - e
-//!   - w
-//!   - n
-//!   - s
+//!   - eee
+//!   - www
+//!   - nnn
+//!   - sss
 //!
 //! Note that for bicycle and pedestrian counts that are unidirectional, the program will use
 //! the total for each period, capturing both in/out directions and thus any wrong-way travel.
-//! In terms of the filename, this would mean using a single direction in that position,
-//! e.g. like the last example above.
+//! In terms of the filename, this would mean using a single direction in that position.
 //!
 //! ## Exporting from STARneXt
 //!

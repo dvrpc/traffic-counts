@@ -392,18 +392,38 @@ impl CountMetadata {
         };
 
         let directions: Directions = match parts[2] {
-            "ns" => Directions::new(Direction::North, Some(Direction::South)),
-            "sn" => Directions::new(Direction::South, Some(Direction::North)),
-            "ew" => Directions::new(Direction::East, Some(Direction::West)),
-            "we" => Directions::new(Direction::West, Some(Direction::East)),
-            "nn" => Directions::new(Direction::North, Some(Direction::North)),
-            "ss" => Directions::new(Direction::South, Some(Direction::South)),
-            "ee" => Directions::new(Direction::East, Some(Direction::East)),
-            "ww" => Directions::new(Direction::West, Some(Direction::West)),
-            "n" => Directions::new(Direction::North, None),
-            "s" => Directions::new(Direction::South, None),
-            "e" => Directions::new(Direction::East, None),
-            "w" => Directions::new(Direction::West, None),
+            "nnn" => Directions::new(
+                Direction::North,
+                Some(Direction::North),
+                Some(Direction::North),
+            ),
+            "sss" => Directions::new(
+                Direction::South,
+                Some(Direction::South),
+                Some(Direction::South),
+            ),
+            "eee" => Directions::new(
+                Direction::East,
+                Some(Direction::East),
+                Some(Direction::East),
+            ),
+            "www" => Directions::new(
+                Direction::West,
+                Some(Direction::West),
+                Some(Direction::West),
+            ),
+            "ns" => Directions::new(Direction::North, Some(Direction::South), None),
+            "sn" => Directions::new(Direction::South, Some(Direction::North), None),
+            "ew" => Directions::new(Direction::East, Some(Direction::West), None),
+            "we" => Directions::new(Direction::West, Some(Direction::East), None),
+            "nn" => Directions::new(Direction::North, Some(Direction::North), None),
+            "ss" => Directions::new(Direction::South, Some(Direction::South), None),
+            "ee" => Directions::new(Direction::East, Some(Direction::East), None),
+            "ww" => Directions::new(Direction::West, Some(Direction::West), None),
+            "n" => Directions::new(Direction::North, None, None),
+            "s" => Directions::new(Direction::South, None, None),
+            "e" => Directions::new(Direction::East, None, None),
+            "w" => Directions::new(Direction::West, None, None),
             _ => {
                 return Err(CountError::InvalidFileName {
                     problem: FileNameProblem::InvalidDirections,
@@ -486,13 +506,19 @@ impl Display for Direction {
 pub struct Directions {
     pub direction1: Direction,
     pub direction2: Option<Direction>,
+    pub direction3: Option<Direction>,
 }
 
 impl Directions {
-    pub fn new(direction1: Direction, direction2: Option<Direction>) -> Self {
+    pub fn new(
+        direction1: Direction,
+        direction2: Option<Direction>,
+        direction3: Option<Direction>,
+    ) -> Self {
         Self {
             direction1,
             direction2,
+            direction3,
         }
     }
 }
@@ -621,10 +647,10 @@ pub fn create_speed_and_class_count(
 
     for count in counts.clone() {
         // Get the direction from the lane of count/metadata of filename.
-        // Lane 1 is first direction, Lane 2 is the second (if any)
         let direction = match count.lane {
             1 => metadata.directions.direction1,
             2 => metadata.directions.direction2.unwrap(),
+            3 => metadata.directions.direction3.unwrap(),
             _ => {
                 error!("Unable to determine lane/direction.");
                 continue;
@@ -684,7 +710,11 @@ pub fn create_speed_and_class_count(
 
     if all_datetimes.len() < speed_range_map.len() {
         let mut all_keys = vec![];
-        let all_lanes = if metadata.directions.direction2.is_some() {
+        let all_lanes = if metadata.directions.direction3.is_some() {
+            vec![1, 2, 3]
+        } else if metadata.directions.direction3.is_none()
+            && metadata.directions.direction2.is_some()
+        {
             vec![1, 2]
         } else {
             vec![1]
@@ -704,6 +734,7 @@ pub fn create_speed_and_class_count(
             let direction = match key.lane {
                 1 => metadata.directions.direction1,
                 2 => metadata.directions.direction2.unwrap(),
+                3 => metadata.directions.direction3.unwrap(),
                 _ => {
                     error!("Unable to determine lane/direction.");
                     continue;

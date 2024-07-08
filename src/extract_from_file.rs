@@ -75,6 +75,23 @@ impl Extract for FifteenMinuteVehicle {
                     }
                 };
             }
+            // There may also be a third count within the row.
+            if let Some(v) = metadata.directions.direction3 {
+                match FifteenMinuteVehicle::new(
+                    metadata.record_num,
+                    count_date,
+                    count_time,
+                    row.as_ref().unwrap()[5].parse().unwrap(),
+                    v,
+                    2,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
+                };
+            }
         }
         Ok(counts)
     }

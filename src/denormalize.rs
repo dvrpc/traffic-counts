@@ -239,10 +239,10 @@ pub fn create_non_normal_speedavg_count(
     // Collect all the speeds per fields in key.
     for count in counts {
         // Get the direction from the lane of count/metadata of filename.
-        // Lane 1 is first direction, Lane 2 is the second (if any)
         let direction = match count.lane {
             1 => metadata.directions.direction1,
             2 => metadata.directions.direction2.unwrap(),
+            3 => metadata.directions.direction3.unwrap(),
             _ => {
                 error!("Unable to determine lane/direction.");
                 continue;
