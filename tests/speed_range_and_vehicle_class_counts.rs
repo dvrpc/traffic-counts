@@ -187,3 +187,58 @@ fn counts_created_correctly_165367() {
     assert_eq!(speed_range_count.last().unwrap().total, 36);
     assert_eq!(vehicle_class_count.last().unwrap().total, 36);
 }
+
+#[test]
+fn counts_created_correctly_101() {
+    // This file was made up, based on another, but with just over an hour of counts.
+    let path = Path::new("test_files/vehicle/kw-101-eee-21-35.csv");
+    let individual_vehicles = IndividualVehicle::extract(path).unwrap();
+    let metadata = CountMetadata::from_path(path).unwrap();
+
+    let (mut speed_range_count, mut vehicle_class_count) =
+        create_speed_and_class_count(metadata, individual_vehicles, TimeInterval::FifteenMin);
+
+    speed_range_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
+    vehicle_class_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
+
+    dbg!(&vehicle_class_count);
+    // total number of periods
+    assert_eq!(speed_range_count.len(), 15); // 5 periods x 3 lanes
+    assert_eq!(vehicle_class_count.len(), 15);
+
+    // periods with 0 vehicles
+    let empty_periods = speed_range_count.iter().filter(|c| c.total == 0).count();
+    assert_eq!(empty_periods, 0);
+
+    // first and last periods
+    let expected_first_dt = datetime!(2023-11-06 10:45);
+    assert_eq!(
+        speed_range_count.first().unwrap().datetime,
+        expected_first_dt
+    );
+    assert_eq!(
+        vehicle_class_count.first().unwrap().datetime,
+        expected_first_dt
+    );
+    let expected_last_dt = datetime!(2023-11-06 11:45);
+    assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
+    assert_eq!(
+        vehicle_class_count.last().unwrap().datetime,
+        expected_last_dt
+    );
+
+    // Verify period in middle (11:15-11:30)
+    assert_eq!(vehicle_class_count[6].total, 24);
+    assert_eq!(vehicle_class_count[6].lane, 1);
+    assert_eq!(vehicle_class_count[6].direction, Direction::East);
+    assert_eq!(vehicle_class_count[7].total, 18);
+    assert_eq!(vehicle_class_count[7].lane, 2);
+    assert_eq!(vehicle_class_count[7].direction, Direction::East);
+    assert_eq!(vehicle_class_count[8].total, 2);
+    assert_eq!(vehicle_class_count[8].lane, 3);
+    assert_eq!(vehicle_class_count[8].direction, Direction::East);
+
+    // verify last period total (lane 3)
+    assert_eq!(speed_range_count.last().unwrap().total, 5);
+    assert_eq!(vehicle_class_count.last().unwrap().total, 5);
+}

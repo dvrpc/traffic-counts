@@ -31,6 +31,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::fs;
 use std::io;
+use std::num::ParseIntError;
 use std::path::Path;
 
 use log::error;
@@ -76,6 +77,10 @@ pub enum CountError<'a> {
     BadDirection(String),
     #[error("mismatch in count types between file location (`{0}`) and header of that file")]
     LocationHeaderMisMatch(&'a Path),
+    #[error("mismatch in number of directions between filename (`{0}`) and data in that file")]
+    DirectionLenMisMatch(&'a Path),
+    #[error("cannot parse value as number")]
+    ParseError(#[from] ParseIntError),
     #[error("no such vehicle class '{0}'")]
     BadVehicleClass(u8),
     #[error("unable to determine interval from count")]

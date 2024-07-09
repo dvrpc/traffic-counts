@@ -43,54 +43,72 @@ impl Extract for FifteenMinuteVehicle {
 
             // There will always be at least one count per row.
             // Extract the first (and perhaps only) direction.
-            match FifteenMinuteVehicle::new(
-                metadata.record_num,
-                count_date,
-                count_time,
-                row.as_ref().unwrap()[3].parse().unwrap(),
-                metadata.directions.direction1,
-                1,
-            ) {
-                Ok(v) => counts.push(v),
-                Err(e) => {
-                    error!("{e}");
-                    continue;
-                }
-            };
+            match row.as_ref().unwrap().get(3) {
+                Some(count) => match count.parse() {
+                    Ok(count) => match FifteenMinuteVehicle::new(
+                        metadata.record_num,
+                        count_date,
+                        count_time,
+                        count,
+                        metadata.directions.direction1,
+                        1,
+                    ) {
+                        Ok(v) => counts.push(v),
+                        Err(e) => {
+                            error!("{e}");
+                            continue;
+                        }
+                    },
+                    Err(e) => return Err(CountError::ParseError(e)),
+                },
+                None => return Err(CountError::DirectionLenMisMatch(path)),
+            }
 
             // There may also be a second count within the row.
-            if let Some(v) = metadata.directions.direction2 {
-                match FifteenMinuteVehicle::new(
-                    metadata.record_num,
-                    count_date,
-                    count_time,
-                    row.as_ref().unwrap()[4].parse().unwrap(),
-                    v,
-                    2,
-                ) {
-                    Ok(v) => counts.push(v),
-                    Err(e) => {
-                        error!("{e}");
-                        continue;
-                    }
-                };
+            if let Some(direction) = metadata.directions.direction2 {
+                match row.as_ref().unwrap().get(4) {
+                    Some(count) => match count.parse() {
+                        Ok(count) => match FifteenMinuteVehicle::new(
+                            metadata.record_num,
+                            count_date,
+                            count_time,
+                            count,
+                            direction,
+                            2,
+                        ) {
+                            Ok(v) => counts.push(v),
+                            Err(e) => {
+                                error!("{e}");
+                                continue;
+                            }
+                        },
+                        Err(e) => return Err(CountError::ParseError(e)),
+                    },
+                    None => return Err(CountError::DirectionLenMisMatch(path)),
+                }
             }
             // There may also be a third count within the row.
-            if let Some(v) = metadata.directions.direction3 {
-                match FifteenMinuteVehicle::new(
-                    metadata.record_num,
-                    count_date,
-                    count_time,
-                    row.as_ref().unwrap()[5].parse().unwrap(),
-                    v,
-                    2,
-                ) {
-                    Ok(v) => counts.push(v),
-                    Err(e) => {
-                        error!("{e}");
-                        continue;
-                    }
-                };
+            if let Some(direction) = metadata.directions.direction3 {
+                match row.as_ref().unwrap().get(5) {
+                    Some(count) => match count.parse() {
+                        Ok(count) => match FifteenMinuteVehicle::new(
+                            metadata.record_num,
+                            count_date,
+                            count_time,
+                            count,
+                            direction,
+                            3,
+                        ) {
+                            Ok(v) => counts.push(v),
+                            Err(e) => {
+                                error!("{e}");
+                                continue;
+                            }
+                        },
+                        Err(e) => return Err(CountError::ParseError(e)),
+                    },
+                    None => return Err(CountError::DirectionLenMisMatch(path)),
+                }
             }
         }
         Ok(counts)
@@ -271,6 +289,7 @@ pub fn create_reader(file: &File) -> Reader<&File> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Direction;
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts() {
@@ -280,10 +299,66 @@ mod tests {
     }
 
     #[test]
-    fn extract_fifteen_min_vehicle_gets_correct_number_of_counts() {
+    fn extract_ind_vehicle_gets_correct_number_of_counts_by_lane() {
+        let path = Path::new("test_files/vehicle/kw-101-eee-21-35.csv");
+        let counted_vehicles = IndividualVehicle::extract(path).unwrap();
+        assert_eq!(counted_vehicles.len(), 227);
+
+        let lane1 = counted_vehicles
+            .iter()
+            .filter(|veh| veh.lane == 1)
+            .collect::<Vec<_>>();
+        let lane2 = counted_vehicles
+            .iter()
+            .filter(|veh| veh.lane == 2)
+            .collect::<Vec<_>>();
+        let lane3 = counted_vehicles
+            .iter()
+            .filter(|veh| veh.lane == 3)
+            .collect::<Vec<_>>();
+
+        assert_eq!(lane1.len(), 96);
+        assert_eq!(lane2.len(), 104);
+        assert_eq!(lane3.len(), 27);
+    }
+
+    #[test]
+    fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_168193() {
         let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
         let fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 384)
+    }
+
+    #[test]
+    fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_102() {
+        let path = Path::new("test_files/15minutevehicle/kw-102-www-21-35.csv");
+        let mut fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
+        fifteen_min_volcount.sort_unstable_by_key(|count| (count.date, count.time, count.lane));
+        assert_eq!(fifteen_min_volcount.len(), 57);
+
+        let count0 = fifteen_min_volcount.first().unwrap();
+        dbg!(count0);
+        assert_eq!(count0.lane, 1);
+        assert_eq!(count0.direction, Direction::West);
+        assert_eq!(count0.count, 49);
+        let count1 = fifteen_min_volcount.get(1).unwrap();
+        assert_eq!(count1.lane, 2);
+        assert_eq!(count1.direction, Direction::West);
+        assert_eq!(count1.count, 68);
+        let count2 = fifteen_min_volcount.get(2).unwrap();
+        assert_eq!(count2.lane, 3);
+        assert_eq!(count2.direction, Direction::West);
+        assert_eq!(count2.count, 10);
+    }
+
+    #[test]
+    fn extract_fifteen_min_vehicle_errs_when_dirs_mismatch_in_filename_and_data_103() {
+        let path = Path::new("test_files/15minutevehicle/kw-103-sss-21-35.csv");
+
+        assert!(matches!(
+            FifteenMinuteVehicle::extract(path),
+            Err(CountError::DirectionLenMisMatch(_))
+        ))
     }
 
     #[test]
