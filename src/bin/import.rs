@@ -114,7 +114,7 @@ use std::fs::{self, OpenOptions};
 use std::io;
 use std::path::PathBuf;
 
-use log::{error, info, LevelFilter};
+use log::{error, info, warn, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
@@ -129,6 +129,7 @@ use traffic_counts::{
 };
 
 const LOG: &str = "import.log";
+const VERIFY_DATA_LOG: &str = "data_verification.log";
 
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
@@ -142,21 +143,39 @@ fn main() {
     let log_dir = env::var("LOG_DIR").expect("Unable to load log directory path from .env file.");
 
     // Set up logging, panic if it fails.
-    let config = ConfigBuilder::new().set_time_format_rfc3339().build();
+    // Log messages related to actual import.
+    let import_config = ConfigBuilder::new()
+        .set_time_format_rfc3339()
+        .add_filter_allow("import".to_string())
+        .build();
+    // Log messages related to data verification.
+    let verify_config = ConfigBuilder::new()
+        .set_time_format_rfc3339()
+        .add_filter_allow("verify".to_string())
+        .build();
     CombinedLogger::init(vec![
         TermLogger::new(
             LevelFilter::Debug,
-            config.clone(),
+            import_config.clone(),
             TerminalMode::Mixed,
             ColorChoice::Auto,
         ),
         WriteLogger::new(
             LevelFilter::Info,
-            config,
+            import_config,
             OpenOptions::new()
                 .append(true)
                 .create(true)
                 .open(format!("{log_dir}/{LOG}"))
+                .expect("Could not open log file."),
+        ),
+        WriteLogger::new(
+            LevelFilter::Info,
+            verify_config,
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(format!("{log_dir}/{VERIFY_DATA_LOG}"))
                 .expect("Could not open log file."),
         ),
     ])
@@ -167,14 +186,17 @@ fn main() {
     let username = match env::var("DB_USERNAME") {
         Ok(v) => v,
         Err(e) => {
-            error!("Unable to load username from .env file: {e}.");
+            error!(
+                target: "import",
+                "Unable to load username from .env file: {e}."
+            );
             return;
         }
     };
     let password = match env::var("DB_PASSWORD") {
         Ok(v) => v,
         Err(e) => {
-            error!("Unable to load password from .env file: {e}.");
+            error!(target: "import", "Unable to load password from .env file: {e}.");
             return;
         }
     };
@@ -186,7 +208,7 @@ fn main() {
     let paths = match collect_paths(data_dir.into(), &mut paths) {
         Ok(v) => v,
         Err(e) => {
-            error!("{e}");
+            error!(target: "import", "{e}");
             return;
         }
     };
@@ -198,16 +220,19 @@ fn main() {
         let count_type = match InputCount::from_parent_dir_and_header(path) {
             Ok(v) => v,
             Err(e) => {
-                error!("{path:?} not processed: {e}");
+                error!(target: "import", "{path:?} not processed: {e}");
                 continue;
             }
         };
 
-        info!("Extracting data from {path:?}, a {count_type:?} count.");
+        info!(
+            target: "import",
+            "Extracting data from {path:?}, a {count_type:?} count."
+        );
         let metadata = match CountMetadata::from_path(path) {
             Ok(v) => v,
             Err(e) => {
-                error!("{path:?} not processed: {e}");
+                error!(target: "import", "{path:?} not processed: {e}");
                 continue;
             }
         };
@@ -220,7 +245,7 @@ fn main() {
                 let individual_vehicles = match IndividualVehicle::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
-                        error!("{path:?} not processed: {e}");
+                        error!(target: "import", "{path:?} not processed: {e}");
                         continue;
                     }
                 };
@@ -248,7 +273,7 @@ fn main() {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            error!("Error inserting count {count:?}: {e}");
+                            error!(target: "import", "Error inserting count {count:?}: {e}");
                         }
                     }
                 }
@@ -259,7 +284,7 @@ fn main() {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            error!("Error inserting count {count:?}: {e}");
+                            error!(target: "import", "Error inserting count {count:?}: {e}");
                         }
                     }
                 }
@@ -278,7 +303,7 @@ fn main() {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            error!("Error inserting count {count:?}: {e}");
+                            error!(target: "import", "Error inserting count {count:?}: {e}");
                         }
                     }
                 }
@@ -289,7 +314,7 @@ fn main() {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            error!("Error inserting count {count:?}: {e}");
+                            error!(target: "import", "Error inserting count {count:?}: {e}");
                         }
                     }
                 }
@@ -297,7 +322,7 @@ fn main() {
 
                 // Calculate and insert the annual average daily volume.
                 if let Err(e) = TimeBinnedVehicleClassCount::insert_aadv(record_num as u32, &conn) {
-                    error!("failed to calculate/insert AADV for {path:?}: {e}")
+                    error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
                 }
             }
             InputCount::FifteenMinuteVehicle => {
@@ -305,7 +330,7 @@ fn main() {
                 let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
-                        error!("{path:?} not processed: {e}");
+                        error!(target: "import", "{path:?} not processed: {e}");
                         continue;
                     }
                 };
@@ -318,7 +343,7 @@ fn main() {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            error!("Error inserting count {count:?}: {e}");
+                            error!(target: "import", "Error inserting count {count:?}: {e}");
                         }
                     }
                 }
@@ -326,7 +351,7 @@ fn main() {
 
                 // Calculate and insert the annual average daily volume.
                 if let Err(e) = FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
-                    error!("failed to calculate/insert AADV for {path:?}: {e}")
+                    error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
                 }
 
                 // Denormalize this data to insert into tc_volcount table.
@@ -342,7 +367,7 @@ fn main() {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            error!("Error inserting count {count:?}: {e}");
+                            error!(target: "import", "Error inserting count {count:?}: {e}");
                         }
                     }
                 }
@@ -353,7 +378,7 @@ fn main() {
                 let fifteen_min_volcount = match FifteenMinuteBicycle::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
-                        error!("{path:?} not processed: {e}");
+                        error!(target: "import", "{path:?} not processed: {e}");
                         continue;
                     }
                 };
@@ -366,7 +391,7 @@ fn main() {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            error!("Error inserting count {count:?}: {e}");
+                            error!(target: "import", "Error inserting count {count:?}: {e}");
                         }
                     }
                 }
@@ -374,7 +399,7 @@ fn main() {
 
                 // Calculate and insert the annual average daily volume.
                 if let Err(e) = FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn) {
-                    error!("failed to calculate/insert AADV for {path:?}: {e}")
+                    error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
                 }
             }
             InputCount::FifteenMinutePedestrian => {
@@ -382,7 +407,7 @@ fn main() {
                 let fifteen_min_volcount = match FifteenMinutePedestrian::extract(path) {
                     Ok(v) => v,
                     Err(e) => {
-                        error!("{path:?} not processed: {e}");
+                        error!(target: "import", "{path:?} not processed: {e}");
                         continue;
                     }
                 };
@@ -395,7 +420,7 @@ fn main() {
                     match count.insert(&mut prepared) {
                         Ok(_) => (),
                         Err(e) => {
-                            error!("Error inserting count {count:?}: {e}");
+                            error!(target: "import", "Error inserting count {count:?}: {e}");
                         }
                     }
                 }
@@ -403,7 +428,7 @@ fn main() {
 
                 // Calculate and insert the annual average daily volume.
                 if let Err(e) = FifteenMinutePedestrian::insert_aadv(record_num as u32, &conn) {
-                    error!("failed to calculate/insert AADV for {path:?}: {e}")
+                    error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
                 }
             }
             // Nothing to do here.
