@@ -45,6 +45,7 @@ pub mod db;
 pub mod denormalize;
 pub mod extract_from_file;
 pub mod intermediate;
+pub mod verify;
 use intermediate::*;
 
 // headers stripped of double quotes and spaces

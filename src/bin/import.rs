@@ -125,6 +125,7 @@ use traffic_counts::{
     db::create_pool,
     denormalize::{Denormalize, *},
     extract_from_file::Extract,
+    verify::{ClassCountVerification, Verify},
     *,
 };
 
@@ -278,6 +279,19 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
+
+                // Verify
+                match ClassCountVerification::verify_data(record_num, &conn) {
+                    Ok(v) if !v.is_empty() => {
+                        for warning in v {
+                            let message = warning.message;
+                            let recordnum = warning.recordnum;
+                            warn!(target: "verify", "{recordnum}: {message}");
+                        }
+                    }
+                    Ok(_) => (),
+                    Err(e) => error!(target: "verify", "{e}"),
+                }
 
                 let mut prepared = TimeBinnedSpeedRangeCount::prepare_insert(&conn).unwrap();
                 for count in speed_range_count {
