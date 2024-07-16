@@ -1,15 +1,21 @@
+use std::collections::HashMap;
+
 use oracle::sql_type::Timestamp;
 use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
 use crate::denormalize::NonNormalVolCount;
 use crate::{Connection, CountError, Direction, TimeBinnedVehicleClassCount};
 
+// If a count is bidirectional, the totals for both directions should be relatively proportional.
+// One direction have less than this level is considered abnormal.
+const DIR_PROPORTION_LOWER_BOUND: f32 = 0.40;
+
 pub trait Verify {
     /// Verify data meets expectations.
     fn verify_data(record_num: u32, conn: &Connection) -> Result<Vec<Warning>, CountError>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClassCountVerification {
     datetime: PrimitiveDateTime,
     lane: u8,
@@ -70,6 +76,7 @@ impl Verify for ClassCountVerification {
             })
         }
 
+        // Check shares class 2 and class 15
         let c2_sum = counts.iter().map(|count| count.c2).sum::<u32>();
         let c15_sum = counts.iter().map(|count| count.c15).sum::<u32>();
         let total_sum = counts.iter().map(|count| count.total).sum::<u32>();
@@ -81,16 +88,49 @@ impl Verify for ClassCountVerification {
 
         if c2_percent < 75.0 {
             warnings.push(Warning::new(
-                format!("Percent of class 2 vehicles is less than 75 ({c2_percent})"),
+                format!("Class 2 vehicles are less than 75% ({c2_percent:.1}%) of total."),
                 recordnum,
             ))
         }
 
         if c15_percent > 10.0 {
             warnings.push(Warning::new(
-                format!("Percent of unclassed vehicles is greater than 10 ({c15_percent})"),
+                format!("Unclassed vehicles are greater than 10% ({c15_percent:.1}%) of total."),
                 recordnum,
             ))
+        }
+
+        // Check proportion of total by direction.
+        let mut count_by_dir = HashMap::new();
+        for count in counts {
+            *count_by_dir.entry(count.dir).or_insert(count.total) += count.total;
+        }
+
+        let larger_entry = count_by_dir.iter().max_by(|a, b| a.1.cmp(b.1));
+        let smaller_entry = count_by_dir.iter().min_by(|a, b| a.1.cmp(b.1));
+
+        if count_by_dir.keys().len() > 1 {
+            if let Some(smaller) = smaller_entry {
+                if let Some(larger) = larger_entry {
+                    let total = smaller.1 + larger.1;
+                    let smaller_share = *smaller.1 as f32 / total as f32;
+                    let larger_share = *larger.1 as f32 / total as f32;
+                    if smaller_share < DIR_PROPORTION_LOWER_BOUND {
+                        warnings.push(Warning::new(
+                            format!(
+                                "Abnormal direction proportions: {} has {:.1}% of total, {} has {:.1}%.  (Expectation is that proportions are no less/more than {}%/{}%.)",
+                                smaller.0,
+                                smaller_share * 100_f32,
+                                larger.0,
+                                larger_share * 100_f32,
+                                DIR_PROPORTION_LOWER_BOUND * 100_f32,
+                                100_f32 - DIR_PROPORTION_LOWER_BOUND * 100_f32,
+                            ),
+                            recordnum,
+                        ))
+                    }
+                }
+            }
         }
 
         Ok(warnings)
