@@ -121,16 +121,16 @@ use simplelog::{
 
 use traffic_counts::{
     aadv::Aadv,
+    check_data::check,
     count_insert::CountInsert,
     db::create_pool,
     denormalize::{Denormalize, *},
     extract_from_file::Extract,
-    verify::{ClassCountVerification, Verify},
     *,
 };
 
 const LOG: &str = "import.log";
-const VERIFY_DATA_LOG: &str = "data_verification.log";
+const CHECK_DATA_LOG: &str = "data_check.log";
 
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
@@ -150,9 +150,9 @@ fn main() {
         .add_filter_allow("import".to_string())
         .build();
     // Log messages related to data verification.
-    let verify_config = ConfigBuilder::new()
+    let check_config = ConfigBuilder::new()
         .set_time_format_rfc3339()
-        .add_filter_allow("verify".to_string())
+        .add_filter_allow("check".to_string())
         .build();
     CombinedLogger::init(vec![
         TermLogger::new(
@@ -170,13 +170,19 @@ fn main() {
                 .open(format!("{log_dir}/{LOG}"))
                 .expect("Could not open log file."),
         ),
+        TermLogger::new(
+            LevelFilter::Debug,
+            check_config.clone(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
         WriteLogger::new(
             LevelFilter::Info,
-            verify_config,
+            check_config,
             OpenOptions::new()
                 .append(true)
                 .create(true)
-                .open(format!("{log_dir}/{VERIFY_DATA_LOG}"))
+                .open(format!("{log_dir}/{CHECK_DATA_LOG}"))
                 .expect("Could not open log file."),
         ),
     ])
@@ -279,19 +285,6 @@ fn main() {
                     }
                 }
                 conn.commit().unwrap();
-
-                // Verify
-                match ClassCountVerification::verify_data(record_num, &conn) {
-                    Ok(v) if !v.is_empty() => {
-                        for warning in v {
-                            let message = warning.message;
-                            let recordnum = warning.recordnum;
-                            warn!(target: "verify", "{recordnum}: {message}");
-                        }
-                    }
-                    Ok(_) => (),
-                    Err(e) => error!(target: "verify", "{e}"),
-                }
 
                 let mut prepared = TimeBinnedSpeedRangeCount::prepare_insert(&conn).unwrap();
                 for count in speed_range_count {
@@ -447,6 +440,19 @@ fn main() {
             }
             // Nothing to do here.
             InputCount::FifteenMinuteBicycleOrPedestrian => (),
+        }
+        // Check for potential issues with data, after it has been inserted into the database,
+        // and log them for review.
+        match check(record_num, &conn) {
+            Ok(v) if !v.is_empty() => {
+                for warning in v {
+                    let message = warning.message;
+                    let recordnum = warning.recordnum;
+                    warn!(target: "check", "{recordnum}: {message}");
+                }
+            }
+            Ok(_) => (),
+            Err(e) => error!(target: "check", "{e}"),
         }
     }
 }
