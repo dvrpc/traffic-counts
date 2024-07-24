@@ -328,8 +328,13 @@ fn main() {
                 conn.commit().unwrap();
 
                 // Calculate and insert the annual average daily volume.
-                if let Err(e) = TimeBinnedVehicleClassCount::insert_aadv(record_num as u32, &conn) {
-                    error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                match TimeBinnedVehicleClassCount::insert_aadv(record_num as u32, &conn) {
+                    Ok(()) => {
+                        info!(target: "import", "AADV calculated and inserted for {record_num}")
+                    }
+                    Err(e) => {
+                        error!(target: "import", "failed to calculate/insert AADV for {record_num}: {e}")
+                    }
                 }
             }
             InputCount::FifteenMinuteVehicle => {
@@ -357,8 +362,13 @@ fn main() {
                 conn.commit().unwrap();
 
                 // Calculate and insert the annual average daily volume.
-                if let Err(e) = FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
-                    error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                match FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
+                    Ok(()) => {
+                        info!(target: "import", "AADV calculated and inserted for {record_num}")
+                    }
+                    Err(e) => {
+                        error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                    }
                 }
 
                 // Denormalize this data to insert into tc_volcount table.
@@ -405,8 +415,13 @@ fn main() {
                 conn.commit().unwrap();
 
                 // Calculate and insert the annual average daily volume.
-                if let Err(e) = FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn) {
-                    error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                match FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn) {
+                    Ok(()) => {
+                        info!(target: "import", "AADV calculated and inserted for {record_num}")
+                    }
+                    Err(e) => {
+                        error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                    }
                 }
             }
             InputCount::FifteenMinutePedestrian => {
@@ -434,8 +449,13 @@ fn main() {
                 conn.commit().unwrap();
 
                 // Calculate and insert the annual average daily volume.
-                if let Err(e) = FifteenMinutePedestrian::insert_aadv(record_num as u32, &conn) {
-                    error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                match FifteenMinutePedestrian::insert_aadv(record_num as u32, &conn) {
+                    Ok(()) => {
+                        info!(target: "import", "AADV calculated and inserted for {record_num}")
+                    }
+                    Err(e) => {
+                        error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                    }
                 }
             }
             // Nothing to do here.
