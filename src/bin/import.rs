@@ -232,10 +232,6 @@ fn main() {
             }
         };
 
-        info!(
-            target: "import",
-            "Extracting data from {path:?}, a {count_type:?} count."
-        );
         let metadata = match CountMetadata::from_path(path) {
             Ok(v) => v,
             Err(e) => {
@@ -245,7 +241,26 @@ fn main() {
         };
         let record_num = metadata.clone().record_num;
 
+        // Check that the count is already included in meta table in database - abort otherwise.
+        if conn
+            .query_row_as::<Option<String>>(
+                "select recordnum from tc_header where recordnum = :1",
+                &[&record_num],
+            )
+            .is_err()
+        {
+            error!(
+                target: "import",
+                "{path:?} not processed: {record_num} not found in TC_HEADER table"
+            );
+            continue;
+        }
+
         // Process the file according to InputCount.
+        info!(
+            target: "import",
+            "Extracting data from {path:?}, a {count_type:?} count."
+        );
         match count_type {
             InputCount::IndividualVehicle => {
                 // Extract data from CSV/text file.
