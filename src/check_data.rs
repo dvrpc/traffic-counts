@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use oracle::sql_type::Timestamp;
+use log::warn;
+use oracle::{sql_type::Timestamp, Connection};
 use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
-use crate::{Connection, CountError, Direction};
+use crate::{CountError, Direction};
 
 // If a count is bidirectional, the totals for both directions should be relatively proportional.
 // One direction having less than this level is considered abnormal.
@@ -21,41 +22,27 @@ pub struct ClassCountCheck {
     total: u32,
 }
 
-#[derive(Debug, Clone)]
-pub struct Warning {
-    pub message: String,
-    pub recordnum: u32,
-}
-
-impl Warning {
-    fn new(message: String, recordnum: u32) -> Self {
-        Self { message, recordnum }
-    }
-}
-
-pub fn check(recordnum: u32, conn: &Connection) -> Result<Vec<Warning>, CountError> {
-    // Set up vec to push all warnings into.
-    let mut warnings = vec![];
-
+pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     // Determine what kind of count this is, in order to run the appropriate checks.
-    let result = conn.query_row_as::<Option<String>>(
+    let count_type = match conn.query_row_as::<Option<String>>(
         "select type from tc_header where recordnum = :1",
         &[&recordnum],
-    )?;
-
-    let count_type = match result {
-        None => {
-            warnings.push(Warning::new(
-                "Unable to identify type of count; cannot check data.".to_string(),
-                recordnum,
+    ) {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return Err(CountError::DataCheckError(
+                "unable to identify type of count".to_string(),
             ));
-            return Ok(warnings);
         }
-        Some(v) => v,
+        Err(_) => {
+            return Err(CountError::DataCheckError(
+                "recordnum not found in TC_HEADER table".to_string(),
+            ));
+        }
     };
 
     // Warn if share of unclassed vehicles is too high or class 2 is too low.
-    if count_type == "Class".to_string() {
+    if count_type == "Class" {
         let results = conn.query_as::<(Timestamp, Timestamp, u8, String, u32, u32, u32)>(
         "select countdate, counttime, countlane, ctdir, total, cars_and_tlrs, unclassified from tc_clacount where recordnum = :1",
         &[&recordnum],
@@ -102,31 +89,27 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<Vec<Warning>, CountErr
         let c15_percent = c15_sum as f32 / total_sum as f32 * 100.0;
 
         if c2_percent < 75.0 {
-            warnings.push(Warning::new(
-                format!("Class 2 vehicles are less than 75% ({c2_percent:.1}%) of total."),
-                recordnum,
-            ))
+            warn!(
+                target: "check",
+                "{recordnum}: Class 2 vehicles are less than 75% ({c2_percent:.1}%) of total."
+            )
         }
 
         if c15_percent > 10.0 {
-            warnings.push(Warning::new(
-                format!("Unclassed vehicles are greater than 10% ({c15_percent:.1}%) of total."),
-                recordnum,
-            ))
+            warn!(target: "check", "{recordnum}: Unclassed vehicles are greater than 10% ({c15_percent:.1}%) of total.");
         }
     }
 
     // Warn if motor vehicle counts don't have relatively even proportion of total per direction.
     if ["Class", "Volume", "15 min Volume"].contains(&count_type.as_str()) {
-        // Check proportion of total by direction.
-        let results = conn.query_as::<(Timestamp, u32, String)>(
-            "select countdate, totalcount, cntdir from tc_volcount where recordnum = :1",
+        let results = conn.query_as::<(u32, String)>(
+            "select totalcount, cntdir from tc_volcount where recordnum = :1",
             &[&recordnum],
         )?;
 
         let mut count_by_dir = HashMap::new();
         for result in results {
-            let (count_date, total, direction) = result?;
+            let (total, direction) = result?;
             *count_by_dir.entry(direction).or_insert(total) += total;
         }
 
@@ -140,19 +123,81 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<Vec<Warning>, CountErr
                     let smaller_share = *smaller.1 as f32 / total as f32;
                     let larger_share = *larger.1 as f32 / total as f32;
                     if smaller_share < DIR_PROPORTION_LOWER_BOUND {
-                        warnings.push(Warning::new(
-                        format!(
-                            "Abnormal direction proportions: {} has {:.1}% of total, {} has {:.1}%.  (Expectation is that proportions are no less/more than {}%/{}%.)",
+                        warn!(target: "check", "{recordnum}: Abnormal direction proportions: {} has {:.1}% of total, {} has {:.1}%.  (Expectation is that proportions are no less/more than {}%/{}%.)",
                             smaller.0,
                             smaller_share * 100_f32,
                             larger.0,
                             larger_share * 100_f32,
                             DIR_PROPORTION_LOWER_BOUND * 100_f32,
                             100_f32 - DIR_PROPORTION_LOWER_BOUND * 100_f32,
-                        ),
-                        recordnum,
-                    ))
+                        );
                     }
+                }
+            }
+        }
+    }
+
+    // Warn if more than 1 consecutive 0-count/hour between 4am and 10pm for motor vehicles.
+    if ["Class", "Volume", "15 min Volume"].contains(&count_type.as_str()) {
+        let results = conn.query_as::<(
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+            Option<u32>,
+        )>(
+            "select
+                am4, am5, am6, am7, am8, am9, am10, am11, pm12, pm1, pm2, pm3, pm4, pm5, pm6,
+                pm7, pm8, pm9, pm10
+                from tc_volcount where recordnum = :1",
+            &[&recordnum],
+        )?;
+        for result in results {
+            let result = result?;
+            let mut hourly = BTreeMap::new();
+            hourly.insert("am4", result.0);
+            hourly.insert("am5", result.1);
+            hourly.insert("am6", result.2);
+            hourly.insert("am7", result.3);
+            hourly.insert("am8", result.4);
+            hourly.insert("am9", result.5);
+            hourly.insert("am10", result.6);
+            hourly.insert("am11", result.7);
+            hourly.insert("pm12", result.8);
+            hourly.insert("pm1", result.9);
+            hourly.insert("pm2", result.10);
+            hourly.insert("pm3", result.11);
+            hourly.insert("pm4", result.12);
+            hourly.insert("pm5", result.13);
+            hourly.insert("pm6", result.14);
+            hourly.insert("pm7", result.15);
+            hourly.insert("pm8", result.16);
+            hourly.insert("pm9", result.17);
+            hourly.insert("pm10", result.18);
+
+            let mut consecutive_zeros = 0_u32;
+            for (hour, count) in hourly {
+                if count.is_some_and(|c| c == 0) {
+                    consecutive_zeros += 1;
+                } else {
+                    consecutive_zeros = 0;
+                }
+                if consecutive_zeros > 1 {
+                    warn!(target: "check", "{recordnum}: Consecutive period ({hour}) with 0 vehicles counted.");
                 }
             }
         }
@@ -168,17 +213,11 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<Vec<Warning>, CountErr
         for result in results {
             let total = result?;
             if total > BIKE_COUNT_MAX {
-                warnings.push(Warning::new(
-                    format!(
-                        "More than {} in a 15-minute period for a bicycle count.",
-                        BIKE_COUNT_MAX
-                    ),
-                    recordnum,
-                ));
+                warn!(target: "check", "{recordnum}: More than {BIKE_COUNT_MAX} in a 15-minute period for a bicycle count.");
                 break;
             }
         }
     }
 
-    Ok(warnings)
+    Ok(())
 }

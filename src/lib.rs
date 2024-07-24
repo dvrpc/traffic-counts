@@ -96,6 +96,8 @@ pub enum CountError<'a> {
     DbError(#[from] oracle::Error),
     #[error("datetime error `{0}`")]
     TimeError(#[from] time::Error),
+    #[error("{0}")]
+    DataCheckError(String),
 }
 
 /// Identifying the problem when there's an error with a filename.

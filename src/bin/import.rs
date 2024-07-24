@@ -114,7 +114,7 @@ use std::fs::{self, OpenOptions};
 use std::io;
 use std::path::PathBuf;
 
-use log::{error, info, warn, LevelFilter};
+use log::{error, info, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
@@ -348,7 +348,7 @@ fn main() {
                         info!(target: "import", "AADV calculated and inserted for {record_num}")
                     }
                     Err(e) => {
-                        error!(target: "import", "failed to calculate/insert AADV for {record_num}: {e}")
+                        error!(target: "import", "Failed to calculate/insert AADV for {record_num}: {e}")
                     }
                 }
             }
@@ -382,7 +382,7 @@ fn main() {
                         info!(target: "import", "AADV calculated and inserted for {record_num}")
                     }
                     Err(e) => {
-                        error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                        error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
                     }
                 }
 
@@ -435,7 +435,7 @@ fn main() {
                         info!(target: "import", "AADV calculated and inserted for {record_num}")
                     }
                     Err(e) => {
-                        error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                        error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
                     }
                 }
             }
@@ -469,7 +469,7 @@ fn main() {
                         info!(target: "import", "AADV calculated and inserted for {record_num}")
                     }
                     Err(e) => {
-                        error!(target: "import", "failed to calculate/insert AADV for {path:?}: {e}")
+                        error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
                     }
                 }
             }
@@ -478,16 +478,9 @@ fn main() {
         }
         // Check for potential issues with data, after it has been inserted into the database,
         // and log them for review.
-        match check(record_num, &conn) {
-            Ok(v) if !v.is_empty() => {
-                for warning in v {
-                    let message = warning.message;
-                    let recordnum = warning.recordnum;
-                    warn!(target: "check", "{recordnum}: {message}");
-                }
-            }
-            Ok(_) => (),
-            Err(e) => error!(target: "check", "{e}"),
+        info!("Checking data for {record_num}");
+        if let Err(e) = check(record_num, &conn) {
+            error!(target: "import", "An error occurred while checking data for {record_num}: {e}; warnings likely to be incomplete or incorrect.")
         }
     }
 }
