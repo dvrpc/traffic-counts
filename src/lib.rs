@@ -35,7 +35,7 @@ use std::num::ParseIntError;
 use std::path::Path;
 
 use log::error;
-use oracle::{sql_type::Timestamp, Connection, Error as OracleError, Statement};
+use oracle::{sql_type::Timestamp, Connection};
 use thiserror::Error;
 use time::{Date, Duration, PrimitiveDateTime, Time, Weekday};
 
@@ -92,8 +92,12 @@ pub enum CountError<'a> {
     InvalidMcd(String),
     #[error("inconsistent data in database")]
     InconsistentData,
+    // Errors from database specifically handled/custom error messages.
+    #[error("{0}")]
+    DbError(String),
+    // Errors from database passed through transparently without specific handling.
     #[error("database error `{0}`")]
-    DbError(#[from] oracle::Error),
+    OracleError(#[from] oracle::Error),
     #[error("datetime error `{0}`")]
     TimeError(#[from] time::Error),
     #[error("{0}")]

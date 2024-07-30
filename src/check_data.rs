@@ -35,9 +35,9 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
             ));
         }
         Err(_) => {
-            return Err(CountError::DataCheckError(
-                "recordnum not found in TC_HEADER table".to_string(),
-            ));
+            return Err(CountError::DbError(format!(
+                "{recordnum} not found in tc_header table"
+            )));
         }
     };
 

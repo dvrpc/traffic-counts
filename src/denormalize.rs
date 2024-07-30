@@ -511,7 +511,7 @@ pub fn hourly_counts<'a, 'conn>(
     vol_field: &'a str,
     conn: &'conn Connection,
 ) -> Result<Vec<HourlyCount>, CountError<'conn>> {
-    let results = conn.query_as::<(Timestamp, Timestamp, u32, String, u32)>(
+    let results = match conn.query_as::<(Timestamp, Timestamp, u32, String, u32)>(
         &format!(
             "select TRUNC(counttime, 'HH24'), countdate, sum({}), {}, countlane 
                 from {} 
@@ -521,7 +521,14 @@ pub fn hourly_counts<'a, 'conn>(
             &vol_field, &dir_field, &table, &dir_field
         ),
         &[&recordnum],
-    )?;
+    ) {
+        Ok(v) => v,
+        Err(_) => {
+            return Err(CountError::DbError(format!(
+                "{recordnum} not found in {table}"
+            )))
+        }
+    };
 
     let mut hourly_counts = vec![];
     for result in results {

@@ -195,8 +195,9 @@ pub trait Aadv {
         );
 
         // Delete any existing AADVs for same recordnum and date
-        conn.execute("delete from tc_aadv where recordnum = :1 and date_calculated = TO_CHAR(:2, 'DD-MON-YY')", &[&recordnum, &date])?;
-        conn.commit()?;
+        if conn.execute("delete from tc_aadv where recordnum = :1 and date_calculated = TO_CHAR(:2, 'DD-MON-YY')", &[&recordnum, &date]).is_ok() {
+            conn.commit()?;
+        };
 
         for (direction, aadv) in aadv {
             let direction = direction.map(|v| format!("{v}"));
@@ -227,10 +228,17 @@ impl Aadv for TimeBinnedVehicleClassCount {
         // Get additional fields required to get factors from two other tables.
         // mcd contains state code
         // fc is "road functional classification"
-        let (mcd, fc, count_type) = conn.query_row_as::<(String, u8, String)>(
+        let (mcd, fc, count_type) = match conn.query_row_as::<(String, u8, String)>(
             "select mcd, fc, type from TC_HEADER where recordnum = :1",
             &[&recordnum],
-        )?;
+        ) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(CountError::DbError(format!(
+                    "{recordnum} not found in tc_header table"
+                )))
+            }
+        };
 
         // Set column name for factor from factor table.
         let season_factor_col = if mcd.starts_with("42") {
@@ -314,10 +322,17 @@ impl Aadv for FifteenMinuteVehicle {
         // Get additional fields required to get factors from two other tables.
         // mcd contains state code
         // fc is "road functional classification"
-        let (mcd, fc, count_type) = conn.query_row_as::<(String, u8, String)>(
+        let (mcd, fc, count_type) = match conn.query_row_as::<(String, u8, String)>(
             "select mcd, fc, type from TC_HEADER where recordnum = :1",
             &[&recordnum],
-        )?;
+        ) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(CountError::DbError(format!(
+                    "{recordnum} not found in tc_header table"
+                )))
+            }
+        };
 
         // Set column names for factors from factor table.
         let (season_factor_col, axle_factor_col) = if mcd.starts_with("42") {
@@ -422,10 +437,17 @@ impl Aadv for FifteenMinuteBicycle {
         let day_counts = Self::get_total_by_date(recordnum, conn)?;
 
         // Get additional fields required to get factors from two other tables.
-        let (bikepedgroup, count_type) = conn.query_row_as::<(String, String)>(
+        let (bikepedgroup, count_type) = match conn.query_row_as::<(String, String)>(
             "select bikepedgroup, type from tc_header where recordnum = :1",
             &[&recordnum],
-        )?;
+        ) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(CountError::DbError(format!(
+                    "{recordnum} not found in tc_header table"
+                )))
+            }
+        };
 
         // Get equipment factor, if any, from the TC_COUNTTYPE table.
         let equipment_factor = conn.query_row_as::<Option<f32>>(
@@ -510,10 +532,17 @@ impl Aadv for FifteenMinutePedestrian {
         let day_counts = Self::get_total_by_date(recordnum, conn)?;
 
         // Get additional fields required to get factors from equipment factor table.
-        let count_type = conn.query_row_as::<String>(
+        let count_type = match conn.query_row_as::<String>(
             "select type from tc_header where recordnum = :1",
             &[&recordnum],
-        )?;
+        ) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(CountError::DbError(format!(
+                    "{recordnum} not found in tc_header table"
+                )))
+            }
+        };
 
         // Get equipment factor, if any, from the TC_COUNTTYPE table.
         let equipment_factor = conn.query_row_as::<Option<f32>>(
@@ -571,14 +600,22 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     conn: &'conn Connection,
 ) -> Result<HashMap<(Date, Option<Direction>), usize>, CountError<'conn>> {
     // Get direction of incount and outcount.
-    let (incount_dir, outcount_dir) = conn.query_row_as::<(Option<String>, Option<String>)>(
+    let (incount_dir, outcount_dir) = match conn.query_row_as::<(Option<String>, Option<String>)>(
         "select indir, outdir from tc_header where recordnum = :1",
         &[&recordnum],
-    )?;
+    ) {
+        Ok(v) => v,
+        Err(_) => {
+            return Err(CountError::DbError(format!(
+                "{recordnum} not found in tc_header table"
+            )))
+        }
+    };
 
     if incount_dir.is_none() || outcount_dir.is_none() {
-        error!("TC_HEADER has null value for INDIR or OUTDIR");
-        return Err(CountError::DbError(OracleError::NullValue));
+        return Err(CountError::DbError(format!(
+            "NULL value for 'indir' or 'outdir' field in tc_header table for {recordnum}"
+        )));
     }
 
     let incount_dir = Direction::from_string(incount_dir.unwrap())?;
