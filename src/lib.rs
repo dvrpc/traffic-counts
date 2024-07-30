@@ -37,7 +37,7 @@ use std::path::Path;
 use log::error;
 use oracle::{sql_type::Timestamp, Connection};
 use thiserror::Error;
-use time::{Date, Duration, PrimitiveDateTime, Time, Weekday};
+use time::{Date, Duration, PrimitiveDateTime, Time};
 
 pub mod aadv;
 pub mod check_data;
