@@ -143,6 +143,14 @@ fn main() {
     // Get env var for path where log will be, panic if it doesn't exist.
     let log_dir = env::var("LOG_DIR").expect("Unable to load log directory path from .env file.");
 
+    // Get env var for whether or not to clean up files.
+    // (When run in production, we want to remove the data files after they've been processed.)
+    let cleanup_files = match env::var("IMPORT_CLEANUP_FILES") {
+        Ok(v) if v == "true" => true,
+        Ok(_) => false,
+        Err(_) => false,
+    };
+
     // Set up logging, panic if it fails.
     // Log messages related to actual import.
     let import_config = ConfigBuilder::new()
@@ -481,6 +489,11 @@ fn main() {
         info!("Checking data for {record_num}");
         if let Err(e) = check(record_num, &conn) {
             error!(target: "import", "An error occurred while checking data for {record_num}: {e}; warnings likely to be incomplete or incorrect.")
+        }
+        if cleanup_files {
+            if let Err(e) = fs::remove_file(&path) {
+                error!("Unable to delete file {path:?} {e}");
+            }
         }
     }
 }
