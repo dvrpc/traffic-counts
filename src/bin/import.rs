@@ -236,6 +236,10 @@ fn main() {
         // desired shape, and inserting it into the database.
         // Exactly how the data is processed depends on what `InputCount` it is.
         for path in paths {
+            // Don't try to process the log files.
+            if path.extension().is_some_and(|x| x == "log") {
+                continue;
+            }
             let count_type = match InputCount::from_parent_dir_and_header(path) {
                 Ok(v) => v,
                 Err(e) => {
