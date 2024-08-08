@@ -113,6 +113,8 @@ use std::env;
 use std::fs::{self, OpenOptions};
 use std::io;
 use std::path::PathBuf;
+use std::thread;
+use std::time;
 
 use log::{error, info, LevelFilter};
 use simplelog::{
@@ -131,6 +133,7 @@ use traffic_counts::{
 
 const LOG: &str = "import.log";
 const CHECK_DATA_LOG: &str = "data_check.log";
+const TIME_BETWEEN_LOOPS: u64 = 20;
 
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
@@ -218,286 +221,291 @@ fn main() {
     let pool = create_pool(username, password).unwrap();
     let conn = pool.get().unwrap();
 
-    // Get all the paths of the files that need to be processed.
-    let mut paths = vec![];
-    let paths = match collect_paths(data_dir.into(), &mut paths) {
-        Ok(v) => v,
-        Err(e) => {
-            error!(target: "import", "{e}");
-            return;
-        }
-    };
-
-    // Iterate through all paths, extacting the data from the files, transforming it into the
-    // desired shape, and inserting it into the database.
-    // Exactly how the data is processed depends on what `InputCount` it is.
-    for path in paths {
-        let count_type = match InputCount::from_parent_dir_and_header(path) {
+    loop {
+        // Get all the paths of the files that need to be processed.
+        let mut paths = vec![];
+        let paths = match collect_paths(data_dir.clone().into(), &mut paths) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "import", "{path:?} not processed: {e}");
-                cleanup(cleanup_files, path);
-                continue;
+                error!(target: "import", "{e}");
+                return;
             }
         };
 
-        let metadata = match CountMetadata::from_path(path) {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "import", "{path:?} not processed: {e}");
-                cleanup(cleanup_files, path);
-                continue;
-            }
-        };
-        let record_num = metadata.clone().record_num;
+        // Iterate through all paths, extacting the data from the files, transforming it into the
+        // desired shape, and inserting it into the database.
+        // Exactly how the data is processed depends on what `InputCount` it is.
+        for path in paths {
+            let count_type = match InputCount::from_parent_dir_and_header(path) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "import", "{path:?} not processed: {e}");
+                    cleanup(cleanup_files, path);
+                    continue;
+                }
+            };
 
-        // Check that the count is already included in meta table in database - abort otherwise.
-        if conn
-            .query_row_as::<Option<String>>(
-                "select recordnum from tc_header where recordnum = :1",
-                &[&record_num],
-            )
-            .is_err()
-        {
-            error!(
-                target: "import",
-                "{path:?} not processed: {record_num} not found in TC_HEADER table"
-            );
-            cleanup(cleanup_files, path);
-            continue;
-        }
+            let metadata = match CountMetadata::from_path(path) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "import", "{path:?} not processed: {e}");
+                    cleanup(cleanup_files, path);
+                    continue;
+                }
+            };
+            let record_num = metadata.clone().record_num;
 
-        // Process the file according to InputCount.
-        info!(
-            target: "import",
-            "Extracting data from {path:?}, a {count_type:?} count."
-        );
-        match count_type {
-            InputCount::IndividualVehicle => {
-                // Extract data from CSV/text file.
-                let individual_vehicles = match IndividualVehicle::extract(path) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!(target: "import", "{path:?} not processed: {e}");
-                        cleanup(cleanup_files, path);
-                        continue;
-                    }
-                };
-
-                // Create two counts from this: 15-minute speed count and 15-minute class count
-                let (speed_range_count, vehicle_class_count) = create_speed_and_class_count(
-                    metadata.clone(),
-                    individual_vehicles.clone(),
-                    TimeInterval::FifteenMin,
+            // Check that the count is already included in meta table in database - abort otherwise.
+            if conn
+                .query_row_as::<Option<String>>(
+                    "select recordnum from tc_header where recordnum = :1",
+                    &[&record_num],
+                )
+                .is_err()
+            {
+                error!(
+                    target: "import",
+                    "{path:?} not processed: {record_num} not found in TC_HEADER table"
                 );
-
-                // Create records for the non-normalized TC_SPESUM table (another one with
-                // specific hourly fields, this time for average speed/hour).
-                let non_normal_speedavg_count =
-                    create_non_normal_speedavg_count(metadata.clone(), individual_vehicles);
-
-                // Delete existing records from db.
-                TimeBinnedVehicleClassCount::delete(&conn, record_num).unwrap();
-                TimeBinnedSpeedRangeCount::delete(&conn, record_num).unwrap();
-                NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
-
-                // Create prepared statments and use them to insert counts.
-                let mut prepared = TimeBinnedVehicleClassCount::prepare_insert(&conn).unwrap();
-                for count in vehicle_class_count {
-                    match count.insert(&mut prepared) {
-                        Ok(_) => (),
-                        Err(e) => {
-                            error!(target: "import", "Error inserting count {count:?}: {e}");
-                        }
-                    }
-                }
-                conn.commit().unwrap();
-
-                let mut prepared = TimeBinnedSpeedRangeCount::prepare_insert(&conn).unwrap();
-                for count in speed_range_count {
-                    match count.insert(&mut prepared) {
-                        Ok(_) => (),
-                        Err(e) => {
-                            error!(target: "import", "Error inserting count {count:?}: {e}");
-                        }
-                    }
-                }
-                conn.commit().unwrap();
-
-                // Denormalize this data to insert into tc_volcount table.
-                let denormalized_volcount =
-                    TimeBinnedVehicleClassCount::denormalize_vol_count(record_num, &conn).unwrap();
-
-                // Delete existing records from db.
-                NonNormalVolCount::delete(&conn, record_num).unwrap();
-
-                // Create prepared statments and use them to insert counts.
-                let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
-                for count in denormalized_volcount {
-                    match count.insert(&mut prepared) {
-                        Ok(_) => (),
-                        Err(e) => {
-                            error!(target: "import", "Error inserting count {count:?}: {e}");
-                        }
-                    }
-                }
-                conn.commit().unwrap();
-
-                let mut prepared = NonNormalAvgSpeedCount::prepare_insert(&conn).unwrap();
-                for count in non_normal_speedavg_count {
-                    match count.insert(&mut prepared) {
-                        Ok(_) => (),
-                        Err(e) => {
-                            error!(target: "import", "Error inserting count {count:?}: {e}");
-                        }
-                    }
-                }
-                conn.commit().unwrap();
-
-                // Calculate and insert the annual average daily volume.
-                match TimeBinnedVehicleClassCount::insert_aadv(record_num as u32, &conn) {
-                    Ok(()) => {
-                        info!(target: "import", "AADV calculated and inserted for {record_num}")
-                    }
-                    Err(e) => {
-                        error!(target: "import", "Failed to calculate/insert AADV for {record_num}: {e}")
-                    }
-                }
+                cleanup(cleanup_files, path);
+                continue;
             }
-            InputCount::FifteenMinuteVehicle => {
-                // Extract data from CSV/text file.
-                let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!(target: "import", "{path:?} not processed: {e}");
-                        cleanup(cleanup_files, path);
-                        continue;
-                    }
-                };
 
-                // As they are already binned by 15-minute period, these need no further
-                // processing; just insert into database.
-                FifteenMinuteVehicle::delete(&conn, record_num).unwrap();
-                let mut prepared = FifteenMinuteVehicle::prepare_insert(&conn).unwrap();
-                for count in fifteen_min_volcount {
-                    match count.insert(&mut prepared) {
-                        Ok(_) => (),
+            // Process the file according to InputCount.
+            info!(
+                target: "import",
+                "Extracting data from {path:?}, a {count_type:?} count."
+            );
+            match count_type {
+                InputCount::IndividualVehicle => {
+                    // Extract data from CSV/text file.
+                    let individual_vehicles = match IndividualVehicle::extract(path) {
+                        Ok(v) => v,
                         Err(e) => {
-                            error!(target: "import", "Error inserting count {count:?}: {e}");
+                            error!(target: "import", "{path:?} not processed: {e}");
+                            cleanup(cleanup_files, path);
+                            continue;
+                        }
+                    };
+
+                    // Create two counts from this: 15-minute speed count and 15-minute class count
+                    let (speed_range_count, vehicle_class_count) = create_speed_and_class_count(
+                        metadata.clone(),
+                        individual_vehicles.clone(),
+                        TimeInterval::FifteenMin,
+                    );
+
+                    // Create records for the non-normalized TC_SPESUM table (another one with
+                    // specific hourly fields, this time for average speed/hour).
+                    let non_normal_speedavg_count =
+                        create_non_normal_speedavg_count(metadata.clone(), individual_vehicles);
+
+                    // Delete existing records from db.
+                    TimeBinnedVehicleClassCount::delete(&conn, record_num).unwrap();
+                    TimeBinnedSpeedRangeCount::delete(&conn, record_num).unwrap();
+                    NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
+
+                    // Create prepared statments and use them to insert counts.
+                    let mut prepared = TimeBinnedVehicleClassCount::prepare_insert(&conn).unwrap();
+                    for count in vehicle_class_count {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!(target: "import", "Error inserting count {count:?}: {e}");
+                            }
+                        }
+                    }
+                    conn.commit().unwrap();
+
+                    let mut prepared = TimeBinnedSpeedRangeCount::prepare_insert(&conn).unwrap();
+                    for count in speed_range_count {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!(target: "import", "Error inserting count {count:?}: {e}");
+                            }
+                        }
+                    }
+                    conn.commit().unwrap();
+
+                    // Denormalize this data to insert into tc_volcount table.
+                    let denormalized_volcount =
+                        TimeBinnedVehicleClassCount::denormalize_vol_count(record_num, &conn)
+                            .unwrap();
+
+                    // Delete existing records from db.
+                    NonNormalVolCount::delete(&conn, record_num).unwrap();
+
+                    // Create prepared statments and use them to insert counts.
+                    let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
+                    for count in denormalized_volcount {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!(target: "import", "Error inserting count {count:?}: {e}");
+                            }
+                        }
+                    }
+                    conn.commit().unwrap();
+
+                    let mut prepared = NonNormalAvgSpeedCount::prepare_insert(&conn).unwrap();
+                    for count in non_normal_speedavg_count {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!(target: "import", "Error inserting count {count:?}: {e}");
+                            }
+                        }
+                    }
+                    conn.commit().unwrap();
+
+                    // Calculate and insert the annual average daily volume.
+                    match TimeBinnedVehicleClassCount::insert_aadv(record_num as u32, &conn) {
+                        Ok(()) => {
+                            info!(target: "import", "AADV calculated and inserted for {record_num}")
+                        }
+                        Err(e) => {
+                            error!(target: "import", "Failed to calculate/insert AADV for {record_num}: {e}")
                         }
                     }
                 }
-                conn.commit().unwrap();
-
-                // Calculate and insert the annual average daily volume.
-                match FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
-                    Ok(()) => {
-                        info!(target: "import", "AADV calculated and inserted for {record_num}")
-                    }
-                    Err(e) => {
-                        error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
-                    }
-                }
-
-                // Denormalize this data to insert into tc_volcount table.
-                let denormalized_volcount =
-                    FifteenMinuteVehicle::denormalize_vol_count(record_num, &conn).unwrap();
-
-                // Delete existing records from db.
-                NonNormalVolCount::delete(&conn, record_num).unwrap();
-
-                // Create prepared statments and use them to insert counts.
-                let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
-                for count in denormalized_volcount {
-                    match count.insert(&mut prepared) {
-                        Ok(_) => (),
+                InputCount::FifteenMinuteVehicle => {
+                    // Extract data from CSV/text file.
+                    let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
+                        Ok(v) => v,
                         Err(e) => {
-                            error!(target: "import", "Error inserting count {count:?}: {e}");
+                            error!(target: "import", "{path:?} not processed: {e}");
+                            cleanup(cleanup_files, path);
+                            continue;
+                        }
+                    };
+
+                    // As they are already binned by 15-minute period, these need no further
+                    // processing; just insert into database.
+                    FifteenMinuteVehicle::delete(&conn, record_num).unwrap();
+                    let mut prepared = FifteenMinuteVehicle::prepare_insert(&conn).unwrap();
+                    for count in fifteen_min_volcount {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!(target: "import", "Error inserting count {count:?}: {e}");
+                            }
+                        }
+                    }
+                    conn.commit().unwrap();
+
+                    // Calculate and insert the annual average daily volume.
+                    match FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
+                        Ok(()) => {
+                            info!(target: "import", "AADV calculated and inserted for {record_num}")
+                        }
+                        Err(e) => {
+                            error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
+                        }
+                    }
+
+                    // Denormalize this data to insert into tc_volcount table.
+                    let denormalized_volcount =
+                        FifteenMinuteVehicle::denormalize_vol_count(record_num, &conn).unwrap();
+
+                    // Delete existing records from db.
+                    NonNormalVolCount::delete(&conn, record_num).unwrap();
+
+                    // Create prepared statments and use them to insert counts.
+                    let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
+                    for count in denormalized_volcount {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!(target: "import", "Error inserting count {count:?}: {e}");
+                            }
+                        }
+                    }
+                    conn.commit().unwrap();
+                }
+                InputCount::FifteenMinuteBicycle => {
+                    // Extract data from CSV/text file.
+                    let fifteen_min_volcount = match FifteenMinuteBicycle::extract(path) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!(target: "import", "{path:?} not processed: {e}");
+                            cleanup(cleanup_files, path);
+                            continue;
+                        }
+                    };
+
+                    // As they are already binned by 15-minute period, these need no further
+                    // processing; just insert into database.
+                    FifteenMinuteBicycle::delete(&conn, record_num).unwrap();
+                    let mut prepared = FifteenMinuteBicycle::prepare_insert(&conn).unwrap();
+                    for count in fifteen_min_volcount {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!(target: "import", "Error inserting count {count:?}: {e}");
+                            }
+                        }
+                    }
+                    conn.commit().unwrap();
+
+                    // Calculate and insert the annual average daily volume.
+                    match FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn) {
+                        Ok(()) => {
+                            info!(target: "import", "AADV calculated and inserted for {record_num}")
+                        }
+                        Err(e) => {
+                            error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
                         }
                     }
                 }
-                conn.commit().unwrap();
+                InputCount::FifteenMinutePedestrian => {
+                    // Extract data from CSV/text file.
+                    let fifteen_min_volcount = match FifteenMinutePedestrian::extract(path) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!(target: "import", "{path:?} not processed: {e}");
+                            cleanup(cleanup_files, path);
+                            continue;
+                        }
+                    };
+
+                    // As they are already binned by 15-minute period, these need no further
+                    // processing; just insert into database.
+                    FifteenMinutePedestrian::delete(&conn, record_num).unwrap();
+                    let mut prepared = FifteenMinutePedestrian::prepare_insert(&conn).unwrap();
+                    for count in fifteen_min_volcount {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!(target: "import", "Error inserting count {count:?}: {e}");
+                            }
+                        }
+                    }
+                    conn.commit().unwrap();
+
+                    // Calculate and insert the annual average daily volume.
+                    match FifteenMinutePedestrian::insert_aadv(record_num as u32, &conn) {
+                        Ok(()) => {
+                            info!(target: "import", "AADV calculated and inserted for {record_num}")
+                        }
+                        Err(e) => {
+                            error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
+                        }
+                    }
+                }
+                // Nothing to do here.
+                InputCount::FifteenMinuteBicycleOrPedestrian => (),
             }
-            InputCount::FifteenMinuteBicycle => {
-                // Extract data from CSV/text file.
-                let fifteen_min_volcount = match FifteenMinuteBicycle::extract(path) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!(target: "import", "{path:?} not processed: {e}");
-                        cleanup(cleanup_files, path);
-                        continue;
-                    }
-                };
-
-                // As they are already binned by 15-minute period, these need no further
-                // processing; just insert into database.
-                FifteenMinuteBicycle::delete(&conn, record_num).unwrap();
-                let mut prepared = FifteenMinuteBicycle::prepare_insert(&conn).unwrap();
-                for count in fifteen_min_volcount {
-                    match count.insert(&mut prepared) {
-                        Ok(_) => (),
-                        Err(e) => {
-                            error!(target: "import", "Error inserting count {count:?}: {e}");
-                        }
-                    }
-                }
-                conn.commit().unwrap();
-
-                // Calculate and insert the annual average daily volume.
-                match FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn) {
-                    Ok(()) => {
-                        info!(target: "import", "AADV calculated and inserted for {record_num}")
-                    }
-                    Err(e) => {
-                        error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
-                    }
-                }
+            // Check for potential issues with data, after it has been inserted into the database,
+            // and log them for review.
+            info!("Checking data for {record_num}");
+            if let Err(e) = check(record_num, &conn) {
+                error!(target: "import", "An error occurred while checking data for {record_num}: {e}; warnings likely to be incomplete or incorrect.")
             }
-            InputCount::FifteenMinutePedestrian => {
-                // Extract data from CSV/text file.
-                let fifteen_min_volcount = match FifteenMinutePedestrian::extract(path) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!(target: "import", "{path:?} not processed: {e}");
-                        cleanup(cleanup_files, path);
-                        continue;
-                    }
-                };
-
-                // As they are already binned by 15-minute period, these need no further
-                // processing; just insert into database.
-                FifteenMinutePedestrian::delete(&conn, record_num).unwrap();
-                let mut prepared = FifteenMinutePedestrian::prepare_insert(&conn).unwrap();
-                for count in fifteen_min_volcount {
-                    match count.insert(&mut prepared) {
-                        Ok(_) => (),
-                        Err(e) => {
-                            error!(target: "import", "Error inserting count {count:?}: {e}");
-                        }
-                    }
-                }
-                conn.commit().unwrap();
-
-                // Calculate and insert the annual average daily volume.
-                match FifteenMinutePedestrian::insert_aadv(record_num as u32, &conn) {
-                    Ok(()) => {
-                        info!(target: "import", "AADV calculated and inserted for {record_num}")
-                    }
-                    Err(e) => {
-                        error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
-                    }
-                }
-            }
-            // Nothing to do here.
-            InputCount::FifteenMinuteBicycleOrPedestrian => (),
+            cleanup(cleanup_files, path);
         }
-        // Check for potential issues with data, after it has been inserted into the database,
-        // and log them for review.
-        info!("Checking data for {record_num}");
-        if let Err(e) = check(record_num, &conn) {
-            error!(target: "import", "An error occurred while checking data for {record_num}: {e}; warnings likely to be incomplete or incorrect.")
-        }
-        cleanup(cleanup_files, path);
+        // Wait to try again
+        thread::sleep(time::Duration::from_secs(TIME_BETWEEN_LOOPS));
     }
 }
 
