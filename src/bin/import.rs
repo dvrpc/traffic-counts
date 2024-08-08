@@ -236,6 +236,7 @@ fn main() {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "import", "{path:?} not processed: {e}");
+                cleanup(cleanup_files, path);
                 continue;
             }
         };
@@ -244,6 +245,7 @@ fn main() {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "import", "{path:?} not processed: {e}");
+                cleanup(cleanup_files, path);
                 continue;
             }
         };
@@ -261,6 +263,7 @@ fn main() {
                 target: "import",
                 "{path:?} not processed: {record_num} not found in TC_HEADER table"
             );
+            cleanup(cleanup_files, path);
             continue;
         }
 
@@ -276,6 +279,7 @@ fn main() {
                     Ok(v) => v,
                     Err(e) => {
                         error!(target: "import", "{path:?} not processed: {e}");
+                        cleanup(cleanup_files, path);
                         continue;
                     }
                 };
@@ -366,6 +370,7 @@ fn main() {
                     Ok(v) => v,
                     Err(e) => {
                         error!(target: "import", "{path:?} not processed: {e}");
+                        cleanup(cleanup_files, path);
                         continue;
                     }
                 };
@@ -419,6 +424,7 @@ fn main() {
                     Ok(v) => v,
                     Err(e) => {
                         error!(target: "import", "{path:?} not processed: {e}");
+                        cleanup(cleanup_files, path);
                         continue;
                     }
                 };
@@ -453,6 +459,7 @@ fn main() {
                     Ok(v) => v,
                     Err(e) => {
                         error!(target: "import", "{path:?} not processed: {e}");
+                        cleanup(cleanup_files, path);
                         continue;
                     }
                 };
@@ -490,11 +497,7 @@ fn main() {
         if let Err(e) = check(record_num, &conn) {
             error!(target: "import", "An error occurred while checking data for {record_num}: {e}; warnings likely to be incomplete or incorrect.")
         }
-        if cleanup_files {
-            if let Err(e) = fs::remove_file(&path) {
-                error!("Unable to delete file {path:?} {e}");
-            }
-        }
+        cleanup(cleanup_files, path);
     }
 }
 
@@ -512,4 +515,12 @@ fn collect_paths(dir: PathBuf, paths: &mut Vec<PathBuf>) -> io::Result<&mut Vec<
         }
     }
     Ok(paths)
+}
+
+fn cleanup(cleanup_files: bool, path: &PathBuf) {
+    if cleanup_files {
+        if let Err(e) = fs::remove_file(path) {
+            error!("Unable to delete file {path:?} {e}");
+        }
+    }
 }
