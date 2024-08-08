@@ -153,13 +153,15 @@ fn main() {
         Ok(_) => false,
         Err(_) => false,
     };
-
     // Set up logging, panic if it fails.
+    // (This is being done instead the loop in case the logs accidentally get deleted, so
+    // the files can be recreated.)
     // Log messages related to actual import.
     let import_config = ConfigBuilder::new()
         .set_time_format_rfc3339()
         .add_filter_allow("import".to_string())
         .build();
+
     // Log messages related to data verification.
     let check_config = ConfigBuilder::new()
         .set_time_format_rfc3339()
@@ -222,6 +224,19 @@ fn main() {
     let conn = pool.get().unwrap();
 
     loop {
+        // Recreate the logs in case they somehow get deleted.
+        let _ = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(format!("{log_dir}/{LOG}"))
+            .expect("Could not open log file.");
+
+        let _ = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(format!("{log_dir}/{CHECK_DATA_LOG}"))
+            .expect("Could not open log file.");
+
         // Get all the paths of the files that need to be processed.
         let mut paths = vec![];
         let paths = match collect_paths(data_dir.clone().into(), &mut paths) {
