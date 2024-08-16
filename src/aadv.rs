@@ -174,7 +174,7 @@ pub trait Aadv {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, f32>, CountError>;
+    ) -> Result<HashMap<Option<Direction>, u32>, CountError>;
 
     // Insert/update the set of AADVs (per direction/overall) into the database.
     fn insert_aadv(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
@@ -221,7 +221,7 @@ impl Aadv for TimeBinnedVehicleClassCount {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, f32>, CountError> {
+    ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
         // Get day counts for full days.
         let day_counts = Self::get_total_by_date(recordnum, conn)?;
 
@@ -298,7 +298,7 @@ impl Aadv for TimeBinnedVehicleClassCount {
                 .filter(|((_date, dir), _total)| dir == direction)
                 .map(|((_date, _dir), total)| total)
                 .sum();
-            aadv.insert(*direction, aadv_per_dir / divisor);
+            aadv.insert(*direction, (aadv_per_dir / divisor).round() as u32);
         }
 
         Ok(aadv)
@@ -315,7 +315,7 @@ impl Aadv for FifteenMinuteVehicle {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, f32>, CountError> {
+    ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
         // Get day counts for full days.
         let day_counts = Self::get_total_by_date(recordnum, conn)?;
 
@@ -398,7 +398,7 @@ impl Aadv for FifteenMinuteVehicle {
                 .filter(|((_date, dir), _total)| dir == direction)
                 .map(|((_date, _dir), total)| total)
                 .sum();
-            aadv.insert(*direction, aadv_per_dir / divisor);
+            aadv.insert(*direction, (aadv_per_dir / divisor).round() as u32);
         }
 
         Ok(aadv)
@@ -432,7 +432,7 @@ impl Aadv for FifteenMinuteBicycle {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, f32>, CountError> {
+    ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
         // Get day counts for full days.
         let day_counts = Self::get_total_by_date(recordnum, conn)?;
 
@@ -493,7 +493,7 @@ impl Aadv for FifteenMinuteBicycle {
                 .filter(|((_date, dir), _total)| dir == direction)
                 .map(|((_date, _dir), total)| total)
                 .sum();
-            aadv.insert(*direction, aadv_per_dir / divisor);
+            aadv.insert(*direction, (aadv_per_dir / divisor).round() as u32);
         }
 
         Ok(aadv)
@@ -527,7 +527,7 @@ impl Aadv for FifteenMinutePedestrian {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, f32>, CountError> {
+    ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
         // Get day counts for full days.
         let day_counts = Self::get_total_by_date(recordnum, conn)?;
 
@@ -580,7 +580,7 @@ impl Aadv for FifteenMinutePedestrian {
                 .filter(|((_date, dir), _total)| dir == direction)
                 .map(|((_date, _dir), total)| total)
                 .sum();
-            aadv.insert(*direction, aadv_per_dir / divisor);
+            aadv.insert(*direction, (aadv_per_dir / divisor).round() as u32);
         }
 
         Ok(aadv)
@@ -1083,21 +1083,15 @@ mod tests {
         let conn = pool.get().unwrap();
 
         let aadv = TimeBinnedVehicleClassCount::calculate_aadv(166905, &conn).unwrap();
-        assert_eq!(aadv.get(&None).unwrap().round() as u32, 3880);
-        assert_eq!(
-            aadv.get(&Some(Direction::East)).unwrap().round() as u32,
-            1783
-        );
-        assert_eq!(
-            aadv.get(&Some(Direction::West)).unwrap().round() as u32,
-            2097
-        );
+        assert_eq!(*aadv.get(&None).unwrap(), 3880);
+        assert_eq!(*aadv.get(&Some(Direction::East)).unwrap(), 1783);
+        assert_eq!(*aadv.get(&Some(Direction::West)).unwrap(), 2097);
 
         // 141216: fc 17, PA, 2018-08-01 (4th day of week from Sunday) only full day
         // pafactor = 0.863; paaxle = 0.976; total for 2018-08-01 (no directionality, because
         // not done by previous import process): 7460
         let aadv = FifteenMinuteVehicle::calculate_aadv(141216, &conn).unwrap();
-        assert_eq!(aadv.get(&None).unwrap().round() as u32, 6283);
+        assert_eq!(*aadv.get(&None).unwrap(), 6283);
 
         // 156238: bikpedgroup Mixed; full days from Nov 22, 2020 to Nov 28, 2020 inclusive
         /* Here's how it was manually calculated:
@@ -1132,9 +1126,9 @@ mod tests {
         dbg!(&manual_aadv_west); //  39.821
         */
         let aadv = FifteenMinuteBicycle::calculate_aadv(156238, &conn).unwrap();
-        assert_eq!(aadv.get(&None).unwrap().round() as u32, 122);
-        assert_eq!(aadv.get(&Some(Direction::East)).unwrap().round() as u32, 83);
-        assert_eq!(aadv.get(&Some(Direction::West)).unwrap().round() as u32, 40);
+        assert_eq!(*aadv.get(&None).unwrap(), 122);
+        assert_eq!(*aadv.get(&Some(Direction::East)).unwrap(), 83);
+        assert_eq!(*aadv.get(&Some(Direction::West)).unwrap(), 40);
 
         // 136271: full days from Oct 15, 2015 to Oct 21, 2015, inclusive.
         /* Here's how it was manually calculated:
@@ -1170,14 +1164,8 @@ mod tests {
         dbg!(&manual_aadv_north); // 23.208
         */
         let aadv = FifteenMinutePedestrian::calculate_aadv(136271, &conn).unwrap();
-        assert_eq!(aadv.get(&None).unwrap().round() as u32, 65);
-        assert_eq!(
-            aadv.get(&Some(Direction::South)).unwrap().round() as u32,
-            42
-        );
-        assert_eq!(
-            aadv.get(&Some(Direction::North)).unwrap().round() as u32,
-            23
-        );
+        assert_eq!(*aadv.get(&None).unwrap(), 65);
+        assert_eq!(*aadv.get(&Some(Direction::South)).unwrap(), 42);
+        assert_eq!(*aadv.get(&Some(Direction::North)).unwrap(), 23);
     }
 }
