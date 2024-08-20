@@ -117,6 +117,7 @@ use std::thread;
 use std::time;
 
 use log::{error, info, LevelFilter};
+use oracle::Connection;
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
@@ -323,8 +324,9 @@ fn main() {
                     TimeBinnedVehicleClassCount::delete(&conn, record_num).unwrap();
                     TimeBinnedSpeedRangeCount::delete(&conn, record_num).unwrap();
                     NonNormalAvgSpeedCount::delete(&conn, record_num).unwrap();
+                    NonNormalVolCount::delete(&conn, record_num).unwrap();
 
-                    // Create prepared statments and use them to insert counts.
+                    // Create prepared statements and use them to insert counts.
                     let mut prepared = TimeBinnedVehicleClassCount::prepare_insert(&conn).unwrap();
                     for count in vehicle_class_count {
                         match count.insert(&mut prepared) {
@@ -334,7 +336,13 @@ fn main() {
                             }
                         }
                     }
-                    conn.commit().unwrap();
+                    let table = <TimeBinnedVehicleClassCount as CountInsert>::COUNT_TABLE;
+                    match conn.commit() {
+                        Ok(()) => (),
+                        Err(e) => {
+                            error!(target: "import", "Error committing {record_num:?} class data insert to database ({table} table): {e}");
+                        }
+                    }
 
                     let mut prepared = TimeBinnedSpeedRangeCount::prepare_insert(&conn).unwrap();
                     for count in speed_range_count {
@@ -345,17 +353,20 @@ fn main() {
                             }
                         }
                     }
-                    conn.commit().unwrap();
+                    let table = <TimeBinnedSpeedRangeCount as CountInsert>::COUNT_TABLE;
+                    match conn.commit() {
+                        Ok(()) => (),
+                        Err(e) => {
+                            error!(target: "import", "Error committing {record_num:?} speed range data insert to database ({table} table): {e}");
+                        }
+                    }
 
                     // Denormalize this data to insert into tc_volcount table.
                     let denormalized_volcount =
                         TimeBinnedVehicleClassCount::denormalize_vol_count(record_num, &conn)
                             .unwrap();
 
-                    // Delete existing records from db.
-                    NonNormalVolCount::delete(&conn, record_num).unwrap();
-
-                    // Create prepared statments and use them to insert counts.
+                    // Create prepared statements and use them to insert counts.
                     let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
                     for count in denormalized_volcount {
                         match count.insert(&mut prepared) {
@@ -365,7 +376,13 @@ fn main() {
                             }
                         }
                     }
-                    conn.commit().unwrap();
+                    let table = <NonNormalVolCount as CountInsert>::COUNT_TABLE;
+                    match conn.commit() {
+                        Ok(()) => (),
+                        Err(e) => {
+                            error!(target: "import", "Error committing {record_num:?} denormalized class data insert to database ({table} table): {e}");
+                        }
+                    }
 
                     let mut prepared = NonNormalAvgSpeedCount::prepare_insert(&conn).unwrap();
                     for count in non_normal_speedavg_count {
@@ -376,7 +393,24 @@ fn main() {
                             }
                         }
                     }
-                    conn.commit().unwrap();
+                    let table = <NonNormalAvgSpeedCount as CountInsert>::COUNT_TABLE;
+                    match conn.commit() {
+                        Ok(()) => (),
+                        Err(e) => {
+                            error!(target: "import", "Error committing {record_num:?} denormalized speed data insert to database ({table} table) {e}");
+                        }
+                    }
+
+                    match update_metadata(record_num, metadata, &conn) {
+                        Ok(()) => {
+                            info!("metadata table (tc_header) updated")
+                        }
+                        Err(e) => {
+                            error!(
+                                "Error updating metadata table (tc_header) for {record_num:?}: {e}"
+                            )
+                        }
+                    }
 
                     // Calculate and insert the annual average daily volume.
                     match TimeBinnedVehicleClassCount::insert_aadv(record_num as u32, &conn) {
@@ -411,15 +445,11 @@ fn main() {
                             }
                         }
                     }
-                    conn.commit().unwrap();
-
-                    // Calculate and insert the annual average daily volume.
-                    match FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
-                        Ok(()) => {
-                            info!(target: "import", "AADV calculated and inserted for {record_num}")
-                        }
+                    let table = <FifteenMinuteVehicle as CountInsert>::COUNT_TABLE;
+                    match conn.commit() {
+                        Ok(()) => (),
                         Err(e) => {
-                            error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
+                            error!(target: "import", "Error committing {record_num:?} data insert to database ({table} table): {e}");
                         }
                     }
 
@@ -430,7 +460,7 @@ fn main() {
                     // Delete existing records from db.
                     NonNormalVolCount::delete(&conn, record_num).unwrap();
 
-                    // Create prepared statments and use them to insert counts.
+                    // Create prepared statements and use them to insert counts.
                     let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
                     for count in denormalized_volcount {
                         match count.insert(&mut prepared) {
@@ -440,7 +470,34 @@ fn main() {
                             }
                         }
                     }
-                    conn.commit().unwrap();
+                    let table = <NonNormalVolCount as CountInsert>::COUNT_TABLE;
+                    match conn.commit() {
+                        Ok(()) => (),
+                        Err(e) => {
+                            error!(target: "import", "Error committing {record_num:?} denormalized data insert to database ({table} table): {e}");
+                        }
+                    }
+
+                    match update_metadata(record_num, metadata, &conn) {
+                        Ok(()) => {
+                            info!("metadata table (tc_header) updated")
+                        }
+                        Err(e) => {
+                            error!(
+                                "Error updating metadata table (tc_header) for {record_num:?}: {e}"
+                            )
+                        }
+                    }
+
+                    // Calculate and insert the annual average daily volume.
+                    match FifteenMinuteVehicle::insert_aadv(record_num as u32, &conn) {
+                        Ok(()) => {
+                            info!(target: "import", "AADV calculated and inserted for {record_num}")
+                        }
+                        Err(e) => {
+                            error!(target: "import", "Failed to calculate/insert AADV for {path:?}: {e}")
+                        }
+                    }
                 }
                 InputCount::FifteenMinuteBicycle => {
                     // Extract data from CSV/text file.
@@ -465,7 +522,24 @@ fn main() {
                             }
                         }
                     }
-                    conn.commit().unwrap();
+                    let table = <FifteenMinuteBicycle as CountInsert>::COUNT_TABLE;
+                    match conn.commit() {
+                        Ok(()) => (),
+                        Err(e) => {
+                            error!(target: "import", "Error committing {record_num:?} data insert to database ({table} table): {e}");
+                        }
+                    }
+
+                    match update_metadata(record_num, metadata, &conn) {
+                        Ok(()) => {
+                            info!("metadata table (tc_header) updated")
+                        }
+                        Err(e) => {
+                            error!(
+                                "Error updating metadata table (tc_header) for {record_num:?}: {e}"
+                            )
+                        }
+                    }
 
                     // Calculate and insert the annual average daily volume.
                     match FifteenMinuteBicycle::insert_aadv(record_num as u32, &conn) {
@@ -500,7 +574,24 @@ fn main() {
                             }
                         }
                     }
-                    conn.commit().unwrap();
+                    let table = <FifteenMinutePedestrian as CountInsert>::COUNT_TABLE;
+                    match conn.commit() {
+                        Ok(()) => (),
+                        Err(e) => {
+                            error!(target: "import", "Error committing {record_num:?} data insert to database ({table} table): {e}");
+                        }
+                    }
+
+                    match update_metadata(record_num, metadata, &conn) {
+                        Ok(()) => {
+                            info!("metadata table (tc_header) updated")
+                        }
+                        Err(e) => {
+                            error!(
+                                "Error updating metadata table (tc_header) for {record_num:?}: {e}"
+                            )
+                        }
+                    }
 
                     // Calculate and insert the annual average daily volume.
                     match FifteenMinutePedestrian::insert_aadv(record_num as u32, &conn) {
@@ -550,4 +641,26 @@ fn cleanup(cleanup_files: bool, path: &PathBuf) {
             error!("Unable to delete file {path:?} {e}");
         }
     }
+}
+
+fn update_metadata(
+    record_num: u32,
+    metadata: CountMetadata,
+    conn: &Connection,
+) -> Result<(), oracle::Error> {
+    conn.execute(
+        "update tc_header SET
+        importdatadate = (select current_date from dual),
+        takenby = :1,
+        counterid = :2,
+        speedlimit = :3
+        where recordnum = :4",
+        &[
+            &metadata.technician,
+            &metadata.counter_id,
+            &metadata.speed_limit,
+            &record_num,
+        ],
+    )?;
+    conn.commit()
 }
