@@ -63,22 +63,22 @@ pub trait GetDate {
 pub enum CountError<'a> {
     #[error("problem with file or directory path")]
     BadPath(&'a Path),
-    #[error("unable to open file `{0}`")]
+    #[error("unable to open file '{0}'")]
     CannotOpenFile(#[from] io::Error),
     #[error("the filename at {path:?} is not to specification: {problem:?}")]
     InvalidFileName {
         problem: FileNameProblem,
         path: &'a Path,
     },
-    #[error("no matching count type for directory `{0}`")]
+    #[error("no matching count type for directory '{0}'")]
     BadLocation(String),
-    #[error("no matching count type for header in `{0}`")]
+    #[error("no matching count type for header in '{0}'")]
     BadHeader(&'a Path),
-    #[error("no such direction `{0}`")]
+    #[error("no such direction '{0}'")]
     BadDirection(String),
-    #[error("mismatch in count types between file location (`{0}`) and header of that file")]
+    #[error("mismatch in count types between file location ('{0}') and header of that file")]
     LocationHeaderMisMatch(&'a Path),
-    #[error("mismatch in number of directions between filename (`{0}`) and data in that file")]
+    #[error("mismatch in number of directions between filename ('{0}') and data in that file")]
     DirectionLenMisMatch(&'a Path),
     #[error("cannot parse value as number")]
     ParseError(#[from] ParseIntError),
@@ -88,7 +88,7 @@ pub enum CountError<'a> {
     BadIntervalCount,
     #[error("error converting header row to string")]
     HeadertoStringRecordError(#[from] csv::Error),
-    #[error("invalid MCD (`{0}`)")]
+    #[error("invalid MCD ({0})")]
     InvalidMcd(String),
     #[error("inconsistent data in database")]
     InconsistentData,
@@ -96,9 +96,9 @@ pub enum CountError<'a> {
     #[error("{0}")]
     DbError(String),
     // Errors from database passed through transparently without specific handling.
-    #[error("database error `{0}`")]
+    #[error("database error '{0}'")]
     OracleError(#[from] oracle::Error),
-    #[error("datetime error `{0}`")]
+    #[error("datetime error '{0}'")]
     TimeError(#[from] time::Error),
     #[error("{0}")]
     DataCheckError(String),

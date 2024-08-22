@@ -2,9 +2,10 @@
 
 use std::env;
 
+use log::Level;
 use oracle::{
     pool::{Pool, PoolBuilder},
-    Error as OracleError,
+    Connection, Error as OracleError,
 };
 use time::{format_description::BorrowedFormatItem, macros::format_description};
 
@@ -25,6 +26,19 @@ pub fn create_pool(username: String, password: String) -> Result<Pool, OracleErr
     PoolBuilder::new(username, password, "dvrpcprod_tp_tls")
         .max_connections(5)
         .build()
+}
+
+pub fn update_db_import_log(
+    record_num: u32,
+    conn: &Connection,
+    msg: &str,
+    level: Level,
+) -> Result<(), oracle::Error> {
+    conn.execute(
+        "insert into import_log (recordnum, message, log_level) values (:1, :2, :3)",
+        &[&record_num, &msg, &level.as_str()],
+    )?;
+    conn.commit()
 }
 
 #[cfg(test)]

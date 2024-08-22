@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 
-use log::warn;
+use log::{warn, Level};
 use oracle::{sql_type::Timestamp, Connection};
 use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
-use crate::{CountError, Direction};
+use crate::{db::update_db_import_log, CountError, Direction};
 
 // If a count is bidirectional, the totals for both directions should be relatively proportional.
 // One direction having less than this level is considered abnormal.
@@ -89,14 +89,16 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         let c15_percent = c15_sum as f32 / total_sum as f32 * 100.0;
 
         if c2_percent < 75.0 {
-            warn!(
-                target: "check",
-                "{recordnum}: Class 2 vehicles are less than 75% ({c2_percent:.1}%) of total."
-            )
+            let msg = format!("Class 2 vehicles are less than 75% ({c2_percent:.1}%) of total.");
+            warn!(target: "check", "{recordnum}: {msg}");
+            update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
         }
 
         if c15_percent > 10.0 {
-            warn!(target: "check", "{recordnum}: Unclassed vehicles are greater than 10% ({c15_percent:.1}%) of total.");
+            let msg =
+                format!("Unclassed vehicles are greater than 10% ({c15_percent:.1}%) of total.");
+            warn!(target: "check", "{recordnum}: {msg}");
+            update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
         }
     }
 
@@ -123,14 +125,15 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                     let smaller_share = *smaller.1 as f32 / total as f32;
                     let larger_share = *larger.1 as f32 / total as f32;
                     if smaller_share < DIR_PROPORTION_LOWER_BOUND {
-                        warn!(target: "check", "{recordnum}: Abnormal direction proportions: {} has {:.1}% of total, {} has {:.1}%.  (Expectation is that proportions are no less/more than {}%/{}%.)",
+                        let msg = format!("Abnormal direction proportions: {} has {:.1}% of total, {} has {:.1}%. (Expectation is that proportions are no less/more than {}%/{}%.)",
                             smaller.0,
                             smaller_share * 100_f32,
                             larger.0,
                             larger_share * 100_f32,
                             DIR_PROPORTION_LOWER_BOUND * 100_f32,
-                            100_f32 - DIR_PROPORTION_LOWER_BOUND * 100_f32,
-                        );
+                            100_f32 - DIR_PROPORTION_LOWER_BOUND * 100_f32);
+                        warn!(target: "check", "{recordnum}: {msg}");
+                        update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
                     }
                 }
             }
@@ -197,7 +200,9 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                     consecutive_zeros = 0;
                 }
                 if consecutive_zeros > 1 {
-                    warn!(target: "check", "{recordnum}: Consecutive period ({hour}) with 0 vehicles counted.");
+                    let msg = format!("Consecutive period ({hour}) with 0 vehicles counted.");
+                    warn!(target: "check", "{msg}");
+                    update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
                 }
             }
         }
@@ -213,7 +218,11 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         for result in results {
             let total = result?;
             if total > BIKE_COUNT_MAX {
-                warn!(target: "check", "{recordnum}: More than {BIKE_COUNT_MAX} in a 15-minute period for a bicycle count.");
+                let msg = format!(
+                    "More than {BIKE_COUNT_MAX} in a 15-minute period for a bicycle count."
+                );
+                warn!(target: "check", "{msg}");
+                update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
                 break;
             }
         }

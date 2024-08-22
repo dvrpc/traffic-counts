@@ -132,3 +132,11 @@ update tc_mcd
     where dvrpc = '3401551390'; -- Newfield Boro, Gloucester
 
 -- End enabling custom factors
+
+-- Create table to store results from running imports.
+create table import_log (
+    recordnum number not null,
+    datetime date default current_date,
+    message varchar2(1000) not null,
+    log_level varchar2(10) not null
+);
