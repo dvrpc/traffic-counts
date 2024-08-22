@@ -94,7 +94,7 @@ alter table tc_15minvolcount
 */
 
 -- Create table annual average daily volume, by directionality.
-create table tc_aadv (
+create table aadv (
     recordnum number not null,
     aadv number not null,
     direction varchar2(5),

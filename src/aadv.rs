@@ -195,14 +195,14 @@ pub trait Aadv {
         );
 
         // Delete any existing AADVs for same recordnum and date
-        if conn.execute("delete from tc_aadv where recordnum = :1 and date_calculated = TO_CHAR(:2, 'DD-MON-YY')", &[&recordnum, &date]).is_ok() {
+        if conn.execute("delete from aadv where recordnum = :1 and date_calculated = TO_CHAR(:2, 'DD-MON-YY')", &[&recordnum, &date]).is_ok() {
             conn.commit()?;
         };
 
         for (direction, aadv) in aadv {
             let direction = direction.map(|v| format!("{v}"));
             conn.execute(
-                "insert into tc_aadv (recordnum, aadv, direction, date_calculated) VALUES (:1, :2, :3, :4)",
+                "insert into aadv (recordnum, aadv, direction, date_calculated) VALUES (:1, :2, :3, :4)",
                 &[&recordnum, aadv, &direction, &date],
             )?;
         }
