@@ -140,3 +140,45 @@ create table import_log (
     message varchar2(1000) not null,
     log_level varchar2(10) not null
 );
+
+
+-- Create table to store days (official U.S. holidays, at least) to exclude from AADV calculations.
+create table aadv_excluded_days (
+    excluded_day date unique not null,
+    reason varchar2(500) not null,
+    client varchar(100)
+);
+
+-- 2023 and 2024 excluded days
+-- This is temporary/not how they will be added in future; a user interface will be created.
+-- U.S. holidays from <https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/>
+-- 2023
+insert into aadv_excluded_days values (to_date('2023-01-02', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-01-16', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-02-20', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-05-29', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-06-19', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-07-04', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-09-04', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-10-09', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-11-10', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-11-23', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2023-12-25', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+--2024
+insert into aadv_excluded_days values (to_date('2024-01-01', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-01-15', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-02-19', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-05-27', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-06-19', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-07-04', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-09-02', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-10-14', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-11-11', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-11-28', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+insert into aadv_excluded_days values (to_date('2024-12-25', 'YYYY-MM-DD'), 'U.S. holiday', NULL);
+--2024 additional PennDot excluded days
+insert into aadv_excluded_days values (to_date('2024-03-28', 'YYYY-MM-DD'), 'Easter', 'PennDot');
+insert into aadv_excluded_days values (to_date('2024-04-01', 'YYYY-MM-DD'), 'Easter', 'PennDot');
+insert into aadv_excluded_days values (to_date('2024-05-23', 'YYYY-MM-DD'), 'Memorial Day', 'PennDot');
+insert into aadv_excluded_days values (to_date('2024-05-28', 'YYYY-MM-DD'), 'Memorial Day', 'PennDot');
+insert into aadv_excluded_days values (to_date('2024-07-03', 'YYYY-MM-DD'), 'Independence Day', 'PennDot');

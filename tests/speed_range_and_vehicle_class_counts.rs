@@ -201,7 +201,6 @@ fn counts_created_correctly_101() {
     speed_range_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
     vehicle_class_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
 
-    dbg!(&vehicle_class_count);
     // total number of periods
     assert_eq!(speed_range_count.len(), 15); // 5 periods x 3 lanes
     assert_eq!(vehicle_class_count.len(), 15);

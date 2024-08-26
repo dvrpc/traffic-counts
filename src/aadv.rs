@@ -19,7 +19,7 @@ pub trait Aadv {
     /// Table containing factors for annual average daily volume calculation.
     const FACTOR_TABLE: &'static str;
 
-    /// Get dates of full-day counts.
+    /// Get dates of full-day counts, without excluding any dates.
     fn get_full_dates(recordnum: u32, conn: &Connection) -> Result<Vec<Date>, CountError> {
         let mut dates = vec![];
 
@@ -118,7 +118,7 @@ pub trait Aadv {
         Ok(dates)
     }
 
-    /// Get totals by date.
+    /// Get totals by date, without excluding any dates.
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
@@ -168,6 +168,22 @@ pub trait Aadv {
         }
 
         Ok(totals)
+    }
+
+    /// Get totals by date, excluded dates that should be excluded for aadv calculation.
+    fn get_total_by_non_excluded_date(
+        recordnum: u32,
+        conn: &Connection,
+    ) -> Result<HashMap<(Date, Option<Direction>), usize>, CountError> {
+        // Get day counts for full days.
+        let mut day_counts = Self::get_total_by_date(recordnum, conn)?;
+
+        // Remove excluded days
+        let excluded_days = excluded_days(conn)?;
+
+        day_counts.retain(|(date, _), _| !excluded_days.contains(date));
+
+        Ok(day_counts)
     }
 
     /// Calculate annual average daily volume.
@@ -222,8 +238,8 @@ impl Aadv for TimeBinnedVehicleClassCount {
         recordnum: u32,
         conn: &Connection,
     ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
-        // Get day counts for full days.
-        let day_counts = Self::get_total_by_date(recordnum, conn)?;
+        // Get totals by date, without excluded dates.
+        let day_counts = Self::get_total_by_non_excluded_date(recordnum, conn)?;
 
         // Get additional fields required to get factors from two other tables.
         // mcd contains state code
@@ -316,8 +332,8 @@ impl Aadv for FifteenMinuteVehicle {
         recordnum: u32,
         conn: &Connection,
     ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
-        // Get day counts for full days.
-        let day_counts = Self::get_total_by_date(recordnum, conn)?;
+        // Get totals by date, without excluded dates.
+        let day_counts = Self::get_total_by_non_excluded_date(recordnum, conn)?;
 
         // Get additional fields required to get factors from two other tables.
         // mcd contains state code
@@ -433,8 +449,8 @@ impl Aadv for FifteenMinuteBicycle {
         recordnum: u32,
         conn: &Connection,
     ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
-        // Get day counts for full days.
-        let day_counts = Self::get_total_by_date(recordnum, conn)?;
+        // Get totals by date, without excluded dates.
+        let day_counts = Self::get_total_by_non_excluded_date(recordnum, conn)?;
 
         // Get additional fields required to get factors from two other tables.
         let (bikepedgroup, count_type) = match conn.query_row_as::<(String, String)>(
@@ -528,8 +544,8 @@ impl Aadv for FifteenMinutePedestrian {
         recordnum: u32,
         conn: &Connection,
     ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
-        // Get day counts for full days.
-        let day_counts = Self::get_total_by_date(recordnum, conn)?;
+        // Get totals by date, without excluded dates.
+        let day_counts = Self::get_total_by_non_excluded_date(recordnum, conn)?;
 
         // Get additional fields required to get factors from equipment factor table.
         let count_type = match conn.query_row_as::<String>(
@@ -655,6 +671,22 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
         totals.insert((date, None), total);
     }
     Ok(totals)
+}
+
+pub fn excluded_days(conn: &Connection) -> Result<Vec<Date>, oracle::Error> {
+    let results = conn.query_as::<Timestamp>("select excluded_day from aadv_excluded_days", &[])?;
+
+    Ok(results
+        .map(|result| {
+            let result = result.unwrap();
+            let date = result;
+            Date::parse(
+                &format!("{}-{}-{}", date.year(), date.month(), date.day()),
+                YYYY_MM_DD_FMT,
+            )
+            .unwrap()
+        })
+        .collect::<Vec<Date>>())
 }
 
 #[cfg(test)]
@@ -1167,5 +1199,54 @@ mod tests {
         assert_eq!(*aadv.get(&None).unwrap(), 65);
         assert_eq!(*aadv.get(&Some(Direction::South)).unwrap(), 42);
         assert_eq!(*aadv.get(&Some(Direction::North)).unwrap(), 23);
+    }
+
+    #[ignore]
+    #[test]
+    fn excluded_days_sample_correct() {
+        let (username, password) = get_creds();
+        let pool = create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+
+        let excluded_days = excluded_days(&conn).unwrap();
+        assert!(excluded_days.contains(&date!(2024 - 07 - 03)));
+        assert!(excluded_days.contains(&date!(2023 - 01 - 02)));
+    }
+
+    #[ignore]
+    #[test]
+    /// 163487 contains excluded date (u.s. holiday) of 2023-02-20
+    fn aadv_correct_with_excluded_day_163487() {
+        let (username, password) = get_creds();
+        let pool = create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+
+        // This count was before we included count direction in tc_volcount. So just has one
+        // direction, north. (But will also have null direction for overall, which will be same
+        // values.)
+        // 2023-02-20 should be excluded, leaving 10 full days in this count to use for calculation
+        // manually:
+        /*
+        use time::macros::date;
+        // (date, total full day count, pa seasonal factor)
+        let data = [
+            (date!(2023 - 02 - 14), 1075, 1.159),
+            (date!(2023 - 02 - 15), 964, 1.007),
+            (date!(2023 - 02 - 16), 1069, 1.035),
+            (date!(2023 - 02 - 17), 1162, 0.953),
+            (date!(2023 - 02 - 18), 868, 1.191),
+            (date!(2023 - 02 - 19), 650, 1.621),
+            (date!(2023 - 02 - 21), 923, 1.159),
+            (date!(2023 - 02 - 22), 959, 1.007),
+            (date!(2023 - 02 - 23), 994, 1.035),
+            (date!(2023 - 02 - 24), 1186, 0.953),
+        ];
+        let manual_aadv = (data.iter().map(|data| data.1 as f64 * data.2).sum::<f64>()
+            / data.len() as f64)
+            .round() as u32;
+        dbg!(manual_aadv);
+        */
+        let aadv = TimeBinnedVehicleClassCount::calculate_aadv(163487, &conn).unwrap();
+        assert_eq!(aadv.get(&None), Some(&1071));
     }
 }
