@@ -221,6 +221,13 @@ pub trait Aadv {
                 "insert into aadv (recordnum, aadv, direction, date_calculated) VALUES (:1, :2, :3, :4)",
                 &[&recordnum, aadv, &direction, &date],
             )?;
+            // Add the overall (no directionality) aadv to tc_header table.
+            if direction.is_none() {
+                conn.execute(
+                    "update tc_header set aadv = :1 where recordnum = :2",
+                    &[aadv, &recordnum],
+                )?;
+            }
         }
         conn.commit()?;
         Ok(())

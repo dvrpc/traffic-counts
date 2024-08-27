@@ -101,6 +101,8 @@ create table aadv (
     date_calculated date not null
 );
 
+-- Add aadv column to tc_header, for redundant storage of latest aadv.
+alter table tc_header add aadv number;
 
 /*
  Begin enabling custom factors
