@@ -201,7 +201,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                 }
                 if consecutive_zeros > 1 {
                     let msg = format!("Consecutive period ({hour}) with 0 vehicles counted.");
-                    warn!(target: "check", "{msg}");
+                    warn!(target: "check", "{recordnum}: {msg}");
                     update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
                 }
             }
@@ -221,7 +221,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                 let msg = format!(
                     "More than {BIKE_COUNT_MAX} in a 15-minute period for a bicycle count."
                 );
-                warn!(target: "check", "{msg}");
+                warn!(target: "check", "{recordnum}: {msg}");
                 update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
                 break;
             }
