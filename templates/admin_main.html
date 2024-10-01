@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block header %}
+
+<h1>{{ header_text }}</h1>
+
+{% endblock %}
+
+{% block main_content %}
+<div id="sidebar">
+  <div>
+    <form action="/admin" method="post">
+      <h2 class="section_heading">Metadata (tc_header)</h2>
+      <ul>
+        <li><button name="action" value="insert_one">Insert One Empty Record</button></li>
+        <li><button name="action" value="insert_many">Insert Many Empty Records</button></li>
+        <li><button>Insert One or More Records Using Existing Record as Template</button></li>
+        <li><button>Edit Record</button></li>
+        <li><button>Create field packets</button></li>
+      </ul>
+
+      <h2 class="section_heading">Count data</h2>
+      <ul>
+        <li><button>Import from Eco-Counter</button></li>
+        <li><button>Import from JAMAR</button></li>
+        <li><button>Show full import log</button></li>
+        <li><button>Show import log for specific record</button></li>
+      </ul>
+
+      <h2 class="section_heading">Factors</h2>
+      <ul>
+        <li><button>Insert new factors</button></li>
+        <li><button>Update existing factors</button></li>
+      </ul>
+    </form>
+  </div>
+</div>
+
+<div id="right">
+  <h2 class="center">Welcome</h2>
+  <p>{{ test_response }}</p>
+  <div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,125 @@
+:root {
+  --off-white: #FBF7F7;
+  --dark-gray: hsl(0, 0%, 15%);
+  --light-gray: hsl(0, 0%, 85%);
+  --blue: hsl(205, 56%, 36%);
+  --light-blue: hsl(205, 56%, 54%);
+  --blue-gray: hsl(205, 15%, 60%);
+}
+
+html {
+  font-size: 20px;
+  font-family: "Open Sans", sans-serif;
+}
+
+body {
+  margin: 0 auto;
+  background: var(--dark-gray);
+  color: var(--light-gray);
+  height: 100vh;
+  width: 100vw;
+  display: grid;
+  grid-template-rows: 100px 1fr;
+  grid-template-areas: 
+    "header" 
+    "main";
+}
+
+header {
+  background: var(--blue);
+  color: var(--off-white);
+  box-shadow: 0px 5px 5px 0px rgba(0,0,0,0.2);
+  grid-area: header;
+}
+
+main {
+  margin: 0 auto;
+  width: 100%;
+  height: 100%;
+  line-height: 1.5;
+  grid-area: main;
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  grid-template-areas: "left right";
+  color: var(--dark-gray);
+}
+
+#sidebar {
+  border: 2px solid var(--dark-gray);
+  background-color: var(--light-gray);
+  grid-area: left;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+#sidebar h2.section_heading {
+  margin: 0;
+  padding: 0;
+  padding-top: 15px;
+  padding-bottom: 5px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1rem;
+  background-color: var(--blue-gray);
+  color: var(--dark-gray);
+}
+
+#sidebar ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+
+#sidebar button {
+  width: 100%;  
+  margin: 0;
+  border: 0;
+  padding-left: 10px;
+}
+
+#sidebar button:hover {
+  background-color: var(--light-gray);
+}
+
+#sidebar li {
+  border-top: 1px solid black;
+}
+
+#sidebar li:last-of-type {
+  border-bottom: 1px solid black;
+}
+
+#right {
+  padding: 10px;
+  border: 2px solid var(--dark-gray);
+  background-color: var(--light-gray);
+  color: var(--dark-gray);
+  grid-area: right;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+h1 {
+  font-size: 1.75rem;
+  text-align: center;
+}
+
+a, a:visited {
+  color: var(--light-blue);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  padding: 5px;
+  margin: 5px;
+  font-size: .9rem;
+  text-align: left;
+}
+
+.center {
+  text-align: center;
+}
