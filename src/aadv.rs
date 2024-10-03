@@ -47,6 +47,7 @@ pub trait Aadv {
                     time.second(),
                     0,
                 )
+                .unwrap()
             })
             .collect::<Vec<Timestamp>>();
 
@@ -208,7 +209,7 @@ pub trait Aadv {
             0,
             0,
             0,
-        );
+        )?;
 
         // Delete any existing AADVs for same recordnum and date
         if conn.execute("delete from aadv where recordnum = :1 and date_calculated = TO_CHAR(:2, 'DD-MON-YY')", &[&recordnum, &date]).is_ok() {

@@ -29,7 +29,7 @@ pub trait CountInsert {
     }
 
     /// Create prepared statement to use for insert.
-    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error>;
+    fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error>;
 
     /// Insert a record into the table using prepared statement.
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error>;
@@ -39,7 +39,7 @@ impl CountInsert for TimeBinnedVehicleClassCount {
     const COUNT_TABLE: &'static str = "tc_clacount";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
-    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+    fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {} (recordnum, countdate, counttime, countlane, total, ctdir, \
             bikes, cars_and_tlrs, ax2_long, buses, ax2_6_tire, ax3_single, ax4_single, \
@@ -61,7 +61,7 @@ impl CountInsert for TimeBinnedVehicleClassCount {
             0,
             0,
             0,
-        );
+        )?;
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.datetime.year(),
@@ -71,7 +71,7 @@ impl CountInsert for TimeBinnedVehicleClassCount {
             self.datetime.minute() as u32,
             self.datetime.second() as u32,
             0,
-        );
+        )?;
 
         stmt.execute(&[
             &self.record_num,
@@ -101,7 +101,7 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
     const COUNT_TABLE: &'static str = "tc_specount";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
-    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+    fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {} (
             recordnum, countdate, counttime, countlane, total, ctdir, \
@@ -122,7 +122,7 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
             0,
             0,
             0,
-        );
+        )?;
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.datetime.year(),
@@ -132,7 +132,7 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
             self.datetime.minute() as u32,
             self.datetime.second() as u32,
             0,
-        );
+        )?;
 
         stmt.execute(&[
             &self.record_num,
@@ -163,7 +163,7 @@ impl CountInsert for NonNormalAvgSpeedCount {
     const COUNT_TABLE: &'static str = "tc_spesum";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
-    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+    fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
             (recordnum, countdate, ctdir, countlane, \
@@ -186,7 +186,7 @@ impl CountInsert for NonNormalAvgSpeedCount {
             0,
             0,
             0,
-        );
+        )?;
 
         stmt.execute(&[
             &self.record_num,
@@ -225,7 +225,7 @@ impl CountInsert for NonNormalVolCount {
     const COUNT_TABLE: &'static str = "tc_volcount";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
-    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+    fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
             (recordnum, countdate, setflag, totalcount, weather, cntdir, countlane, \
@@ -248,7 +248,7 @@ impl CountInsert for NonNormalVolCount {
             0,
             0,
             0,
-        );
+        )?;
 
         stmt.execute(&[
             &self.record_num,
@@ -290,7 +290,7 @@ impl CountInsert for FifteenMinuteVehicle {
     const COUNT_TABLE: &'static str = "tc_15minvolcount";
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
-    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+    fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
             (recordnum, countdate, counttime, volcount, cntdir, countlane) \
@@ -309,7 +309,7 @@ impl CountInsert for FifteenMinuteVehicle {
             0,
             0,
             0,
-        );
+        )?;
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.date.year(),
@@ -319,7 +319,7 @@ impl CountInsert for FifteenMinuteVehicle {
             self.time.minute() as u32,
             self.time.second() as u32,
             0,
-        );
+        )?;
 
         stmt.execute(&[
             &self.record_num,
@@ -336,7 +336,7 @@ impl CountInsert for FifteenMinuteBicycle {
     const COUNT_TABLE: &'static str = "tc_bikecount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
-    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+    fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
             (dvrpcnum, countdate, counttime, total, incount, outcount) \
@@ -355,7 +355,7 @@ impl CountInsert for FifteenMinuteBicycle {
             0,
             0,
             0,
-        );
+        )?;
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.date.year(),
@@ -365,7 +365,7 @@ impl CountInsert for FifteenMinuteBicycle {
             self.time.minute() as u32,
             self.time.second() as u32,
             0,
-        );
+        )?;
 
         stmt.execute(&[
             &self.record_num,
@@ -382,7 +382,7 @@ impl CountInsert for FifteenMinutePedestrian {
     const COUNT_TABLE: &'static str = "tc_pedcount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
-    fn prepare_insert(conn: &Connection) -> Result<Statement<'_>, oracle::Error> {
+    fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
             (dvrpcnum, countdate, counttime, total, \"IN\", \"OUT\") \
@@ -401,7 +401,7 @@ impl CountInsert for FifteenMinutePedestrian {
             0,
             0,
             0,
-        );
+        )?;
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.date.year(),
@@ -411,7 +411,7 @@ impl CountInsert for FifteenMinutePedestrian {
             self.time.minute() as u32,
             self.time.second() as u32,
             0,
-        );
+        )?;
 
         stmt.execute(&[
             &self.record_num,
