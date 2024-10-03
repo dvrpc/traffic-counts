@@ -95,8 +95,6 @@ main {
   background-color: var(--light-gray);
   color: var(--dark-gray);
   grid-area: right;
-  display: grid;
-  grid-template-rows: auto 1fr;
 }
 
 h1 {
