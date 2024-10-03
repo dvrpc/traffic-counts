@@ -1,9 +1,12 @@
+use std::convert::AsRef;
 use std::env;
 use std::fmt::Display;
+use std::str::FromStr;
 
 use axum::{extract::Form, routing::get, Router};
 use rinja_axum::Template;
 use serde::{Deserialize, Serialize};
+use strum_macros::{AsRefStr, EnumString};
 use tower_http::services::ServeDir;
 
 use traffic_counts::db::{self, LogRecord};
@@ -20,7 +23,7 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-#[derive(Serialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Debug, PartialEq, Clone, AsRefStr, EnumString)]
 enum AdminAction {
     Start,
     InsertOne,
@@ -36,9 +39,9 @@ enum AdminAction {
     UpdateFactors,
 }
 
-impl<'a> AdminAction {
-    fn long_display(&self) -> &'a str {
-        match self {
+impl Display for AdminAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let r = match self {
             AdminAction::Start => "Welcome",
             AdminAction::InsertOne => "Insert One Empty Record",
             AdminAction::InsertMany => "Insert Many Empty Records",
@@ -53,32 +56,6 @@ impl<'a> AdminAction {
             AdminAction::ShowOneLog => "Show Import Log for Specific Record",
             AdminAction::InsertFactors => "Insert Factors",
             AdminAction::UpdateFactors => "Update Factors",
-        }
-    }
-    fn from_str(str: &'a str) -> Self {
-        match str {
-            "show_full_log" => AdminAction::ShowFullLog,
-            "show_one_log" => AdminAction::ShowOneLog,
-            _ => AdminAction::InsertOne,
-        }
-    }
-}
-
-impl Display for AdminAction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let r = match self {
-            AdminAction::Start => "start",
-            AdminAction::InsertOne => "insert_one",
-            AdminAction::InsertMany => "insert_many",
-            AdminAction::InsertWithTemplate => "insert_with_template",
-            AdminAction::EditOne => "edit",
-            AdminAction::CreatePackets => "create_packets",
-            AdminAction::ImportEcoCounter => "import_ecocounter",
-            AdminAction::ImportJamar => "import_jamar",
-            AdminAction::ShowFullLog => "show_full_log",
-            AdminAction::ShowOneLog => "show_one_log",
-            AdminAction::InsertFactors => "insert_factors",
-            AdminAction::UpdateFactors => "update_factors",
         };
         write!(f, "{r}")
     }
@@ -109,7 +86,7 @@ async fn admin() -> AdminMainTemplate<'static> {
 }
 
 async fn process_admin(Form(input): Form<Input>) -> AdminMainTemplate<'static> {
-    let action = AdminAction::from_str(&input.action.to_string());
+    let action = AdminAction::from_str(&input.action).unwrap();
     let recordnum = match &input.recordnum {
         Some(v) => Some(v),
         None => None,

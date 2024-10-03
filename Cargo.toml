@@ -21,5 +21,7 @@ time = { version = "0.3.36", features = ["parsing", "macros", "serde"] }
 axum = { version = "0.7.7", features = ["form"] }
 rinja_axum = "0.3.4"
 serde = { version = "1.0", features = ["derive"] }
+strum = "0.26"
+strum_macros = "0.26"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6.1", features = ["fs"] }

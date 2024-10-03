@@ -12,32 +12,32 @@
     <form action="/admin" method="post">
       <h2 class="section_heading">Metadata (tc_header)</h2>
       <ul>
-        <li><button name="action" value="{{ AdminAction::InsertOne }}">{{ AdminAction::InsertOne.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::InsertMany }}">{{ AdminAction::InsertMany.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::InsertWithTemplate }}">{{ AdminAction::InsertWithTemplate.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::EditOne }}">{{ AdminAction::EditOne.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::CreatePackets }}">{{ AdminAction::CreatePackets.long_display() }}</button></li>
+        <li><button name="action" value="{{ AdminAction::InsertOne.as_ref() }}">{{ AdminAction::InsertOne }}</button></li>
+        <li><button name="action" value="{{ AdminAction::InsertMany.as_ref() }}">{{ AdminAction::InsertMany }}</button></li>
+        <li><button name="action" value="{{ AdminAction::InsertWithTemplate.as_ref() }}">{{ AdminAction::InsertWithTemplate }}</button></li>
+        <li><button name="action" value="{{ AdminAction::EditOne.as_ref() }}">{{ AdminAction::EditOne }}</button></li>
+        <li><button name="action" value="{{ AdminAction::CreatePackets.as_ref() }}">{{ AdminAction::CreatePackets }}</button></li>
       </ul>
 
       <h2 class="section_heading">Count data</h2>
       <ul>
-        <li><button name="action" value="{{ AdminAction::ImportEcoCounter }}">{{ AdminAction::ImportEcoCounter.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::ImportJamar }}">{{ AdminAction::ImportJamar.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::ShowFullLog }}"> {{ AdminAction::ShowFullLog.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::ShowOneLog }}">{{ AdminAction::ShowOneLog.long_display() }}</button></li>
+        <li><button name="action" value="{{ AdminAction::ImportEcoCounter.as_ref() }}">{{ AdminAction::ImportEcoCounter }}</button></li>
+        <li><button name="action" value="{{ AdminAction::ImportJamar.as_ref() }}">{{ AdminAction::ImportJamar }}</button></li>
+        <li><button name="action" value="{{ AdminAction::ShowFullLog.as_ref() }}"> {{ AdminAction::ShowFullLog }}</button></li>
+        <li><button name="action" value="{{ AdminAction::ShowOneLog.as_ref() }}">{{ AdminAction::ShowOneLog }}</button></li>
       </ul>
 
       <h2 class="section_heading">Factors</h2>
       <ul>
-        <li><button name="action" value="{{ AdminAction::InsertFactors }}">{{ AdminAction::InsertFactors.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::UpdateFactors }}">{{ AdminAction::UpdateFactors.long_display() }}</button></li>
+        <li><button name="action" value="{{ AdminAction::InsertFactors.as_ref() }}">{{ AdminAction::InsertFactors }}</button></li>
+        <li><button name="action" value="{{ AdminAction::UpdateFactors.as_ref() }}">{{ AdminAction::UpdateFactors }}</button></li>
       </ul>
     </form>
   </div>
 </div>
 
 <div id="right">
-  <h2 class="center">{{ admin_action.long_display() }}</h2>
+  <h2 class="center">{{ admin_action }}</h2>
 
   {% match message %}
     {% when Some with (v) %} {{ v }}
@@ -59,7 +59,7 @@
       {% match log_records %}
         {% when Some(log_records) %} 
           {% if log_records.is_empty() %}
-            No import records found.<br>
+            No import records found. Try again:<br>
             {% include "recordnum_form.html" %}
           {% else %}
             {% include "log_records_table.html" %}
