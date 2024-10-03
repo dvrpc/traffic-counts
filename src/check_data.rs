@@ -4,7 +4,10 @@ use log::{warn, Level};
 use oracle::{sql_type::Timestamp, Connection};
 use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
-use crate::{db::update_db_import_log, CountError, Direction};
+use crate::{
+    db::{update_db_import_log, LogRecord},
+    CountError, Direction,
+};
 
 // If a count is bidirectional, the totals for both directions should be relatively proportional.
 // One direction having less than this level is considered abnormal.
@@ -91,14 +94,14 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         if c2_percent < 75.0 {
             let msg = format!("Class 2 vehicles are less than 75% ({c2_percent:.1}%) of total.");
             warn!(target: "check", "{recordnum}: {msg}");
-            update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
+            update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn)).unwrap();
         }
 
         if c15_percent > 10.0 {
             let msg =
                 format!("Unclassed vehicles are greater than 10% ({c15_percent:.1}%) of total.");
             warn!(target: "check", "{recordnum}: {msg}");
-            update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
+            update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn)).unwrap();
         }
     }
 
@@ -133,7 +136,8 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                             DIR_PROPORTION_LOWER_BOUND * 100_f32,
                             100_f32 - DIR_PROPORTION_LOWER_BOUND * 100_f32);
                         warn!(target: "check", "{recordnum}: {msg}");
-                        update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
+                        update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn))
+                            .unwrap();
                     }
                 }
             }
@@ -202,7 +206,8 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                 if consecutive_zeros > 1 {
                     let msg = format!("Consecutive period ({hour}) with 0 vehicles counted.");
                     warn!(target: "check", "{recordnum}: {msg}");
-                    update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
+                    update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn))
+                        .unwrap();
                 }
             }
         }
@@ -222,7 +227,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                     "More than {BIKE_COUNT_MAX} in a 15-minute period for a bicycle count."
                 );
                 warn!(target: "check", "{recordnum}: {msg}");
-                update_db_import_log(recordnum, conn, &msg, Level::Warn).unwrap();
+                update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn)).unwrap();
                 break;
             }
         }

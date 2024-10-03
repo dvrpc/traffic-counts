@@ -3,9 +3,9 @@
 //!   - vehicle/  - for raw, unbinned records of [individual vehicles][IndividualVehicle] containing vehicle class and speed, from STARneXt/JAMAR
 //!   - 15minutevehicle/ - for [pre-binned, 15-minute volume counts][FifteenMinuteVehicle] from STARneXt/JAMAR
 //!   - 15minutebicycle/ - for [pre-binned, 15-minute bicycle counts][FifteenMinuteBicycle] from
-//! Eco-Counter
+//!     Eco-Counter
 //!   - 15minutepedestrian/ - for [pre-binned, 15-minute pedestrian counts][FifteenMinutePedestrian]
-//! from Eco-Counter
+//!     from Eco-Counter
 //!
 //! When a file is found, the program verifies that it contains the correct/expected kind of data,
 //! derives the appropriate counts from it, and then inserts these into our database and removes
@@ -73,9 +73,9 @@
 //!
 //!   - open STARneXt, open a .snj file.
 //!   - click the **Process** button from the top menu to transform tube pulses to
-//! vehicle counts. This will take you to a "Per Vehicle Records" tab.
+//!     vehicle counts. This will take you to a "Per Vehicle Records" tab.
 //!   - click the **Export** button from the top menu, selecting *ASCII (CSV)*
-//! as the format. Then:
+//!     as the format. Then:
 //!     - leave the radio button checked for *Export all vehicles*
 //!     - click **Next**
 //!     - click the checkboxes for all channels available
@@ -105,9 +105,8 @@
 //! A visualization will then appear in the main area of the site. Do the following:
 //!   - By default the visualization is set to *Curve*; change it to *Table*.
 //!   - Select **Options** and ensure that *Total per site* and *Directions* are
-//! both toggled on and that both directions (in/out) are included.
-//!   - click on the **Download** (⤓) button, choosing *Spreadsheet (CSV)* as the format, comma as
-//! the delimiter, and save locally.
+//!     both toggled on and that both directions (in/out) are included.
+//!   - click on the **Download** (⤓) button, choosing *Spreadsheet (CSV)* as the format, comma   //!     as the delimiter, and save locally.
 
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -126,7 +125,7 @@ use traffic_counts::{
     aadv::Aadv,
     check_data::check,
     count_insert::CountInsert,
-    db::{create_pool, update_db_import_log},
+    db::{create_pool, update_db_import_log, LogRecord},
     denormalize::{Denormalize, *},
     extract_from_file::Extract,
     *,
@@ -288,7 +287,11 @@ fn main() {
                     target: "import",
                     "{record_num}: {msg}",
                 );
-                update_db_import_log(record_num, &conn, msg, Level::Error).unwrap();
+                update_db_import_log(
+                    &conn,
+                    LogRecord::new(record_num, msg.to_string(), Level::Error),
+                )
+                .unwrap();
                 cleanup(cleanup_files, path);
                 continue;
             }
@@ -296,7 +299,7 @@ fn main() {
             // Process the file according to InputCount.
             let msg = format!("Extracting data from {path:?}, a {count_type:?} count");
             info!( target: "import", "{msg}" );
-            update_db_import_log(record_num, &conn, &msg, Level::Info).unwrap();
+            update_db_import_log(&conn, LogRecord::new(record_num, msg, Level::Info)).unwrap();
             match count_type {
                 InputCount::IndividualVehicle => {
                     // Extract data from CSV/text file.
@@ -305,7 +308,11 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -337,8 +344,11 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{record_num}: {msg}");
-                                update_db_import_log(record_num, &conn, &msg, Level::Error)
-                                    .unwrap();
+                                update_db_import_log(
+                                    &conn,
+                                    LogRecord::new(record_num, msg, Level::Error),
+                                )
+                                .unwrap();
                                 continue 'paths_loop;
                             }
                         }
@@ -348,12 +358,20 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed class data insert to database ({table} table)");
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error committing class data insert to database ({table} table): {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -364,8 +382,11 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{record_num}: {msg}");
-                                update_db_import_log(record_num, &conn, &msg, Level::Error)
-                                    .unwrap();
+                                update_db_import_log(
+                                    &conn,
+                                    LogRecord::new(record_num, msg, Level::Error),
+                                )
+                                .unwrap();
                                 continue 'paths_loop;
                             }
                         }
@@ -375,12 +396,20 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed speed range data insert to database ({table} table)");
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error committing speed range data insert to database ({table} table): {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -397,8 +426,11 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{record_num}: {msg}");
-                                update_db_import_log(record_num, &conn, &msg, Level::Error)
-                                    .unwrap();
+                                update_db_import_log(
+                                    &conn,
+                                    LogRecord::new(record_num, msg, Level::Error),
+                                )
+                                .unwrap();
                                 continue 'paths_loop;
                             }
                         }
@@ -408,12 +440,20 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized class data insert to database ({table} table)");
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error committing denormalized class data insert to database ({table} table): {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -424,8 +464,11 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{record_num}: {msg}");
-                                update_db_import_log(record_num, &conn, &msg, Level::Error)
-                                    .unwrap();
+                                update_db_import_log(
+                                    &conn,
+                                    LogRecord::new(record_num, msg, Level::Error),
+                                )
+                                .unwrap();
                                 continue 'paths_loop;
                             }
                         }
@@ -435,12 +478,20 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized speed data insert to database ({table} table)");
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error committing denormalized speed data insert to database ({table} table): {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -448,12 +499,20 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error updating metadata (tc_header table): {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -462,12 +521,20 @@ fn main() {
                         Ok(()) => {
                             let msg = "AADV calculated and inserted";
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Failed to calculate/insert AADV: {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
                 }
@@ -478,7 +545,11 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -494,8 +565,11 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{record_num}: {msg}");
-                                update_db_import_log(record_num, &conn, &msg, Level::Error)
-                                    .unwrap();
+                                update_db_import_log(
+                                    &conn,
+                                    LogRecord::new(record_num, msg, Level::Error),
+                                )
+                                .unwrap();
                                 continue 'paths_loop;
                             }
                         }
@@ -508,7 +582,11 @@ fn main() {
                                 "Error committing data insert to database ({table} table): {e}"
                             );
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -527,8 +605,11 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{record_num}: {msg}");
-                                update_db_import_log(record_num, &conn, &msg, Level::Error)
-                                    .unwrap();
+                                update_db_import_log(
+                                    &conn,
+                                    LogRecord::new(record_num, msg, Level::Error),
+                                )
+                                .unwrap();
                                 continue 'paths_loop;
                             }
                         }
@@ -538,12 +619,20 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized data insert to database ({table} table)");
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error committing denormalized data insert to database ({table} table): {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -551,13 +640,21 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error updating metadata (tc_header table): {e}");
                             error!(target: "import", "{record_num}: {msg}"
                             );
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -566,12 +663,20 @@ fn main() {
                         Ok(()) => {
                             let msg = "AADV calculated and inserted";
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Failed to calculate/insert AADV: {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
                 }
@@ -582,7 +687,11 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -598,8 +707,11 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{record_num}: {msg}");
-                                update_db_import_log(record_num, &conn, &msg, Level::Error)
-                                    .unwrap();
+                                update_db_import_log(
+                                    &conn,
+                                    LogRecord::new(record_num, msg, Level::Error),
+                                )
+                                .unwrap();
                                 continue 'paths_loop;
                             }
                         }
@@ -611,14 +723,22 @@ fn main() {
                                 "Successfully committed data insert to database ({table} table)"
                             );
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!(
                                 "Error committing data insert to database ({table} table): {e}"
                             );
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -626,12 +746,20 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error updating metadata (tc_header table): {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -640,12 +768,20 @@ fn main() {
                         Ok(()) => {
                             let msg = "AADV calculated and inserted";
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Failed to calculate/insert AADV: {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
                 }
@@ -656,7 +792,11 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -672,8 +812,11 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}");
                                 error!(target: "import", "{record_num}: {msg}");
-                                update_db_import_log(record_num, &conn, &msg, Level::Error)
-                                    .unwrap();
+                                update_db_import_log(
+                                    &conn,
+                                    LogRecord::new(record_num, msg, Level::Error),
+                                )
+                                .unwrap();
                                 continue 'paths_loop;
                             }
                         }
@@ -685,14 +828,22 @@ fn main() {
                                 "Successfully committed data insert to database ({table} table)"
                             );
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!(
                                 "Error committing data insert to database ({table} table): {e}"
                             );
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -700,12 +851,20 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Error updating metadata (tc_header header): {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
 
@@ -714,12 +873,20 @@ fn main() {
                         Ok(()) => {
                             let msg = "AADV calculated and inserted";
                             info!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
                         }
                         Err(e) => {
                             let msg = format!("Failed to calculate/insert AADV: {e}");
                             error!(target: "import", "{record_num}: {msg}");
-                            update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                            update_db_import_log(
+                                &conn,
+                                LogRecord::new(record_num, msg, Level::Error),
+                            )
+                            .unwrap();
                         }
                     }
                 }
@@ -730,11 +897,15 @@ fn main() {
             // and log them for review.
             let msg = "Checking data";
             info!(target: "import", "{record_num}: {msg}");
-            update_db_import_log(record_num, &conn, msg, Level::Info).unwrap();
+            update_db_import_log(
+                &conn,
+                LogRecord::new(record_num, msg.to_string(), Level::Info),
+            )
+            .unwrap();
             if let Err(e) = check(record_num, &conn) {
                 let msg = format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect.");
                 error!(target: "import", "{record_num}: {msg}");
-                update_db_import_log(record_num, &conn, &msg, Level::Error).unwrap();
+                update_db_import_log(&conn, LogRecord::new(record_num, msg, Level::Error)).unwrap();
             }
             cleanup(cleanup_files, path);
         }
