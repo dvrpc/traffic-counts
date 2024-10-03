@@ -1,0 +1,13 @@
+<table>
+  {% for item in log_records %}
+    <tr>
+      <td>
+        {{ item.datetime.unwrap().date()|safe }}
+        {{ item.datetime.unwrap().hour()|safe }}:{{ item.datetime.unwrap().minute() }}
+      </td>
+      <td>{{ item.record_num|safe }}</td>
+      <td>{{ item.level|safe }}</td>
+      <td>{{ item.msg|safe }}</td>
+    </tr>
+  {% endfor %}
+</table>

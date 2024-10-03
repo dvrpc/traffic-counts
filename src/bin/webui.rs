@@ -20,8 +20,9 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq, Clone)]
 enum AdminAction {
+    Start,
     InsertOne,
     InsertMany,
     InsertWithTemplate,
@@ -30,7 +31,7 @@ enum AdminAction {
     ImportEcoCounter,
     ImportJamar,
     ShowFullLog,
-    ShowRecordLog,
+    ShowOneLog,
     InsertFactors,
     UpdateFactors,
 }
@@ -38,6 +39,7 @@ enum AdminAction {
 impl<'a> AdminAction {
     fn long_display(&self) -> &'a str {
         match self {
+            AdminAction::Start => "Welcome",
             AdminAction::InsertOne => "Insert One Empty Record",
             AdminAction::InsertMany => "Insert Many Empty Records",
             AdminAction::InsertWithTemplate => {
@@ -48,7 +50,7 @@ impl<'a> AdminAction {
             AdminAction::ImportEcoCounter => "Import from EcoCounter",
             AdminAction::ImportJamar => "Import from Jamar",
             AdminAction::ShowFullLog => "Show Full Import Log",
-            AdminAction::ShowRecordLog => "Show Import Log for Specific Record",
+            AdminAction::ShowOneLog => "Show Import Log for Specific Record",
             AdminAction::InsertFactors => "Insert Factors",
             AdminAction::UpdateFactors => "Update Factors",
         }
@@ -56,6 +58,7 @@ impl<'a> AdminAction {
     fn from_str(str: &'a str) -> Self {
         match str {
             "show_full_log" => AdminAction::ShowFullLog,
+            "show_one_log" => AdminAction::ShowOneLog,
             _ => AdminAction::InsertOne,
         }
     }
@@ -64,6 +67,7 @@ impl<'a> AdminAction {
 impl Display for AdminAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let r = match self {
+            AdminAction::Start => "start",
             AdminAction::InsertOne => "insert_one",
             AdminAction::InsertMany => "insert_many",
             AdminAction::InsertWithTemplate => "insert_with_template",
@@ -72,7 +76,7 @@ impl Display for AdminAction {
             AdminAction::ImportEcoCounter => "import_ecocounter",
             AdminAction::ImportJamar => "import_jamar",
             AdminAction::ShowFullLog => "show_full_log",
-            AdminAction::ShowRecordLog => "show_record_log",
+            AdminAction::ShowOneLog => "show_one_log",
             AdminAction::InsertFactors => "insert_factors",
             AdminAction::UpdateFactors => "update_factors",
         };
@@ -84,25 +88,32 @@ impl Display for AdminAction {
 #[allow(dead_code)]
 struct Input {
     action: String,
+    recordnum: Option<u32>,
 }
 
 #[derive(Template, Debug)]
 #[template(path = "admin_main.html")]
 struct AdminMainTemplate<'a> {
     header_text: &'a str,
-    right_header: &'a str,
+    admin_action: AdminAction,
     log_records: Option<Vec<LogRecord>>,
+    message: Option<String>,
 }
 async fn admin() -> AdminMainTemplate<'static> {
     AdminMainTemplate {
         header_text: "Traffic Counts: Admin",
-        right_header: "Welcome",
+        admin_action: AdminAction::Start,
         log_records: None,
+        message: None,
     }
 }
 
 async fn process_admin(Form(input): Form<Input>) -> AdminMainTemplate<'static> {
-    let input = AdminAction::from_str(&input.action.to_string());
+    let action = AdminAction::from_str(&input.action.to_string());
+    let recordnum = match &input.recordnum {
+        Some(v) => Some(v),
+        None => None,
+    };
 
     dotenvy::dotenv().expect("Unable to load .env file.");
     let username = env::var("DB_USERNAME").unwrap();
@@ -112,14 +123,30 @@ async fn process_admin(Form(input): Form<Input>) -> AdminMainTemplate<'static> {
 
     let mut template = AdminMainTemplate {
         header_text: "Traffic Counts: Admin",
-        right_header: "Welcome",
+        admin_action: action.clone(),
         log_records: None,
+        message: None,
     };
 
-    match input {
+    match action {
+        AdminAction::Start => (),
         AdminAction::ShowFullLog => {
-            template.log_records = Some(db::get_import_log(&conn, None).unwrap());
-            template.right_header = "Full Import Log";
+            let log_records = Some(db::get_import_log(&conn, None).unwrap());
+            template.log_records = log_records.clone();
+            template.admin_action = AdminAction::ShowFullLog;
+        }
+        AdminAction::ShowOneLog => {
+            if let Some(v) = recordnum {
+                match db::get_import_log(&conn, Some(*v)) {
+                    Ok(w) => {
+                        template.log_records = Some(w);
+                    }
+                    Err(_) => {
+                        template.message =
+                            Some(format!("Recordnum {v} not found or error running query."));
+                    }
+                }
+            }
         }
         _ => {}
     };

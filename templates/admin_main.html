@@ -23,8 +23,8 @@
       <ul>
         <li><button name="action" value="{{ AdminAction::ImportEcoCounter }}">{{ AdminAction::ImportEcoCounter.long_display() }}</button></li>
         <li><button name="action" value="{{ AdminAction::ImportJamar }}">{{ AdminAction::ImportJamar.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::ShowFullLog }}">{{ AdminAction::ShowFullLog.long_display() }}</button></li>
-        <li><button name="action" value="{{ AdminAction::ShowRecordLog }}">{{ AdminAction::ShowRecordLog.long_display() }}</button></li>
+        <li><button name="action" value="{{ AdminAction::ShowFullLog }}"> {{ AdminAction::ShowFullLog.long_display() }}</button></li>
+        <li><button name="action" value="{{ AdminAction::ShowOneLog }}">{{ AdminAction::ShowOneLog.long_display() }}</button></li>
       </ul>
 
       <h2 class="section_heading">Factors</h2>
@@ -37,24 +37,41 @@
 </div>
 
 <div id="right">
-  <h2 class="center">{{ right_header }}</h2>
-  {% match log_records %}
-    {% when Some with (v) %} 
-    <table>
-      {% for item in v %}
-        <tr>
-          <td>
-            {{ item.datetime.unwrap().date()|safe }} 
-            {{ item.datetime.unwrap().hour()|safe }}:{{ item.datetime.unwrap().minute() }}
-          </td> 
-          <td>{{ item.record_num|safe }}</td>
-          <td>{{ item.level|safe }}</td>
-          <td>{{ item.msg|safe }}</td>
-        </tr>
-      {% endfor %}
-    </table>
-    {% when None %}
+  <h2 class="center">{{ admin_action.long_display() }}</h2>
+
+  {% match message %}
+    {% when Some with (v) %} {{ v }}
+    {% when _ %} 
   {% endmatch %}
+
+  {# Display right pane based on action taken. #}
+  {% match admin_action %}
+    {% when AdminAction::Start %} 
+
+    {% when AdminAction::ShowFullLog %} 
+      {% match log_records %}
+        {% when Some(log_records) %} 
+          {% include "log_records_table.html" %}
+        {% when None %}        
+      {% endmatch %}
+
+    {% when AdminAction::ShowOneLog %}
+      {% match log_records %}
+        {% when Some(log_records) %} 
+          {% if log_records.is_empty() %}
+            No import records found.<br>
+            {% include "recordnum_form.html" %}
+          {% else %}
+            {% include "log_records_table.html" %}
+          {% endif %}
+        {% when None %}
+          {% include "recordnum_form.html" %}
+      {% endmatch %}
+
+    {% when _ %} not handled yet
+
+  {% endmatch %}
+ 
 </div>
 
 {% endblock %}

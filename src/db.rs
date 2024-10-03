@@ -10,6 +10,7 @@ use oracle::{
     sql_type::Timestamp,
     Connection, Error as OracleError, RowValue,
 };
+use serde::Serialize;
 use time::{
     format_description::BorrowedFormatItem, macros::format_description, Date, PrimitiveDateTime,
     Time,
@@ -34,12 +35,12 @@ pub fn create_pool(username: String, password: String) -> Result<Pool, OracleErr
         .build()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct LogRecord {
     pub datetime: Option<PrimitiveDateTime>,
     pub record_num: u32,
     pub msg: String,
-    pub level: Level,
+    pub level: String,
 }
 
 impl RowValue for LogRecord {
@@ -81,7 +82,7 @@ impl LogRecord {
             datetime: None,
             record_num,
             msg,
-            level,
+            level: level.to_string(),
         }
     }
 }
@@ -103,11 +104,7 @@ impl Display for LogRecord {
 pub fn update_db_import_log(conn: &Connection, log_record: LogRecord) -> Result<(), oracle::Error> {
     conn.execute(
         "insert into import_log (recordnum, message, log_level) values (:1, :2, :3)",
-        &[
-            &log_record.record_num,
-            &log_record.msg,
-            &log_record.level.as_str(),
-        ],
+        &[&log_record.record_num, &log_record.msg, &log_record.level],
     )?;
     conn.commit()
 }
