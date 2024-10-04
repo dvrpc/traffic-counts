@@ -68,6 +68,13 @@
           {% include "recordnum_form.html" %}
       {% endmatch %}
 
+    {% when AdminAction::InsertOne %}
+      <form action="/admin" method="post">
+        Please confirm that you want to create a new, empty record in the `tc_header` table:
+        <button name="action" value="{{ AdminAction::InsertOneConfirm.as_ref() }}">Confirm</button>
+      </form>
+
+    {% when AdminAction::InsertOneConfirm %}
     {% when _ %} not handled yet
 
   {% endmatch %}

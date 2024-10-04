@@ -27,6 +27,7 @@ async fn main() {
 enum AdminAction {
     Start,
     InsertOne,
+    InsertOneConfirm,
     InsertMany,
     InsertWithTemplate,
     EditOne,
@@ -39,11 +40,13 @@ enum AdminAction {
     UpdateFactors,
 }
 
+/// These will be used as text for sidebar menu buttons and/or section titles, depending on use.
 impl Display for AdminAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let r = match self {
             AdminAction::Start => "Welcome",
             AdminAction::InsertOne => "Insert One Empty Record",
+            AdminAction::InsertOneConfirm => "Insert One Empty Record",
             AdminAction::InsertMany => "Insert Many Empty Records",
             AdminAction::InsertWithTemplate => {
                 "Insert One or More Records Using Existing Record as Template"
@@ -109,7 +112,7 @@ async fn process_admin(Form(input): Form<Input>) -> AdminMainTemplate<'static> {
         AdminAction::Start => (),
         AdminAction::ShowFullLog => {
             let log_records = Some(db::get_import_log(&conn, None).unwrap());
-            template.log_records = log_records.clone();
+            template.log_records = log_records;
             template.admin_action = AdminAction::ShowFullLog;
         }
         AdminAction::ShowOneLog => {
@@ -124,6 +127,11 @@ async fn process_admin(Form(input): Form<Input>) -> AdminMainTemplate<'static> {
                     }
                 }
             }
+        }
+        AdminAction::InsertOneConfirm => {
+            // TODO: code to insert a new record
+            // different message/response based on result
+            template.message = Some("New record created {} (num here)".to_string());
         }
         _ => {}
     };
