@@ -128,11 +128,14 @@ async fn process_admin(Form(input): Form<Input>) -> AdminMainTemplate<'static> {
                 }
             }
         }
-        AdminAction::InsertOneConfirm => {
-            // TODO: code to insert a new record
-            // different message/response based on result
-            template.message = Some("New record created {} (num here)".to_string());
-        }
+        AdminAction::InsertOneConfirm => match db::insert_empty_metadata(&conn) {
+            Ok(v) => {
+                template.message = Some(format!("New record created {v}"));
+            }
+            Err(e) => {
+                template.message = Some(format!("Error: {e}"));
+            }
+        },
         _ => {}
     };
 

@@ -130,6 +130,16 @@ pub fn get_import_log(
     Ok(log_records)
 }
 
+pub fn insert_empty_metadata(conn: &Connection) -> Result<u32, oracle::Error> {
+    let stmt = conn.execute(
+        "insert into tc_header (createheaderdate) values (CURRENT_DATE) RETURNING recordnum INTO :record_num",
+        &[&None::<u32>],
+    )?;
+    conn.commit()?;
+    let record_num: u32 = stmt.returned_values("record_num")?[0];
+    Ok(record_num)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
