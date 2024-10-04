@@ -9,7 +9,7 @@ use log::error;
 use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
 use crate::{
-    num_nondata_rows, CountError, CountMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian,
+    num_nondata_rows, CountError, FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian,
     FifteenMinuteVehicle, IndividualVehicle,
 };
 
@@ -26,7 +26,7 @@ impl Extract for FifteenMinuteVehicle {
     fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
-        let metadata = CountMetadata::from_path(path)?;
+        let metadata = FieldMetadata::from_path(path)?;
 
         // Iterate through data rows.
         let mut counts = vec![];
@@ -164,7 +164,7 @@ impl Extract for FifteenMinuteBicycle {
     fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
-        let metadata = CountMetadata::from_path(path)?;
+        let metadata = FieldMetadata::from_path(path)?;
 
         // Iterate through data rows.
         let mut counts = vec![];
@@ -224,7 +224,7 @@ impl Extract for FifteenMinutePedestrian {
     fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
-        let metadata = CountMetadata::from_path(path)?;
+        let metadata = FieldMetadata::from_path(path)?;
 
         // Iterate through data rows.
         let mut counts = vec![];

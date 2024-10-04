@@ -224,7 +224,7 @@ pub struct NonNormalAvgSpeedCount {
 
 /// Create non-normalized average speed counts from [`IndividualVehicle`]s.
 pub fn create_non_normal_speedavg_count(
-    metadata: CountMetadata,
+    metadata: FieldMetadata,
     counts: Vec<IndividualVehicle>,
 ) -> Vec<NonNormalAvgSpeedCount> {
     let mut non_normal_raw_speed_map: HashMap<NonNormalCountKey, NonNormalRawSpeedValue> =

@@ -346,12 +346,71 @@ impl FifteenMinuteVehicle {
     }
 }
 
-/// The metadata of an input count, including technician, id, direction(s), count machine id,
-/// and - potentially - the speed limit.
+/// The full metadata of a count, which corresponds to the "tc_header" table in the database.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Metadata {
+    // takenby in db
+    pub technician: String, // initials
+    // no underscore in db
+    pub record_num: u32,
+    // pub directions: Directions, // using seperate fields
+    // no underscore in database
+    pub counter_id: u32,
+    // no underscore in database
+    pub speed_limit: Option<u8>,
+    pub importdatadate: Option<Timestamp>,
+
+    // TODO: uses appropriate types - using String for all for simplicity to start
+    pub amending: Option<String>,
+    pub pmending: Option<String>,
+    pub ampeak: Option<String>,
+    pub pmpeak: Option<String>,
+    pub datelastcounted: Option<String>,
+    pub stationid: Option<String>,
+    pub createheaderdate: Option<String>,
+    pub mp: Option<String>,
+    pub prj: Option<String>,
+    pub comments: Option<String>,
+    pub fc: Option<String>,
+    pub mcd: Option<String>,
+    pub rdprefix: Option<String>,
+    pub route: Option<String>,
+    pub sr: Option<String>,
+    pub offset: Option<String>,
+    pub seg: Option<String>,
+    pub sri: Option<String>,
+    pub road: Option<String>,
+    pub cntdir: Option<Direction>,
+    pub trafdir: Option<Direction>,
+    pub fromlmt: Option<String>,
+    pub tolmt: Option<String>,
+    pub description: Option<String>,
+    pub source: Option<String>,
+    pub divided: Option<String>,
+    // "type" in db
+    pub count_type: Option<String>,
+    pub weather: Option<String>,
+    pub rdsuffix: Option<String>,
+    pub x: Option<String>,
+    pub y: Option<String>,
+    pub latitude: Option<String>,
+    pub longitude: Option<String>,
+    pub outdir: Option<String>,
+    pub indir: Option<String>,
+    pub sidewalk: Option<String>,
+    pub program: Option<String>,
+    pub bikepedgroup: Option<String>,
+    pub bikepedfacility: Option<String>,
+    pub isurban: Option<String>,
+    pub bikepeddesc: Option<String>,
+}
+
+/// The field metadata of an input count, which is a subset of the full `Metadata` and includes
+/// technician, id, direction(s), count machine id, and - potentially - the speed limit.
 ///
 /// See the [import](../import/index.html) program for filename specification.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CountMetadata {
+pub struct FieldMetadata {
     pub technician: String, // initials
     pub record_num: u32,
     pub directions: Directions,
@@ -359,7 +418,7 @@ pub struct CountMetadata {
     pub speed_limit: Option<u8>,
 }
 
-impl CountMetadata {
+impl FieldMetadata {
     /// Get an input count's metadata from its path.
     pub fn from_path(path: &Path) -> Result<Self, CountError> {
         let parts: Vec<&str> = path
@@ -643,7 +702,7 @@ pub struct TimeBinnedSpeedRangeCount {
 
 /// Create time-binned speed and class counts from [`IndividualVehicle`]s.
 pub fn create_speed_and_class_count(
-    metadata: CountMetadata,
+    metadata: FieldMetadata,
     mut counts: Vec<IndividualVehicle>,
     interval: TimeInterval,
 ) -> (

@@ -264,7 +264,7 @@ fn main() {
                 }
             };
 
-            let metadata = match CountMetadata::from_path(path) {
+            let metadata = match FieldMetadata::from_path(path) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "import", "{path:?} not processed: {e}");
@@ -940,7 +940,7 @@ fn cleanup(cleanup_files: bool, path: &PathBuf) {
 
 fn update_metadata(
     record_num: u32,
-    metadata: CountMetadata,
+    metadata: FieldMetadata,
     conn: &Connection,
 ) -> Result<(), oracle::Error> {
     conn.execute(

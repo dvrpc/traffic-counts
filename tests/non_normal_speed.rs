@@ -11,8 +11,8 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     // two directions, two lanes
     let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
     let counted_vehicles = IndividualVehicle::extract(path).unwrap();
-    let metadata = CountMetadata::from_path(path).unwrap();
-    let mut non_normal_count = create_non_normal_speedavg_count(metadata, counted_vehicles);
+    let field_metadata = FieldMetadata::from_path(path).unwrap();
+    let mut non_normal_count = create_non_normal_speedavg_count(field_metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 6);
 
     // Sort by date, and then lane, so elements of the vec are in an expected order to test.
@@ -49,8 +49,8 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     // one direction, two lanes
     let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
     let counted_vehicles = IndividualVehicle::extract(path).unwrap();
-    let metadata = CountMetadata::from_path(path).unwrap();
-    let mut non_normal_count = create_non_normal_speedavg_count(metadata, counted_vehicles);
+    let field_metadata = FieldMetadata::from_path(path).unwrap();
+    let mut non_normal_count = create_non_normal_speedavg_count(field_metadata, counted_vehicles);
     assert_eq!(non_normal_count.len(), 10);
 
     // Sort by date, and then lane, so elements of the vec are in an expected order to test.
