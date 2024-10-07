@@ -3,7 +3,12 @@ use std::env;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use axum::{extract::Form, routing::get, Router};
+use axum::{
+    extract::{Form, State},
+    routing::get,
+    Router,
+};
+use oracle::pool::Pool;
 use rinja_axum::Template;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
@@ -11,12 +16,24 @@ use tower_http::services::ServeDir;
 
 use traffic_counts::db::{self, LogRecord};
 
+#[derive(Clone)]
+struct AppState {
+    conn_pool: Pool,
+}
+
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().expect("Unable to load .env file.");
+    let username = env::var("DB_USERNAME").unwrap();
+    let password = env::var("DB_PASSWORD").unwrap();
+    let conn_pool = db::create_pool(username, password).unwrap();
+
+    let state = AppState { conn_pool };
     let app = Router::new()
         .route("/", get(home))
         .route("/admin", get(admin).post(process_admin))
         .route("/viewer", get(viewer))
+        .with_state(state)
         .nest_service("/static", ServeDir::new("static"));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -88,18 +105,16 @@ async fn admin() -> AdminMainTemplate<'static> {
     }
 }
 
-async fn process_admin(Form(input): Form<Input>) -> AdminMainTemplate<'static> {
+async fn process_admin(
+    State(state): State<AppState>,
+    Form(input): Form<Input>,
+) -> AdminMainTemplate<'static> {
+    let conn = state.conn_pool.get().unwrap();
     let action = AdminAction::from_str(&input.action).unwrap();
     let recordnum = match &input.recordnum {
         Some(v) => Some(v),
         None => None,
     };
-
-    dotenvy::dotenv().expect("Unable to load .env file.");
-    let username = env::var("DB_USERNAME").unwrap();
-    let password = env::var("DB_PASSWORD").unwrap();
-    let pool = db::create_pool(username, password).unwrap();
-    let conn = pool.get().unwrap();
 
     let mut template = AdminMainTemplate {
         header_text: "Traffic Counts: Admin",
