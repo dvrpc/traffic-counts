@@ -16,6 +16,9 @@ use time::{
     Time,
 };
 
+use crate::CountError;
+
+pub const RECORD_CREATION_LIMIT: u32 = 50;
 pub const YYYY_MM_DD_FMT: &[BorrowedFormatItem<'_>] =
     format_description!("[year]-[month padding:none]-[day padding:none]");
 
@@ -130,14 +133,29 @@ pub fn get_import_log(
     Ok(log_records)
 }
 
-pub fn insert_empty_metadata(conn: &Connection) -> Result<u32, oracle::Error> {
-    let stmt = conn.execute(
-        "insert into tc_header (createheaderdate) values (CURRENT_DATE) RETURNING recordnum INTO :record_num",
-        &[&None::<u32>],
-    )?;
+/// Insert one or more empty metadata (tc_header) records (with recordnum and created date only).
+pub fn insert_empty_metadata(conn: &Connection, number: u32) -> Result<Vec<u32>, CountError> {
+    if number == 0 {
+        return Err(CountError::DbError("Cannot create 0 records".to_string()));
+    }
+    if number > RECORD_CREATION_LIMIT {
+        return Err(CountError::DbError(format!(
+            "Too many new records requested: cannot created more than {}",
+            RECORD_CREATION_LIMIT
+        )));
+    }
+
+    let mut recordnums = vec![];
+    for _ in 0..number {
+        let stmt = conn.execute(
+            "insert into tc_header (createheaderdate) values (CURRENT_DATE) RETURNING recordnum INTO :record_num",
+            &[&None::<u32>],
+        )?;
+        let record_num: u32 = stmt.returned_values("record_num")?[0];
+        recordnums.push(record_num);
+    }
     conn.commit()?;
-    let record_num: u32 = stmt.returned_values("record_num")?[0];
-    Ok(record_num)
+    Ok(recordnums)
 }
 
 #[cfg(test)]

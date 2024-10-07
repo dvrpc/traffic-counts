@@ -74,7 +74,17 @@
         <button name="action" value="{{ AdminAction::InsertOneConfirm.as_ref() }}">Confirm</button>
       </form>
 
+    {% when AdminAction::InsertMany %}
+      <form action="/admin" method="post">
+        <label>
+          How many empty records would you like to create?<br>
+          <input type="text" name="number_to_create" required />
+        </label>
+        <button name="action" value="{{ AdminAction::InsertManyConfirm.as_ref() }}">Submit</button>
+      </form>
+
     {% when AdminAction::InsertOneConfirm %}
+    {% when AdminAction::InsertManyConfirm %}
     {% when _ %} not handled yet
 
   {% endmatch %}

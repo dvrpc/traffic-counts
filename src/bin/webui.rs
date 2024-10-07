@@ -46,6 +46,7 @@ enum AdminAction {
     InsertOne,
     InsertOneConfirm,
     InsertMany,
+    InsertManyConfirm,
     InsertWithTemplate,
     EditOne,
     CreatePackets,
@@ -65,6 +66,7 @@ impl Display for AdminAction {
             AdminAction::InsertOne => "Insert One Empty Record",
             AdminAction::InsertOneConfirm => "Insert One Empty Record",
             AdminAction::InsertMany => "Insert Many Empty Records",
+            AdminAction::InsertManyConfirm => "Insert Many Empty Records",
             AdminAction::InsertWithTemplate => {
                 "Insert One or More Records Using Existing Record as Template"
             }
@@ -86,6 +88,7 @@ impl Display for AdminAction {
 struct Input {
     action: String,
     recordnum: Option<u32>,
+    number_to_create: Option<u32>,
 }
 
 #[derive(Template, Debug)]
@@ -112,6 +115,10 @@ async fn process_admin(
     let conn = state.conn_pool.get().unwrap();
     let action = AdminAction::from_str(&input.action).unwrap();
     let recordnum = match &input.recordnum {
+        Some(v) => Some(v),
+        None => None,
+    };
+    let number_to_create = match &input.number_to_create {
         Some(v) => Some(v),
         None => None,
     };
@@ -143,12 +150,28 @@ async fn process_admin(
                 }
             }
         }
-        AdminAction::InsertOneConfirm => match db::insert_empty_metadata(&conn) {
+        AdminAction::InsertOneConfirm => match db::insert_empty_metadata(&conn, 1) {
             Ok(v) => {
-                template.message = Some(format!("New record created {v}"));
+                template.message = Some(format!("New record created {}", v[0]));
             }
             Err(e) => {
                 template.message = Some(format!("Error: {e}"));
+            }
+        },
+        AdminAction::InsertManyConfirm => match number_to_create {
+            Some(v) => match db::insert_empty_metadata(&conn, *v) {
+                Ok(v) => {
+                    template.message = Some(format!("New records created {:?}", v));
+                }
+                Err(e) => {
+                    template.message = Some(format!("Error: {e}"));
+                }
+            },
+            None => {
+                template.message = Some(
+                    "Unable to process request: number of records to create is unknown."
+                        .to_string(),
+                )
             }
         },
         _ => {}
