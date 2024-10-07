@@ -6,45 +6,43 @@
 
 {% endblock %}
 
-{% block main_content %}
-<div id="sidebar">
-  <div>
-    <form action="/admin" method="post">
-      <h2 class="section_heading">Metadata (tc_header)</h2>
-      <ul>
-        <li><button name="action" value="{{ AdminAction::InsertOne.as_ref() }}">{{ AdminAction::InsertOne }}</button></li>
-        <li><button name="action" value="{{ AdminAction::InsertMany.as_ref() }}">{{ AdminAction::InsertMany }}</button></li>
-        <li><button name="action" value="{{ AdminAction::InsertWithTemplate.as_ref() }}">{{ AdminAction::InsertWithTemplate }}</button></li>
-        <li><button name="action" value="{{ AdminAction::EditOne.as_ref() }}">{{ AdminAction::EditOne }}</button></li>
-        <li><button name="action" value="{{ AdminAction::CreatePackets.as_ref() }}">{{ AdminAction::CreatePackets }}</button></li>
-      </ul>
+{% block nav %}
+  <form action="/admin" method="post">
+    <h2 class="section_heading">Metadata (tc_header)</h2>
+    <ul>
+      <li><button name="action" value="{{ AdminAction::InsertOne.as_ref() }}">{{ AdminAction::InsertOne }}</button></li>
+      <li><button name="action" value="{{ AdminAction::InsertMany.as_ref() }}">{{ AdminAction::InsertMany }}</button></li>
+      <li><button name="action" value="{{ AdminAction::InsertWithTemplate.as_ref() }}">{{ AdminAction::InsertWithTemplate }}</button></li>
+      <li><button name="action" value="{{ AdminAction::EditOne.as_ref() }}">{{ AdminAction::EditOne }}</button></li>
+      <li><button name="action" value="{{ AdminAction::CreatePackets.as_ref() }}">{{ AdminAction::CreatePackets }}</button></li>
+    </ul>
 
-      <h2 class="section_heading">Count data</h2>
-      <ul>
-        <li><button name="action" value="{{ AdminAction::ImportEcoCounter.as_ref() }}">{{ AdminAction::ImportEcoCounter }}</button></li>
-        <li><button name="action" value="{{ AdminAction::ImportJamar.as_ref() }}">{{ AdminAction::ImportJamar }}</button></li>
-        <li><button name="action" value="{{ AdminAction::ShowFullLog.as_ref() }}"> {{ AdminAction::ShowFullLog }}</button></li>
-        <li><button name="action" value="{{ AdminAction::ShowOneLog.as_ref() }}">{{ AdminAction::ShowOneLog }}</button></li>
-      </ul>
+    <h2 class="section_heading">Count data</h2>
+    <ul>
+      <li><button name="action" value="{{ AdminAction::ImportEcoCounter.as_ref() }}">{{ AdminAction::ImportEcoCounter }}</button></li>
+      <li><button name="action" value="{{ AdminAction::ImportJamar.as_ref() }}">{{ AdminAction::ImportJamar }}</button></li>
+      <li><button name="action" value="{{ AdminAction::ShowFullLog.as_ref() }}"> {{ AdminAction::ShowFullLog }}</button></li>
+      <li><button name="action" value="{{ AdminAction::ShowOneLog.as_ref() }}">{{ AdminAction::ShowOneLog }}</button></li>
+    </ul>
 
-      <h2 class="section_heading">Factors</h2>
-      <ul>
-        <li><button name="action" value="{{ AdminAction::InsertFactors.as_ref() }}">{{ AdminAction::InsertFactors }}</button></li>
-        <li><button name="action" value="{{ AdminAction::UpdateFactors.as_ref() }}">{{ AdminAction::UpdateFactors }}</button></li>
-      </ul>
-    </form>
-  </div>
-</div>
+    <h2 class="section_heading">Factors</h2>
+    <ul>
+      <li><button name="action" value="{{ AdminAction::InsertFactors.as_ref() }}">{{ AdminAction::InsertFactors }}</button></li>
+      <li><button name="action" value="{{ AdminAction::UpdateFactors.as_ref() }}">{{ AdminAction::UpdateFactors }}</button></li>
+    </ul>
+  </form>
+{% endblock %}
 
-<div id="right">
+{% block main %}
   <h2 class="center">{{ admin_action }}</h2>
 
+  {# Display any message to the user, if there is one. #}
   {% match message %}
     {% when Some with (v) %} {{ v }}
     {% when _ %} 
   {% endmatch %}
 
-  {# Display right pane based on action taken. #}
+  {# Display based on action taken. #}
   {% match admin_action %}
     {% when AdminAction::Start %} 
 
@@ -69,7 +67,8 @@
       {% endmatch %}
 
     {% when AdminAction::InsertOne %}
-      <form action="/admin" method="post">
+      <br/>
+      <for action="/adin" method="post">
         Please confirm that you want to create a new, empty record in the `tc_header` table:
         <button name="action" value="{{ AdminAction::InsertOneConfirm.as_ref() }}">Confirm</button>
       </form>
@@ -85,10 +84,14 @@
 
     {% when AdminAction::InsertOneConfirm %}
     {% when AdminAction::InsertManyConfirm %}
-    {% when _ %} not handled yet
+    {% when AdminAction::InsertWithTemplate %}
+    {% when AdminAction::EditOne %}
+    {% when AdminAction::CreatePackets %}
+    {% when AdminAction::ImportEcoCounter %}
+    {% when AdminAction::ImportJamar %}
+    {% when AdminAction::InsertFactors %}
+    {% when AdminAction::UpdateFactors %}
 
   {% endmatch %}
  
-</div>
-
 {% endblock %}
