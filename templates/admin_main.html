@@ -68,7 +68,7 @@
 
     {% when AdminAction::InsertOne %}
       <br/>
-      <for action="/adin" method="post">
+      <form action="/admin" method="post">
         Please confirm that you want to create a new, empty record in the `tc_header` table:
         <button name="action" value="{{ AdminAction::InsertOneConfirm.as_ref() }}">Confirm</button>
       </form>
