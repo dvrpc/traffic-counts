@@ -1,10 +1,18 @@
 :root {
   --off-white: #FBF7F7;
-  --dark-gray: hsl(0, 0%, 15%);
-  --light-gray: hsl(0, 0%, 85%);
+  --gray0: hsl(0, 0%, 20%);
+  --gray1: hsl(0, 0%, 30%);
+  --gray2: hsl(0, 0%, 40%);
+  --gray3: hsl(0, 0%, 50%);
+  --gray4: hsl(0, 0%, 60%);
+  --gray5: hsl(0, 0%, 70%);
+  --gray6: hsl(0, 0%, 80%);
   --blue: hsl(205, 56%, 36%);
   --light-blue: hsl(205, 56%, 54%);
   --blue-gray: hsl(205, 15%, 60%);
+  --dark-blue-gray: hsl(205, 15%, 35%);
+  --darkest-blue-gray: hsl(205, 15%, 15%);
+  color-scheme: light dark;
 }
 
 html {
@@ -14,8 +22,6 @@ html {
 
 body {
   margin: 0 auto;
-  background: var(--dark-gray);
-  color: var(--dark-gray);
   height: 100vh;
   width: 100vw;
   display: grid;
@@ -34,8 +40,8 @@ header {
 }
 
 nav {
-  border: 2px solid var(--dark-gray);
-  background-color: var(--light-gray);
+  border: 2px solid var(--gray0);
+  background-color: var(--gray6);
   grid-area: nav;
   grid-template-rows: auto 1fr;
 }
@@ -49,7 +55,7 @@ nav h2.section_heading {
   font-weight: bold;
   font-size: 1rem;
   background-color: var(--blue-gray);
-  color: var(--dark-gray);
+  color: var(--gray0);
 }
 
 nav ul {
@@ -66,7 +72,7 @@ nav button {
 }
 
 nav button:hover {
-  background-color: var(--light-gray);
+  background-color: var(--gray6);
 }
 
 nav li {
@@ -79,9 +85,9 @@ nav li:last-of-type {
 
 main {
   padding: 10px;
-  border: 2px solid var(--dark-gray);
-  background-color: var(--light-gray);
-  color: var(--dark-gray);
+  border: 2px solid var(--gray0);
+  background-color: var(--gray6);
+  color: var(--gray0);
   grid-area: main;
 }
 
@@ -108,4 +114,35 @@ button {
 
 .center {
   text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  header {
+    background: var(--darkest-blue-gray);
+    color: var(--gray4);
+  }
+  nav {
+    border: 2px solid var(--gray0);
+    background-color: var(--gray1);
+    color: var(--gray3);
+  }
+
+  button, input {
+    color: var(--gray3);
+    background-color: var(--gray0);
+  }
+
+  nav h2.section_heading {
+    background-color: var(--dark-blue-gray);
+  }
+
+  nav button:hover {
+    background-color: var(--gray2);
+    color: var(--gray5);
+  }
+
+  main {
+    background-color: var(--gray1);
+    color: var(--gray4);
+  }
 }
