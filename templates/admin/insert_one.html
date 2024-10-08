@@ -1,0 +1,12 @@
+{% extends "admin/main.html" %}
+
+{% block main %}
+  {% if condition == ResponseCondition::GetInput %}
+    <form action="{{ ADMIN_URL }}/insert-one" method="post">
+      <label>
+        Please confirm that you want to create a new, empty record in the `tc_header` table:
+      </label>
+      <input type="submit" name="confirm" value="Confirm" />
+    </form>
+  {% endif %}
+{% endblock %}

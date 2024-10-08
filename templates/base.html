@@ -19,6 +19,10 @@
   </nav>
 
   <main>
+    <h2 class="center">{{ Self::heading() }}</h2>
+    {% if let Some(message) = message %}
+      {{ message }}
+    {% endif %}
     {% block main %}{% endblock %}
   </main>
 

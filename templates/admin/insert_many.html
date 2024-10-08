@@ -1,0 +1,13 @@
+{% extends "admin/main.html" %}
+
+{% block main %}
+  {% if condition == ResponseCondition::GetInput %}
+    <form action="{{ ADMIN_URL }}/insert-many" method="post">
+      <label>
+        How many empty records would you like to create?<br>
+        <input type="text" name="number_to_create" required />
+      </label>
+      <input type="submit" name="confirm" value="Submit">
+    </form>
+  {% endif %}
+{% endblock %}

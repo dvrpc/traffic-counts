@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block header %}
+  <h1>Traffic Counts: Admin</h1>
+{% endblock %}
+
+{% block nav %}
+    <h2 class="section_heading">Metadata (tc_header)</h2>
+    <form>
+      <ul>
+        <li><button formaction="{{ ADMIN_URL }}/insert-one">
+          {{ AdminInsertOneTemplate::heading() }}
+        </button></li>
+        <li><button formaction="{{ ADMIN_URL }}/insert-many">
+          {{ AdminInsertManyTemplate::heading() }}
+        </button></li>
+        <li><button formaction="{{ ADMIN_URL }}/insert-with-template">
+            Insert One or Many with Template Template (heading())
+        </button></li>
+        <li><button formaction="{{ ADMIN_URL }}/edit-record">Edit Record (heading())</button></li>
+        <li><button formaction="{{ ADMIN_URL }}/create-packets">Create Packets (heading())</button></li>
+      </ul>
+
+      <h2 class="section_heading">Count data</h2>
+      <ul>
+        <li><button formaction="{{ ADMIN_URL }}/import-ecocounter">Import from EcoCounter (heading())</button></li>
+        <li><button formaction="{{ ADMIN_URL }}/import-jamar">Import from JAMAR (heading())</button></li>
+        <li><button formaction="{{ ADMIN_URL }}/show-full-log">
+          {{ AdminShowFullLogTemplate::heading() }}
+        </button></li>
+        <li><button formaction="{{ ADMIN_URL }}/show-one-log">
+          {{ AdminShowOneLogTemplate::heading() }}
+        </button></li>
+      </ul>
+
+      <h2 class="section_heading">Factors</h2>
+      <ul>
+        <li><button formaction="{{ ADMIN_URL }}/insert-factors">Insert Factors</button></li>
+        <li><button formaction="{{ ADMIN_URL }}/update-factors">Update Factors</button></li>      
+      </ul>
+    </form>
+{% endblock %}
+

@@ -1,7 +1,4 @@
-use std::convert::AsRef;
 use std::env;
-use std::fmt::Display;
-use std::str::FromStr;
 
 use axum::{
     extract::{Form, State},
@@ -10,11 +7,12 @@ use axum::{
 };
 use oracle::pool::Pool;
 use rinja_axum::Template;
-use serde::{Deserialize, Serialize};
-use strum_macros::{AsRefStr, EnumString};
+use serde::Deserialize;
 use tower_http::services::ServeDir;
 
 use traffic_counts::db::{self, LogRecord};
+
+const ADMIN_URL: &str = "/admin";
 
 #[derive(Clone)]
 struct AppState {
@@ -31,8 +29,20 @@ async fn main() {
     let state = AppState { conn_pool };
     let app = Router::new()
         .route("/", get(home))
-        .route("/admin", get(admin).post(process_admin))
-        .route("/viewer", get(viewer))
+        .route(ADMIN_URL, get(admin))
+        .route(
+            &format!("{ADMIN_URL}/insert-one"),
+            get(get_insert_one).post(post_insert_one),
+        )
+        .route(
+            &format!("{ADMIN_URL}/insert-many"),
+            get(get_insert_many).post(post_insert_many),
+        )
+        .route(&format!("{ADMIN_URL}/show-full-log"), get(show_full_log))
+        .route(
+            &format!("{ADMIN_URL}/show-one-log"),
+            get(get_show_one_log).post(post_show_one_log),
+        )
         .with_state(state)
         .nest_service("/static", ServeDir::new("static"));
 
@@ -40,161 +50,221 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-#[derive(Serialize, Debug, PartialEq, Clone, AsRefStr, EnumString)]
-enum AdminAction {
-    Start,
-    InsertOne,
-    InsertOneConfirm,
-    InsertMany,
-    InsertManyConfirm,
-    InsertWithTemplate,
-    EditOne,
-    CreatePackets,
-    ImportEcoCounter,
-    ImportJamar,
-    ShowFullLog,
-    ShowOneLog,
-    InsertFactors,
-    UpdateFactors,
+/// The condition of the response - getting input (possibly again after bad input) or success.
+#[derive(Default, PartialEq, Debug)]
+enum ResponseCondition {
+    #[default]
+    GetInput,
+    Success,
 }
 
-/// These will be used as text for sidebar menu buttons and/or section titles, depending on use.
-impl Display for AdminAction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let r = match self {
-            AdminAction::Start => "Welcome",
-            AdminAction::InsertOne => "Insert One Empty Record",
-            AdminAction::InsertOneConfirm => "Insert One Empty Record",
-            AdminAction::InsertMany => "Insert Many Empty Records",
-            AdminAction::InsertManyConfirm => "Insert Many Empty Records",
-            AdminAction::InsertWithTemplate => {
-                "Insert One or More Records Using Existing Record as Template"
-            }
-            AdminAction::EditOne => "Edit Record",
-            AdminAction::CreatePackets => "Create Packets",
-            AdminAction::ImportEcoCounter => "Import from EcoCounter",
-            AdminAction::ImportJamar => "Import from Jamar",
-            AdminAction::ShowFullLog => "Show Full Import Log",
-            AdminAction::ShowOneLog => "Show Import Log for Specific Record",
-            AdminAction::InsertFactors => "Insert Factors",
-            AdminAction::UpdateFactors => "Update Factors",
-        };
-        write!(f, "{r}")
+/// A trait to set the heading for the <main> section of the page by template.
+pub trait Heading {
+    fn heading() -> String;
+}
+
+/// The front page of the admin section.
+///
+/// It will sometimes be used to display successful posts and messages, in addition to the default
+/// starting page.
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/main.html")]
+struct AdminMainTemplate {
+    message: Option<String>,
+}
+
+impl Heading for AdminMainTemplate {
+    fn heading() -> String {
+        "Welcome".to_string()
+    }
+}
+
+async fn admin() -> AdminMainTemplate {
+    AdminMainTemplate::default()
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/insert_one.html")]
+struct AdminInsertOneTemplate {
+    message: Option<String>,
+    condition: ResponseCondition,
+}
+
+impl Heading for AdminInsertOneTemplate {
+    fn heading() -> String {
+        "Insert One New Record".to_string()
+    }
+}
+
+async fn get_insert_one() -> AdminInsertOneTemplate {
+    AdminInsertOneTemplate {
+        message: None,
+        condition: ResponseCondition::GetInput,
+    }
+}
+
+async fn post_insert_one(State(state): State<AppState>) -> AdminInsertOneTemplate {
+    let conn = state.conn_pool.get().unwrap();
+    let (message, condition) = match db::insert_empty_metadata(&conn, 1) {
+        Ok(v) => (
+            Some(format!("New record created {}", v[0])),
+            ResponseCondition::Success,
+        ),
+        Err(e) => (Some(format!("Error: {e}")), ResponseCondition::GetInput),
+    };
+    AdminInsertOneTemplate { message, condition }
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/insert_many.html")]
+struct AdminInsertManyTemplate {
+    message: Option<String>,
+    condition: ResponseCondition,
+}
+
+impl Heading for AdminInsertManyTemplate {
+    fn heading() -> String {
+        "Insert Many Empty Records".to_string()
     }
 }
 
 #[derive(Deserialize, Debug)]
-#[allow(dead_code)]
-struct Input {
-    action: String,
-    recordnum: Option<u32>,
+struct AdminInsertManyForm {
     number_to_create: Option<u32>,
 }
 
-#[derive(Template, Debug)]
-#[template(path = "admin_main.html")]
-struct AdminMainTemplate<'a> {
-    header_text: &'a str,
-    admin_action: AdminAction,
-    log_records: Option<Vec<LogRecord>>,
+async fn get_insert_many() -> AdminInsertManyTemplate {
+    AdminInsertManyTemplate::default()
+}
+
+async fn post_insert_many(
+    State(state): State<AppState>,
+    Form(input): Form<AdminInsertManyForm>,
+) -> AdminInsertManyTemplate {
+    let conn = state.conn_pool.get().unwrap();
+
+    let (message, condition) = match input.number_to_create {
+        Some(v) => match db::insert_empty_metadata(&conn, v) {
+            Ok(w) => (
+                format!("New records created {:?}", w),
+                ResponseCondition::Success,
+            ),
+            Err(e) => (format!("Error: {e}."), ResponseCondition::GetInput),
+        },
+        None => (
+            format!(
+                "Please specify a number of records to create, from 1 to {}",
+                db::RECORD_CREATION_LIMIT
+            ),
+            ResponseCondition::GetInput,
+        ),
+    };
+
+    AdminInsertManyTemplate {
+        message: Some(message),
+        condition,
+    }
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/show_full_log.html")]
+struct AdminShowFullLogTemplate {
+    message: Option<String>,
+    log_records: Vec<LogRecord>,
+}
+
+impl Heading for AdminShowFullLogTemplate {
+    fn heading() -> String {
+        "Show Full Import Log".to_string()
+    }
+}
+
+async fn show_full_log(State(state): State<AppState>) -> AdminShowFullLogTemplate {
+    let conn = state.conn_pool.get().unwrap();
+    let (message, log_records) = match db::get_import_log(&conn, None) {
+        Ok(v) => (Some("".to_string()), v),
+        Err(e) => (Some(format!("Error: {e}")), vec![]),
+    };
+
+    AdminShowFullLogTemplate {
+        message,
+        log_records,
+    }
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/show_one_log.html")]
+struct AdminShowOneLogTemplate {
+    message: Option<String>,
+    condition: ResponseCondition,
+    log_records: Vec<LogRecord>,
+}
+
+impl Heading for AdminShowOneLogTemplate {
+    fn heading() -> String {
+        "Show Import Log for Specific Record".to_string()
+    }
+}
+
+#[derive(Deserialize, Debug)]
+struct AdminShowOneLogForm {
+    recordnum: Option<u32>,
+}
+
+async fn get_show_one_log() -> AdminShowOneLogTemplate {
+    AdminShowOneLogTemplate::default()
+}
+
+async fn post_show_one_log(
+    State(state): State<AppState>,
+    Form(input): Form<AdminShowOneLogForm>,
+) -> AdminShowOneLogTemplate {
+    let conn = state.conn_pool.get().unwrap();
+    let (message, condition, log_records) = match input.recordnum {
+        Some(v) => match db::get_import_log(&conn, Some(v)) {
+            Ok(w) => {
+                if w.is_empty() {
+                    (
+                        Some(format!("No import log records found for recordnum {v}.")),
+                        ResponseCondition::GetInput,
+                        vec![],
+                    )
+                } else {
+                    (None, ResponseCondition::Success, w)
+                }
+            }
+            Err(e) => (
+                Some(format!("Error: {e}.")),
+                ResponseCondition::GetInput,
+                vec![],
+            ),
+        },
+        None => (
+            Some("Please specify a recordnum.".to_string()),
+            ResponseCondition::GetInput,
+            vec![],
+        ),
+    };
+
+    AdminShowOneLogTemplate {
+        message,
+        condition,
+        log_records,
+    }
+}
+
+#[derive(Template, Default, Debug)]
+#[template(path = "home.html")]
+struct HomeTemplate {
     message: Option<String>,
 }
-async fn admin() -> AdminMainTemplate<'static> {
-    AdminMainTemplate {
-        header_text: "Traffic Counts: Admin",
-        admin_action: AdminAction::Start,
-        log_records: None,
-        message: None,
+
+impl Heading for HomeTemplate {
+    fn heading() -> String {
+        "main".to_string()
     }
 }
-
-async fn process_admin(
-    State(state): State<AppState>,
-    Form(input): Form<Input>,
-) -> AdminMainTemplate<'static> {
-    let conn = state.conn_pool.get().unwrap();
-    let action = AdminAction::from_str(&input.action).unwrap();
-    let recordnum = match &input.recordnum {
-        Some(v) => Some(v),
-        None => None,
-    };
-    let number_to_create = match &input.number_to_create {
-        Some(v) => Some(v),
-        None => None,
-    };
-
-    let mut template = AdminMainTemplate {
-        header_text: "Traffic Counts: Admin",
-        admin_action: action.clone(),
-        log_records: None,
-        message: None,
-    };
-
-    match action {
-        AdminAction::Start => (),
-        AdminAction::ShowFullLog => {
-            let log_records = Some(db::get_import_log(&conn, None).unwrap());
-            template.log_records = log_records;
-            template.admin_action = AdminAction::ShowFullLog;
-        }
-        AdminAction::ShowOneLog => {
-            if let Some(v) = recordnum {
-                match db::get_import_log(&conn, Some(*v)) {
-                    Ok(w) => {
-                        template.log_records = Some(w);
-                    }
-                    Err(_) => {
-                        template.message =
-                            Some(format!("Recordnum {v} not found or error running query."));
-                    }
-                }
-            }
-        }
-        AdminAction::InsertOneConfirm => match db::insert_empty_metadata(&conn, 1) {
-            Ok(v) => {
-                template.message = Some(format!("New record created {}", v[0]));
-            }
-            Err(e) => {
-                template.message = Some(format!("Error: {e}"));
-            }
-        },
-        AdminAction::InsertManyConfirm => match number_to_create {
-            Some(v) => match db::insert_empty_metadata(&conn, *v) {
-                Ok(v) => {
-                    template.message = Some(format!("New records created {:?}", v));
-                }
-                Err(e) => {
-                    template.message = Some(format!("Error: {e}"));
-                }
-            },
-            None => {
-                template.message = Some(
-                    "Unable to process request: number of records to create is unknown."
-                        .to_string(),
-                )
-            }
-        },
-        _ => {}
-    };
-
-    template
-}
-
-#[derive(Template)]
-#[template(path = "viewer_main.html")]
-struct ViewerMainTemplate<'a> {
-    header_text: &'a str,
-}
-async fn viewer() -> ViewerMainTemplate<'static> {
-    ViewerMainTemplate {
-        header_text: "Traffic Counts: Viewer",
-    }
-}
-
-#[derive(Template)]
-#[template(path = "home.html")]
-struct HomeTemplate {}
 
 async fn home() -> HomeTemplate {
-    HomeTemplate {}
+    HomeTemplate::default()
 }

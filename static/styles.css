@@ -59,10 +59,10 @@ nav ul {
 }
 
 nav button {
-  width: 100%;  
+  width: 100%;
   margin: 0;
-  border: 0;
-  padding-left: 10px;
+  cursor: pointer;
+  border-radius: 0;
 }
 
 nav button:hover {
