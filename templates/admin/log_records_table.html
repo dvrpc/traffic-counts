@@ -1,9 +1,9 @@
 <table>
   {% for item in log_records %}
     <tr>
-      <td>
+      <td nowrap>
         {{ item.datetime.unwrap().date()|safe }}
-        {{ item.datetime.unwrap().hour()|safe }}:{{ item.datetime.unwrap().minute() }}
+        {{ item.datetime.unwrap().hour()|safe }}:{{ item.datetime.unwrap().minute()|safe }}
       </td>
       <td>{{ item.record_num|safe }}</td>
       <td>{{ item.level|safe }}</td>

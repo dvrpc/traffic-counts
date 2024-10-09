@@ -1,0 +1,14 @@
+{% extends "admin/main.html" %}
+
+{% block main %}
+  <form action="{{ ADMIN_URL }}/view-import-log" method="post">
+    <label>
+      Filter by recordnum:
+      <input type="text" name="recordnum" />
+    </label>
+    <input type="submit" name="confirm" value="Submit" />
+    <input type="submit" name="clear" value="Clear" />
+  </form>
+  <br>
+  {% include "log_records_table.html" %}
+{% endblock %}

@@ -31,17 +31,12 @@ async fn main() {
         .route("/", get(home))
         .route(ADMIN_URL, get(admin))
         .route(
-            &format!("{ADMIN_URL}/insert-one"),
-            get(get_insert_one).post(post_insert_one),
+            &format!("{ADMIN_URL}/insert"),
+            get(get_insert).post(post_insert),
         )
         .route(
-            &format!("{ADMIN_URL}/insert-many"),
-            get(get_insert_many).post(post_insert_many),
-        )
-        .route(&format!("{ADMIN_URL}/show-full-log"), get(show_full_log))
-        .route(
-            &format!("{ADMIN_URL}/show-one-log"),
-            get(get_show_one_log).post(post_show_one_log),
+            &format!("{ADMIN_URL}/view-import-log"),
+            get(get_view_import_log).post(post_view_import_log),
         )
         .with_state(state)
         .nest_service("/static", ServeDir::new("static"));
@@ -84,63 +79,31 @@ async fn admin() -> AdminMainTemplate {
 }
 
 #[derive(Template, Debug, Default)]
-#[template(path = "admin/insert_one.html")]
-struct AdminInsertOneTemplate {
+#[template(path = "admin/insert.html")]
+struct AdminInsertTemplate {
     message: Option<String>,
     condition: ResponseCondition,
 }
 
-impl Heading for AdminInsertOneTemplate {
+impl Heading for AdminInsertTemplate {
     fn heading() -> String {
-        "Insert One New Record".to_string()
-    }
-}
-
-async fn get_insert_one() -> AdminInsertOneTemplate {
-    AdminInsertOneTemplate {
-        message: None,
-        condition: ResponseCondition::GetInput,
-    }
-}
-
-async fn post_insert_one(State(state): State<AppState>) -> AdminInsertOneTemplate {
-    let conn = state.conn_pool.get().unwrap();
-    let (message, condition) = match db::insert_empty_metadata(&conn, 1) {
-        Ok(v) => (
-            Some(format!("New record created {}", v[0])),
-            ResponseCondition::Success,
-        ),
-        Err(e) => (Some(format!("Error: {e}")), ResponseCondition::GetInput),
-    };
-    AdminInsertOneTemplate { message, condition }
-}
-
-#[derive(Template, Debug, Default)]
-#[template(path = "admin/insert_many.html")]
-struct AdminInsertManyTemplate {
-    message: Option<String>,
-    condition: ResponseCondition,
-}
-
-impl Heading for AdminInsertManyTemplate {
-    fn heading() -> String {
-        "Insert Many Empty Records".to_string()
+        "Insert Empty Records".to_string()
     }
 }
 
 #[derive(Deserialize, Debug)]
-struct AdminInsertManyForm {
+struct AdminInsertForm {
     number_to_create: Option<u32>,
 }
 
-async fn get_insert_many() -> AdminInsertManyTemplate {
-    AdminInsertManyTemplate::default()
+async fn get_insert() -> AdminInsertTemplate {
+    AdminInsertTemplate::default()
 }
 
-async fn post_insert_many(
+async fn post_insert(
     State(state): State<AppState>,
-    Form(input): Form<AdminInsertManyForm>,
-) -> AdminInsertManyTemplate {
+    Form(input): Form<AdminInsertForm>,
+) -> AdminInsertTemplate {
     let conn = state.conn_pool.get().unwrap();
 
     let (message, condition) = match input.number_to_create {
@@ -160,95 +123,76 @@ async fn post_insert_many(
         ),
     };
 
-    AdminInsertManyTemplate {
+    AdminInsertTemplate {
         message: Some(message),
         condition,
     }
 }
 
 #[derive(Template, Debug, Default)]
-#[template(path = "admin/show_full_log.html")]
-struct AdminShowFullLogTemplate {
+#[template(path = "admin/view_import_log.html")]
+struct AdminViewImportLogTemplate {
     message: Option<String>,
     log_records: Vec<LogRecord>,
 }
 
-impl Heading for AdminShowFullLogTemplate {
+impl Heading for AdminViewImportLogTemplate {
     fn heading() -> String {
-        "Show Full Import Log".to_string()
+        "View Import Log".to_string()
     }
 }
 
-async fn show_full_log(State(state): State<AppState>) -> AdminShowFullLogTemplate {
+#[derive(Deserialize, Debug)]
+struct AdminViewImportLogForm {
+    // We really want an `Option<u32>` here, but for some reason serde cannot handle
+    // the None variant properly, so have to parse it manually.
+    #[serde(default)]
+    recordnum: String,
+    clear: Option<String>,
+}
+
+async fn get_view_import_log(State(state): State<AppState>) -> AdminViewImportLogTemplate {
     let conn = state.conn_pool.get().unwrap();
     let (message, log_records) = match db::get_import_log(&conn, None) {
         Ok(v) => (Some("".to_string()), v),
         Err(e) => (Some(format!("Error: {e}")), vec![]),
     };
 
-    AdminShowFullLogTemplate {
+    AdminViewImportLogTemplate {
         message,
         log_records,
     }
 }
 
-#[derive(Template, Debug, Default)]
-#[template(path = "admin/show_one_log.html")]
-struct AdminShowOneLogTemplate {
-    message: Option<String>,
-    condition: ResponseCondition,
-    log_records: Vec<LogRecord>,
-}
-
-impl Heading for AdminShowOneLogTemplate {
-    fn heading() -> String {
-        "Show Import Log for Specific Record".to_string()
-    }
-}
-
-#[derive(Deserialize, Debug)]
-struct AdminShowOneLogForm {
-    recordnum: Option<u32>,
-}
-
-async fn get_show_one_log() -> AdminShowOneLogTemplate {
-    AdminShowOneLogTemplate::default()
-}
-
-async fn post_show_one_log(
+async fn post_view_import_log(
     State(state): State<AppState>,
-    Form(input): Form<AdminShowOneLogForm>,
-) -> AdminShowOneLogTemplate {
+    Form(input): Form<AdminViewImportLogForm>,
+) -> AdminViewImportLogTemplate {
     let conn = state.conn_pool.get().unwrap();
-    let (message, condition, log_records) = match input.recordnum {
-        Some(v) => match db::get_import_log(&conn, Some(v)) {
-            Ok(w) => {
-                if w.is_empty() {
-                    (
-                        Some(format!("No import log records found for recordnum {v}.")),
-                        ResponseCondition::GetInput,
-                        vec![],
-                    )
-                } else {
-                    (None, ResponseCondition::Success, w)
-                }
-            }
-            Err(e) => (
-                Some(format!("Error: {e}.")),
-                ResponseCondition::GetInput,
-                vec![],
-            ),
-        },
-        None => (
-            Some("Please specify a recordnum.".to_string()),
-            ResponseCondition::GetInput,
-            vec![],
-        ),
+
+    let (message, log_records) = if input.clear.is_some() {
+        match db::get_import_log(&conn, None) {
+            Ok(v) => (Some("".to_string()), v),
+            Err(e) => (Some(format!("Error: {e}")), vec![]),
+        }
+    } else if input.recordnum.is_empty() {
+        (Some("Please specify a recordnum.".to_string()), vec![])
+    } else {
+        match input.recordnum.parse() {
+            Ok(v) => match db::get_import_log(&conn, Some(v)) {
+                Ok(w) if w.is_empty() => (
+                    Some(format!("No import log records found for recordnum {v}.")),
+                    vec![],
+                ),
+                Ok(w) => (None, w),
+                Err(e) => (Some(format!("Error: {e}.")), vec![]),
+            },
+            Err(e) => (Some(format!("Error: {e}.")), vec![]),
+        }
     };
 
-    AdminShowOneLogTemplate {
+    AdminViewImportLogTemplate {
         message,
-        condition,
         log_records,
     }
 }

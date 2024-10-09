@@ -1,9 +1,0 @@
-{% if condition == ResponseCondition::GetInput %}
-  <form action="{{ ADMIN_URL }}/show-one-log" method="post">
-    <label>
-      Recordnum:
-      <input type="text" name="recordnum" required />
-    </label>
-    <input type="submit" name="confirm" value="Submit">
-  </form>
-{% endif %}

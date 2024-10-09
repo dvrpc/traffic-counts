@@ -1,9 +1,0 @@
-{% extends "admin/main.html" %}
-
-{% block main %}
-  {% if condition == ResponseCondition::GetInput %}
-    {% include "recordnum_form.html" %}
-  {% else %}
-    {% include "log_records_table.html" %}
-  {% endif %}
-{% endblock %}
