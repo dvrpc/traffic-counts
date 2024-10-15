@@ -5,6 +5,7 @@ use axum::{
     routing::get,
     Router,
 };
+use axum_extra::routing::RouterExt;
 use oracle::pool::Pool;
 use rinja_axum::Template;
 use serde::Deserialize;
@@ -29,12 +30,15 @@ async fn main() {
     let state = AppState { conn_pool };
     let app = Router::new()
         .route("/", get(home))
-        .route(ADMIN_URL, get(admin))
-        .route(
+        // `route_with_tsr` redirects any url with a trailing slash to the same one without
+        // the trailing slash.
+        // It's from the axum_extra crate's `RouteExt`.
+        .route_with_tsr(ADMIN_URL, get(admin))
+        .route_with_tsr(
             &format!("{ADMIN_URL}/insert"),
             get(get_insert).post(post_insert),
         )
-        .route(
+        .route_with_tsr(
             &format!("{ADMIN_URL}/view-import-log"),
             get(get_view_import_log).post(post_view_import_log),
         )
