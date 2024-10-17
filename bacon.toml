@@ -1,0 +1,5 @@
+[jobs.webui]
+command = ["cargo", "run", "--bin", "webui", "--color", "always"]
+watch = ["templates", "static"]
+on_change_strategy = "kill_then_restart"
+allow_warnings = true
