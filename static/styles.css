@@ -25,7 +25,7 @@ body {
   width: 100vw;
   display: grid;
   grid-template-rows: 100px 1fr;
-  grid-template-columns: 400px 1fr;
+  grid-template-columns: 400px minmax(0, 1fr);
   grid-template-areas: 
     "header header"
     "nav main";
@@ -42,7 +42,6 @@ nav {
   border: 2px solid var(--gray0);
   background-color: var(--gray6);
   grid-area: nav;
-  grid-template-rows: auto 1fr;
 }
 
 nav h2 {
@@ -90,13 +89,18 @@ main {
   grid-area: main;
 }
 
+main h2 {
+  padding-bottom: 0px;
+  margin-bottom: 0px;
+}
+
 h1 {
   font-size: 1.75rem;
   text-align: center;
 }
 
 a, a:visited {
-  color: var(--blue2);
+  color: var(--blue1);
   text-decoration: none;
 }
 
@@ -113,6 +117,50 @@ button {
 
 .center {
   text-align: center;
+}
+.small {
+  font-size: .8rem;
+}
+
+/* 
+  table scrolling & row/col freezing mostly from 
+  <https://code-boxx.com/freeze-rows-columns-html-tables/> 
+*/
+#scroll-table-container {
+  overflow-x: auto;
+  max-height: calc(100vh - 250px);  /* 100vh - header - main h2 + some extra */
+}
+
+#scroll-table {
+  border-collapse: separate;
+  border-spacing: 0;
+
+  /* don't wrap anything, add padding */
+  & td, th { white-space: nowrap; padding: 5px; }
+
+  /* make header row and first column sticky & have different bg color */
+  & thead, th {  position: sticky;  background-color: var(--blue-gray1); }
+
+  /* header row should be on top of table body */
+  & thead { top: 0;  z-index: 2;  }
+
+  /* first column should be on top of rest of columns */
+  & th { left: 0; z-index: 1; }
+
+  /* first row, first column should be on top of everything */
+  & thead th:first-child { z-index: 3; }
+  
+  /* getting the borders to look right (not double up) */
+  & thead th {
+    border-top: 1px solid var(--gray2); 
+  }
+  & th, td {
+    border-left: 1px solid var(--gray2);
+    border-bottom: 1px solid var(--gray2);
+  }
+  & th:first-child, td:last-child, thead th:last-child { 
+    border-right: 1px solid var(--gray2); 
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -148,5 +196,9 @@ button {
     background-color: var(--gray0);
     color: var(--gray4);
     border-top: 1px solid black;
+  }
+  /* change first row/column bg color */
+  #scroll-table {
+    & thead, th {  background-color: var(--blue-gray0); }
   }
 }

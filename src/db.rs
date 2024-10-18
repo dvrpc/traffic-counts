@@ -16,11 +16,116 @@ use time::{
     Time,
 };
 
-use crate::CountError;
+use crate::{CountError, Direction, Metadata};
 
 pub const RECORD_CREATION_LIMIT: u32 = 50;
 pub const YYYY_MM_DD_FMT: &[BorrowedFormatItem<'_>] =
     format_description!("[year]-[month padding:none]-[day padding:none]");
+
+// TODO: the dates here get converted to Options if errors, but they should be handled properly.
+impl RowValue for Metadata {
+    fn get(row: &oracle::Row) -> oracle::Result<Self> {
+        let amending = row.get("amending")?;
+        let ampeak = row.get("ampeak")?;
+        let bikepeddesc = row.get("bikepeddesc")?;
+        let bikepedfacility = row.get("bikepedfacility")?;
+        let bikepedgroup = row.get("bikepedgroup")?;
+        let cntdir = Direction::from_option_string(row.get("cntdir")?).ok();
+        let comments = row.get("comments")?;
+        let count_type = row.get("type")?;
+        let counterid = row.get("counterid")?;
+        let createheaderdate = row.get("createheaderdate")?;
+        let datelastcounted = row.get("datelastcounted")?;
+        let description = row.get("description")?;
+        let fc = row.get("fc")?;
+        let fromlmt = row.get("fromlmt")?;
+        let importdatadate = row.get("importdatadate")?;
+        let indir = Direction::from_option_string(row.get("indir")?).ok();
+        let isurban = {
+            let isurban: String = row.get("isurban")?;
+            if isurban == *"Y" {
+                Some(true)
+            } else {
+                Some(false)
+            }
+        };
+        let latitude = row.get("latitude")?;
+        let longitude = row.get("longitude")?;
+        let mcd = row.get("mcd")?;
+        let mp = row.get("mp")?;
+        let offset = row.get("offset")?;
+        let outdir = Direction::from_option_string(row.get("outdir")?).ok();
+        let pmending = row.get("pmending")?;
+        let pmpeak = row.get("pmpeak")?;
+        let prj = row.get("prj")?;
+        let program = row.get("program")?;
+        let record_num = row.get("recordnum")?;
+        let rdprefix = row.get("rdprefix")?;
+        let rdsuffix = row.get("rdsuffix")?;
+        let road = row.get("road")?;
+        let route = row.get("route")?;
+        let seg = row.get("seg")?;
+        let sidewalk = row.get("sidewalk")?;
+        let speed_limit = row.get("speedlimit")?;
+        let source = row.get("source")?;
+        let sr = row.get("sr")?;
+        let sri = row.get("sri")?;
+        let stationid = row.get("stationid")?;
+        let technician = row.get("takenby")?;
+        let tolmt = row.get("tolmt")?;
+        let trafdir = Direction::from_option_string(row.get("trafdir")?).ok();
+        let x = row.get("x")?;
+        let y = row.get("y")?;
+
+        let record = Metadata {
+            amending,
+            ampeak,
+            bikepeddesc,
+            bikepedgroup,
+            bikepedfacility,
+            cntdir,
+            comments,
+            count_type,
+            counterid,
+            createheaderdate,
+            datelastcounted,
+            description,
+            fc,
+            fromlmt,
+            importdatadate,
+            indir,
+            isurban,
+            latitude,
+            longitude,
+            mcd,
+            mp,
+            offset,
+            outdir,
+            pmending,
+            pmpeak,
+            prj,
+            program,
+            record_num,
+            rdprefix,
+            rdsuffix,
+            road,
+            route,
+            seg,
+            sidewalk,
+            speed_limit,
+            source,
+            sr,
+            sri,
+            stationid,
+            technician,
+            tolmt,
+            trafdir,
+            x,
+            y,
+        };
+        Ok(record)
+    }
+}
 
 pub fn get_creds() -> (String, String) {
     dotenvy::dotenv().expect("Unable to load .env file.");
@@ -131,6 +236,35 @@ pub fn get_import_log(
     }
 
     Ok(log_records)
+}
+
+/// Get total number of records in metadata (tc_header) table.
+pub fn get_metadata_total_recs(conn: &Connection) -> Result<u32, CountError> {
+    Ok(conn.query_row_as::<u32>("select count(*) from tc_header", &[])?)
+}
+/// Get one or more metadata (tc_header) records.
+pub fn get_metadata(
+    conn: &Connection,
+    offset: Option<u32>,
+    limit: Option<u32>,
+) -> Result<Vec<Metadata>, CountError> {
+    let mut records = vec![];
+
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(100);
+    let results = conn.query_as::<Metadata>(
+        "select * from tc_header 
+            order by recordnum DESC
+            offset :1 rows
+            fetch first :2 rows only",
+        &[&offset, &limit],
+    )?;
+
+    for row in results {
+        let row = row?;
+        records.push(row)
+    }
+    Ok(records)
 }
 
 /// Insert one or more empty metadata (tc_header) records (with recordnum and created date only).

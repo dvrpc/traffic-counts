@@ -1,23 +1,34 @@
 use std::env;
+use std::fmt;
+use std::str::FromStr;
 
 use axum::{
-    extract::{Form, State},
+    extract::{Form, Query, State},
     routing::get,
     Router,
 };
 use axum_extra::routing::RouterExt;
 use oracle::pool::Pool;
 use rinja_axum::Template;
-use serde::Deserialize;
+use serde::{de, Deserialize, Deserializer};
 use tower_http::services::ServeDir;
 
-use traffic_counts::db::{self, LogRecord};
+use traffic_counts::{
+    db::{self, LogRecord},
+    Metadata,
+};
 
 const ADMIN_URL: &str = "/admin";
+
+/// A trait to set the heading for the main section of the page by template.
+pub trait Heading {
+    fn heading() -> String;
+}
 
 #[derive(Clone)]
 struct AppState {
     conn_pool: Pool,
+    num_metadata_records: u32,
 }
 
 #[tokio::main]
@@ -27,13 +38,19 @@ async fn main() {
     let password = env::var("DB_PASSWORD").unwrap();
     let conn_pool = db::create_pool(username, password).unwrap();
 
-    let state = AppState { conn_pool };
+    let conn = conn_pool.get().unwrap();
+    let num_metadata_records = db::get_metadata_total_recs(&conn).unwrap();
+    let state = AppState {
+        conn_pool,
+        num_metadata_records,
+    };
     let app = Router::new()
         .route("/", get(home))
         // `route_with_tsr` redirects any url with a trailing slash to the same one without
         // the trailing slash.
         // It's from the axum_extra crate's `RouteExt`.
         .route_with_tsr(ADMIN_URL, get(admin))
+        .route_with_tsr(&format!("{ADMIN_URL}/view"), get(get_view))
         .route_with_tsr(
             &format!("{ADMIN_URL}/insert"),
             get(get_insert).post(post_insert),
@@ -57,11 +74,6 @@ enum ResponseCondition {
     Success,
 }
 
-/// A trait to set the heading for the <main> section of the page by template.
-pub trait Heading {
-    fn heading() -> String;
-}
-
 /// The front page of the admin section.
 ///
 /// It will sometimes be used to display successful posts and messages, in addition to the default
@@ -80,6 +92,53 @@ impl Heading for AdminMainTemplate {
 
 async fn admin() -> AdminMainTemplate {
     AdminMainTemplate::default()
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/view.html")]
+struct AdminViewTemplate {
+    message: Option<String>,
+    condition: ResponseCondition,
+    metadata: Vec<Metadata>,
+    total_pages: u32,
+    page: u32,
+}
+
+impl Heading for AdminViewTemplate {
+    fn heading() -> String {
+        "View Count Metadata Records".to_string()
+    }
+}
+
+#[derive(Deserialize)]
+struct Page {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    page: Option<u32>,
+}
+
+async fn get_view(State(state): State<AppState>, page: Query<Page>) -> AdminViewTemplate {
+    let results_per_page = 100;
+    let page = page.0.page.unwrap_or(1);
+    let mut message = None;
+
+    let conn = state.conn_pool.get().unwrap();
+
+    let metadata = match db::get_metadata(&conn, Some(page * results_per_page), None) {
+        Ok(v) => v,
+        // TODO: handle this later
+        Err(e) => {
+            message = Some(format!("{e}"));
+            vec![]
+        }
+    };
+    let total_pages = state.num_metadata_records / results_per_page;
+    AdminViewTemplate {
+        message,
+        condition: ResponseCondition::GetInput,
+        metadata,
+        total_pages,
+        page,
+    }
 }
 
 #[derive(Template, Debug, Default)]
@@ -215,4 +274,27 @@ impl Heading for HomeTemplate {
 
 async fn home() -> HomeTemplate {
     HomeTemplate::default()
+}
+
+fn empty_string_as_none<'de, D, T>(de: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    let opt = Option::<String>::deserialize(de)?;
+    match opt.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => FromStr::from_str(s).map_err(de::Error::custom).map(Some),
+    }
+}
+
+pub fn display_some<T>(value: &Option<T>) -> String
+where
+    T: std::fmt::Display,
+{
+    match value {
+        Some(value) => value.to_string(),
+        None => String::new(),
+    }
 }

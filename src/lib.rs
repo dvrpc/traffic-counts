@@ -349,60 +349,50 @@ impl FifteenMinuteVehicle {
 /// The full metadata of a count, which corresponds to the "tc_header" table in the database.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Metadata {
-    // takenby in db
-    pub technician: String, // initials
-    // no underscore in db
-    pub record_num: u32,
-    // pub directions: Directions, // using seperate fields
-    // no underscore in database
-    pub counter_id: u32,
-    // no underscore in database
-    pub speed_limit: Option<u8>,
-    pub importdatadate: Option<Timestamp>,
-
-    // TODO: uses appropriate types - using String for all for simplicity to start
     pub amending: Option<String>,
-    pub pmending: Option<String>,
-    pub ampeak: Option<String>,
-    pub pmpeak: Option<String>,
-    pub datelastcounted: Option<String>,
-    pub stationid: Option<String>,
-    pub createheaderdate: Option<String>,
-    pub mp: Option<String>,
-    pub prj: Option<String>,
-    pub comments: Option<String>,
-    pub fc: Option<String>,
-    pub mcd: Option<String>,
-    pub rdprefix: Option<String>,
-    pub route: Option<String>,
-    pub sr: Option<String>,
-    pub offset: Option<String>,
-    pub seg: Option<String>,
-    pub sri: Option<String>,
-    pub road: Option<String>,
-    pub cntdir: Option<Direction>,
-    pub trafdir: Option<Direction>,
-    pub fromlmt: Option<String>,
-    pub tolmt: Option<String>,
-    pub description: Option<String>,
-    pub source: Option<String>,
-    pub divided: Option<String>,
-    // "type" in db
-    pub count_type: Option<String>,
-    pub weather: Option<String>,
-    pub rdsuffix: Option<String>,
-    pub x: Option<String>,
-    pub y: Option<String>,
-    pub latitude: Option<String>,
-    pub longitude: Option<String>,
-    pub outdir: Option<String>,
-    pub indir: Option<String>,
-    pub sidewalk: Option<String>,
-    pub program: Option<String>,
-    pub bikepedgroup: Option<String>,
-    pub bikepedfacility: Option<String>,
-    pub isurban: Option<String>,
+    pub ampeak: Option<f32>,
     pub bikepeddesc: Option<String>,
+    pub bikepedfacility: Option<String>,
+    pub bikepedgroup: Option<String>,
+    pub cntdir: Option<Direction>,
+    pub comments: Option<String>,
+    pub count_type: Option<String>, // just "type" in db
+    pub counterid: Option<u32>,
+    pub createheaderdate: Option<Timestamp>,
+    pub datelastcounted: Option<Timestamp>,
+    pub description: Option<String>,
+    pub fc: Option<u32>,
+    pub fromlmt: Option<String>,
+    pub importdatadate: Option<Timestamp>,
+    pub indir: Option<Direction>,
+    pub isurban: Option<bool>,
+    pub latitude: Option<f32>,
+    pub longitude: Option<f32>,
+    pub mcd: Option<String>,
+    pub mp: Option<String>,
+    pub offset: Option<String>,
+    pub outdir: Option<Direction>,
+    pub pmending: Option<String>,
+    pub pmpeak: Option<f32>,
+    pub prj: Option<String>,
+    pub program: Option<String>,
+    pub record_num: u32, // no underscore in db
+    pub rdprefix: Option<String>,
+    pub rdsuffix: Option<String>,
+    pub road: Option<String>,
+    pub route: Option<u32>,
+    pub seg: Option<String>,
+    pub sidewalk: Option<String>,
+    pub speed_limit: Option<u8>, // no underscore in database
+    pub source: Option<String>,
+    pub sr: Option<String>,
+    pub sri: Option<String>,
+    pub stationid: Option<String>,
+    pub technician: Option<String>, // "takenby" in db
+    pub tolmt: Option<String>,
+    pub trafdir: Option<Direction>,
+    pub x: Option<f32>,
+    pub y: Option<f32>,
 }
 
 /// The field metadata of an input count, which is a subset of the full `Metadata` and includes
@@ -556,6 +546,13 @@ impl Direction {
             "south" | "s" => Ok(Direction::South),
             "west" | "w" => Ok(Direction::West),
             _ => Err(CountError::BadDirection(dir.to_string())),
+        }
+    }
+
+    fn from_option_string(dir: Option<String>) -> Result<Direction, CountError<'static>> {
+        match dir {
+            Some(v) => Direction::from_string(v),
+            None => Err(CountError::BadDirection("None".to_string())),
         }
     }
 }

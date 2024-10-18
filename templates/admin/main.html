@@ -8,6 +8,9 @@
     <h2>Metadata (tc_header)</h2>
     <form>
       <ul>
+        <li><button formaction="{{ ADMIN_URL }}/view">
+          {{ AdminViewTemplate::heading() }}
+        </button></li>
         <li><button formaction="{{ ADMIN_URL }}/insert">
           {{ AdminInsertTemplate::heading() }}
         </button></li>
@@ -18,7 +21,7 @@
         <li><button formaction="{{ ADMIN_URL }}/create-packets">Create Packets (heading())</button></li>
       </ul>
 
-      <h2 class="section_heading">Count data</h2>
+      <h2 class="section_heading">Import</h2>
       <ul>
         <li><button formaction="{{ ADMIN_URL }}/import-ecocounter">Import from EcoCounter (heading())</button></li>
         <li><button formaction="{{ ADMIN_URL }}/import-jamar">Import from JAMAR (heading())</button></li>
