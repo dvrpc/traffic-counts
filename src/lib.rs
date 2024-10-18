@@ -35,7 +35,7 @@ use std::num::ParseIntError;
 use std::path::Path;
 
 use log::error;
-use oracle::{sql_type::Timestamp, Connection};
+use oracle::sql_type::Timestamp;
 use thiserror::Error;
 use time::{Date, Duration, PrimitiveDateTime, Time};
 

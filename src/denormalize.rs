@@ -6,6 +6,7 @@
 //!  * raw data, in the form of [IndividualVehicle]s, is
 //!    [processed and transformed](create_non_normal_speedavg_count)
 //!    into the shape of the TC_SPESUM table ([NonNormalAvgSpeedCount]).
+use oracle::Connection;
 
 use crate::{db::YYYY_MM_DD_FMT, intermediate::*, *};
 

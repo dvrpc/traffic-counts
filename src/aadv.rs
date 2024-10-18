@@ -1,5 +1,6 @@
 //! Calculate average annual daily volumes and insert them into the database.
 
+use oracle::Connection;
 use time::{Date, OffsetDateTime};
 
 use crate::{db::YYYY_MM_DD_FMT, *};
