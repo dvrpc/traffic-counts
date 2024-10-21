@@ -8,7 +8,8 @@
   --gray5: hsl(0, 0%, 70%);
   --gray6: hsl(0, 0%, 80%);
   --blue0: hsl(205, 56%, 15%);
-  --blue1: hsl(205, 45%, 35%);
+  --blue1: hsl(205, 56%, 35%);
+  --blue2: hsl(205, 40%, 48%);
   --blue-gray0: hsl(205, 15%, 30%);
   --blue-gray1: hsl(205, 15%, 60%);
   color-scheme: light dark;
@@ -199,8 +200,10 @@ button {
     color: var(--gray4);
     border-top: 1px solid black;
   }
-  /* change first row/column bg color */
+  a, a:visited { color: var(--blue2) };
+
   #scroll-table {
+    /* change first row/column bg color */
     & thead, th {  background-color: var(--blue-gray0); }
   }
 }
