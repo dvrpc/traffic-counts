@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::env;
+use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
 
@@ -8,7 +10,7 @@ use axum::{
     Router,
 };
 use axum_extra::routing::RouterExt;
-use oracle::pool::Pool;
+use oracle::{pool::Pool, Error as OracleError, ErrorKind as OracleErrorKind};
 use rinja_axum::Template;
 use serde::{de, Deserialize, Deserializer};
 use tower_http::services::ServeDir;
@@ -54,7 +56,8 @@ async fn main() {
         // the trailing slash.
         // It's from the axum_extra crate's `RouteExt`.
         .route_with_tsr(ADMIN_PATH, get(admin))
-        .route_with_tsr(ADMIN_METADATA_LIST_PATH, get(get_view_list))
+        .route_with_tsr(ADMIN_METADATA_LIST_PATH, get(get_metadata_list))
+        .route_with_tsr(ADMIN_METADATA_DETAIL_PATH, get(get_metadata_detail))
         .route_with_tsr(
             ADMIN_METADATA_INSERT_PATH,
             get(get_insert).post(post_insert),
@@ -120,7 +123,7 @@ struct Page {
     page: Option<u32>,
 }
 
-async fn get_view_list(
+async fn get_metadata_list(
     State(state): State<AppState>,
     page: Query<Page>,
 ) -> AdminMetadataListTemplate {
@@ -130,7 +133,7 @@ async fn get_view_list(
 
     let conn = state.conn_pool.get().unwrap();
 
-    let metadata = match db::get_metadata(&conn, Some(page * results_per_page), None) {
+    let metadata = match db::get_metadata_paginated(&conn, Some(page * results_per_page), None) {
         Ok(v) => v,
         // TODO: handle this later
         Err(e) => {
@@ -146,6 +149,58 @@ async fn get_view_list(
         total_pages,
         page,
     }
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/metadata_detail.html")]
+struct AdminMetadataDetailTemplate {
+    message: Option<String>,
+    condition: ResponseCondition,
+    metadata: Option<Metadata>,
+}
+
+impl Heading for AdminMetadataDetailTemplate {
+    fn heading() -> String {
+        "View Count Metadata".to_string()
+    }
+}
+
+async fn get_metadata_detail(
+    State(state): State<AppState>,
+    record_num: Query<HashMap<String, u32>>,
+) -> AdminMetadataDetailTemplate {
+    let conn = state.conn_pool.get().unwrap();
+    let mut detail = AdminMetadataDetailTemplate {
+        message: None,
+        condition: ResponseCondition::GetInput,
+        metadata: None,
+    };
+    let record_num = match record_num.0.get("record_num") {
+        Some(v) => v,
+        None => {
+            detail.message = Some("Please provide a record number.".to_string());
+            return detail;
+        }
+    };
+
+    detail.metadata = match db::get_metadata(&conn, *record_num) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            // Handle the one error that is probable (no matching recordnum in db).
+            if e.source().is_some_and(|v| {
+                matches!(
+                    v.downcast_ref::<OracleError>().unwrap().kind(),
+                    OracleErrorKind::NoDataFound
+                )
+            }) {
+                detail.message = Some(format!("Record {record_num} not found."))
+            } else {
+                detail.message = Some(format!("{e}"))
+            }
+            return detail;
+        }
+    };
+    detail
 }
 
 #[derive(Template, Debug, Default)]

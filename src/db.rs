@@ -242,8 +242,17 @@ pub fn get_import_log(
 pub fn get_metadata_total_recs(conn: &Connection) -> Result<u32, CountError> {
     Ok(conn.query_row_as::<u32>("select count(*) from tc_header", &[])?)
 }
-/// Get one or more metadata (tc_header) records.
-pub fn get_metadata(
+
+/// Get paginated metadata (tc_header) records.
+pub fn get_metadata(conn: &Connection, record_num: u32) -> Result<Metadata, CountError> {
+    Ok(conn.query_row_as::<Metadata>(
+        "select * from tc_header where recordnum = :1",
+        &[&record_num],
+    )?)
+}
+
+/// Get paginated metadata (tc_header) records.
+pub fn get_metadata_paginated(
     conn: &Connection,
     offset: Option<u32>,
     limit: Option<u32>,
