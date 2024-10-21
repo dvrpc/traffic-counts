@@ -2,7 +2,7 @@
 
 {% block main %}
   {% if condition == ResponseCondition::GetInput %}
-    <form action="{{ ADMIN_URL }}/insert" method="post">
+    <form action="{{ ADMIN_METADATA_INSERT_PATH }}" method="post">
       <label>
         How many empty records would you like to create?<br>
         <input type="text" name="number_to_create" required />

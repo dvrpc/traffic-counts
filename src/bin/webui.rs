@@ -18,7 +18,11 @@ use traffic_counts::{
     Metadata,
 };
 
-const ADMIN_URL: &str = "/admin";
+const ADMIN_PATH: &str = "/admin";
+const ADMIN_METADATA_LIST_PATH: &str = "/admin/metadata-list";
+const ADMIN_METADATA_DETAIL_PATH: &str = "/admin/metadata-detail";
+const ADMIN_METADATA_INSERT_PATH: &str = "/admin/insert";
+const ADMIN_IMPORT_LOG_PATH: &str = "/admin/import-log";
 
 /// A trait to set the heading for the main section of the page by template.
 pub trait Heading {
@@ -49,14 +53,14 @@ async fn main() {
         // `route_with_tsr` redirects any url with a trailing slash to the same one without
         // the trailing slash.
         // It's from the axum_extra crate's `RouteExt`.
-        .route_with_tsr(ADMIN_URL, get(admin))
-        .route_with_tsr(&format!("{ADMIN_URL}/view"), get(get_view))
+        .route_with_tsr(ADMIN_PATH, get(admin))
+        .route_with_tsr(ADMIN_METADATA_LIST_PATH, get(get_view_list))
         .route_with_tsr(
-            &format!("{ADMIN_URL}/insert"),
+            ADMIN_METADATA_INSERT_PATH,
             get(get_insert).post(post_insert),
         )
         .route_with_tsr(
-            &format!("{ADMIN_URL}/view-import-log"),
+            ADMIN_IMPORT_LOG_PATH,
             get(get_view_import_log).post(post_view_import_log),
         )
         .with_state(state)
@@ -95,8 +99,8 @@ async fn admin() -> AdminMainTemplate {
 }
 
 #[derive(Template, Debug, Default)]
-#[template(path = "admin/view.html")]
-struct AdminViewTemplate {
+#[template(path = "admin/metadata_list.html")]
+struct AdminMetadataListTemplate {
     message: Option<String>,
     condition: ResponseCondition,
     metadata: Vec<Metadata>,
@@ -104,7 +108,7 @@ struct AdminViewTemplate {
     page: u32,
 }
 
-impl Heading for AdminViewTemplate {
+impl Heading for AdminMetadataListTemplate {
     fn heading() -> String {
         "View Count Metadata Records".to_string()
     }
@@ -116,7 +120,10 @@ struct Page {
     page: Option<u32>,
 }
 
-async fn get_view(State(state): State<AppState>, page: Query<Page>) -> AdminViewTemplate {
+async fn get_view_list(
+    State(state): State<AppState>,
+    page: Query<Page>,
+) -> AdminMetadataListTemplate {
     let results_per_page = 100;
     let page = page.0.page.unwrap_or(1);
     let mut message = None;
@@ -132,7 +139,7 @@ async fn get_view(State(state): State<AppState>, page: Query<Page>) -> AdminView
         }
     };
     let total_pages = state.num_metadata_records / results_per_page;
-    AdminViewTemplate {
+    AdminMetadataListTemplate {
         message,
         condition: ResponseCondition::GetInput,
         metadata,
@@ -193,20 +200,20 @@ async fn post_insert(
 }
 
 #[derive(Template, Debug, Default)]
-#[template(path = "admin/view_import_log.html")]
-struct AdminViewImportLogTemplate {
+#[template(path = "admin/import_log.html")]
+struct AdminImportLogTemplate {
     message: Option<String>,
     log_records: Vec<LogRecord>,
 }
 
-impl Heading for AdminViewImportLogTemplate {
+impl Heading for AdminImportLogTemplate {
     fn heading() -> String {
         "View Import Log".to_string()
     }
 }
 
 #[derive(Deserialize, Debug)]
-struct AdminViewImportLogForm {
+struct AdminImportLogForm {
     // We really want an `Option<u32>` here, but for some reason serde cannot handle
     // the None variant properly, so have to parse it manually.
     #[serde(default)]
@@ -214,14 +221,14 @@ struct AdminViewImportLogForm {
     clear: Option<String>,
 }
 
-async fn get_view_import_log(State(state): State<AppState>) -> AdminViewImportLogTemplate {
+async fn get_view_import_log(State(state): State<AppState>) -> AdminImportLogTemplate {
     let conn = state.conn_pool.get().unwrap();
     let (message, log_records) = match db::get_import_log(&conn, None) {
         Ok(v) => (Some("".to_string()), v),
         Err(e) => (Some(format!("Error: {e}")), vec![]),
     };
 
-    AdminViewImportLogTemplate {
+    AdminImportLogTemplate {
         message,
         log_records,
     }
@@ -229,8 +236,8 @@ async fn get_view_import_log(State(state): State<AppState>) -> AdminViewImportLo
 
 async fn post_view_import_log(
     State(state): State<AppState>,
-    Form(input): Form<AdminViewImportLogForm>,
-) -> AdminViewImportLogTemplate {
+    Form(input): Form<AdminImportLogForm>,
+) -> AdminImportLogTemplate {
     let conn = state.conn_pool.get().unwrap();
 
     let (message, log_records) = if input.clear.is_some() {
@@ -254,7 +261,7 @@ async fn post_view_import_log(
         }
     };
 
-    AdminViewImportLogTemplate {
+    AdminImportLogTemplate {
         message,
         log_records,
     }

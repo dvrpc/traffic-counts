@@ -5,9 +5,9 @@
         {{ item.datetime.unwrap().date()|safe }}
         {{ item.datetime.unwrap().hour()|safe }}:{{ item.datetime.unwrap().minute()|safe }}
       </td>
-      <td>{{ item.record_num|safe }}</td>
-      <td>{{ item.level|safe }}</td>
-      <td>{{ item.msg|safe }}</td>
+      <td><a href="{{ ADMIN_METADATA_DETAIL_PATH }}?record_num={{ item.record_num }}">{{ item.record_num }}</a></td>
+      <td>{{ item.level }}</td>
+      <td>{{ item.msg }}</td>
     </tr>
   {% endfor %}
 </table>

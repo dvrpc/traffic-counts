@@ -8,32 +8,32 @@
     <h2>Metadata (tc_header)</h2>
     <form>
       <ul>
-        <li><button formaction="{{ ADMIN_URL }}/view">
-          {{ AdminViewTemplate::heading() }}
+        <li><button formaction="{{ ADMIN_METADATA_LIST_PATH }}">
+          {{ AdminMetadataListTemplate::heading() }}
         </button></li>
-        <li><button formaction="{{ ADMIN_URL }}/insert">
+        <li><button formaction="{{ ADMIN_METADATA_INSERT_PATH }}">
           {{ AdminInsertTemplate::heading() }}
         </button></li>
-        <li><button formaction="{{ ADMIN_URL }}/insert-with-template">
+        <li><button formaction="{{ ADMIN_PATH }}/insert-with-template">
             Insert Records from Template (heading())
         </button></li>
-        <li><button formaction="{{ ADMIN_URL }}/edit-record">Edit Record (heading())</button></li>
-        <li><button formaction="{{ ADMIN_URL }}/create-packets">Create Packets (heading())</button></li>
+        <li><button formaction="{{ ADMIN_PATH }}/edit-record">Edit Record (heading())</button></li>
+        <li><button formaction="{{ ADMIN_PATH }}/create-packets">Create Packets (heading())</button></li>
       </ul>
 
       <h2 class="section_heading">Import</h2>
       <ul>
-        <li><button formaction="{{ ADMIN_URL }}/import-ecocounter">Import from EcoCounter (heading())</button></li>
-        <li><button formaction="{{ ADMIN_URL }}/import-jamar">Import from JAMAR (heading())</button></li>
-        <li><button formaction="{{ ADMIN_URL }}/view-import-log">
-          {{ AdminViewImportLogTemplate::heading() }}
+        <li><button formaction="{{ ADMIN_PATH }}/import-ecocounter">Import from EcoCounter (heading())</button></li>
+        <li><button formaction="{{ ADMIN_PATH }}/import-jamar">Import from JAMAR (heading())</button></li>
+        <li><button formaction="{{ ADMIN_IMPORT_LOG_PATH }}">
+          {{ AdminImportLogTemplate::heading() }}
         </button></li>
       </ul>
 
       <h2 class="section_heading">Factors</h2>
       <ul>
-        <li><button formaction="{{ ADMIN_URL }}/insert-factors">Insert Factors</button></li>
-        <li><button formaction="{{ ADMIN_URL }}/update-factors">Update Factors</button></li>      
+        <li><button formaction="{{ ADMIN_PATH }}/insert-factors">Insert Factors</button></li>
+        <li><button formaction="{{ ADMIN_PATH }}/update-factors">Update Factors</button></li>      
       </ul>
     </form>
 {% endblock %}

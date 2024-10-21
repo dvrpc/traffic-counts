@@ -1,18 +1,18 @@
 {% extends "admin/main.html" %}
 {% block main %}
   {% if condition == ResponseCondition::GetInput %}
-    <form action="{{ ADMIN_URL }}/view" method="get">
+    <form action="{{ ADMIN_METADATA_LIST_PATH }}" method="get">
       <p class="center small">Page {{ page }} of {{ total_pages }} |
         {% if page > 1 %}
-          <a href="{{ ADMIN_URL }}/view?page=1">First</a>
-          <a href="{{ ADMIN_URL }}/view?page={{ page - 1 }}">Previous</a>
+          <a href="{{ ADMIN_METADATA_LIST_PATH }}?page=1">First</a>
+          <a href="{{ ADMIN_METADATA_LIST_PATH }}?page={{ page - 1 }}">Previous</a>
         {% else %}
           First
           Previous
         {% endif %}
         {% if total_pages != page %}
-          <a href="{{ ADMIN_URL }}/view?page={{ page + 1 }}">Next</a>
-          <a href="{{ ADMIN_URL }}/view?page={{ total_pages }}">Last</a>
+          <a href="{{ ADMIN_METADATA_LIST_PATH }}?page={{ page + 1 }}">Next</a>
+          <a href="{{ ADMIN_METADATA_LIST_PATH }}?page={{ total_pages }}">Last</a>
         {% else %}
           Next
           Last
@@ -69,7 +69,11 @@
           <tbody>
           {% for item in metadata %}
             <tr>
-              <th>{{ item.record_num }}</th>
+              <th>
+                <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?record_num={{ item.record_num }}">
+                  {{ item.record_num }}
+                </a>
+              </th>
               <td>{{ self::display_some(item.count_type) }}</td>
               <td>{{ self::display_some(item.datelastcounted) }}</td>
               <td>{{ self::display_some(item.technician) }}</td>
