@@ -24,7 +24,7 @@ body {
   height: 100vh;
   width: 100vw;
   display: grid;
-  grid-template-rows: 100px 1fr;
+  grid-template-rows: 75px 1fr;
   grid-template-columns: 400px minmax(0, 1fr);
   grid-template-areas: 
     "header header"
@@ -90,13 +90,15 @@ main {
 }
 
 main h2 {
-  padding-bottom: 0px;
-  margin-bottom: 0px;
+  padding: 0 auto;
+  margin: 0 auto;
+
 }
 
 h1 {
   font-size: 1.75rem;
   text-align: center;
+  margin: 10px auto;
 }
 
 a, a:visited {
@@ -128,7 +130,7 @@ button {
 */
 #scroll-table-container {
   overflow-x: auto;
-  max-height: calc(100vh - 250px);  /* 100vh - header - main h2 + some extra */
+  max-height: calc(100vh - 225px);  /* 100vh - header - main h2 + some extra */
 }
 
 #scroll-table {
