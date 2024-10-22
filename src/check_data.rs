@@ -1,4 +1,4 @@
-/// Checks on data integrity/validity.
+//! Checks on data integrity/validity.
 use std::collections::{BTreeMap, HashMap};
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
