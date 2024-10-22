@@ -1,7 +1,7 @@
 //! This library contains data structures related to DVRPC's traffic counts
 //! and enables performing various kinds of operations on them, like
 //! [extracting][extract_from_file] data from files,
-//! [inserting/replacing][db/crud] count data in the database,
+//! [CRUD db operations][db::crud],
 //! [denormalizing][denormalize] count data,
 //! and [calculating/inserting][aadv] the annual average daily traffic volumes.
 //!
@@ -9,13 +9,12 @@
 //! and inserting it into our database. See its documentation for further details, including
 //! the filename specification and the types of counts it can create.
 //!
-//! An additional program, currently named [upsert_factors](../upsert_factors/index.html) - though
+//! Another program, currently named [upsert_factors](../upsert_factors/index.html) - though
 //! that may be changed in the future to better reflect what it does - updates factors used to
 //! calculate annual average daily volumes. Extended documentation forthcoming.
 //!
-//! This library also lays the foundations for the inverse need - getting data from the database
-//! in order to act on it or display it in some way, whether for CRUD user interfaces or other
-//! uses.
+//! Finally, a [web interface](../webui/index.html) is currently under development for viewing and
+//! administering the database.
 //!
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 
@@ -100,7 +99,8 @@ pub enum FileNameProblem {
     InvalidSpeedLimit,
 }
 
-/// An individual vehicle that has been counted, including vehicle classification and speed,
+/// An individual vehicle that has been counted, including
+/// [vehicle classification](VehicleClass) and speed,
 /// with no binning applied to it.
 ///
 /// Three kinds of counts can be derived from this type of data:
@@ -141,7 +141,7 @@ impl IndividualVehicle {
     }
 }
 
-/// Pre-binned, 15-minute bicycle volume counts (TC_BIKECOUNT table).
+/// Pre-binned, 15-minute bicycle volume counts.
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteBicycle {
     pub record_num: u32,
@@ -178,7 +178,7 @@ impl FifteenMinuteBicycle {
     }
 }
 
-/// Pre-binned, 15-minute pedestrian volume counts (TC_PEDCOUNT table).
+/// Pre-binned, 15-minute pedestrian volume counts.
 #[derive(Debug, Clone)]
 pub struct FifteenMinutePedestrian {
     pub record_num: u32,
@@ -215,7 +215,7 @@ impl FifteenMinutePedestrian {
     }
 }
 
-/// Pre-binned, 15-minute motor vehicle volume counts (TC_15MINVOLCOUNT table).
+/// Pre-binned, 15-minute motor vehicle volume counts.
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
     pub record_num: u32,
@@ -301,7 +301,7 @@ pub struct Metadata {
     pub y: Option<f32>,
 }
 
-/// The field metadata of an input count, which is a subset of the full `Metadata` and includes
+/// The field metadata of an input count, which is a subset of the full [`Metadata`] and includes
 /// technician, id, direction(s), count machine id, and - potentially - the speed limit.
 ///
 /// See the [import](../import/index.html) program for filename specification.
@@ -542,8 +542,7 @@ impl VehicleClass {
     }
 }
 
-/// Count of [vehicles by class][`VehicleClass`],
-/// binned into 15-minute or hourly intervals (TC_CLACOUNT table).
+/// Count of [vehicles by class][`VehicleClass`], binned into 15-minute or hourly intervals.
 ///
 /// We almost always want fifteen-minute counts, but hourly is also an option.
 #[derive(Debug, Clone)]
@@ -569,8 +568,7 @@ pub struct TimeBinnedVehicleClassCount {
     pub total: u32,
 }
 
-/// Count of vehicles by speed range,
-/// binned into 15-minute or hourly intervals (TC_SPECOUNT table).
+/// Count of vehicles by speed range, binned into 15-minute or hourly intervals.
 ///
 /// We almost always want fifteen-minute counts, but hourly is also an option.
 #[derive(Debug, Clone)]

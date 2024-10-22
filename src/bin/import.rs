@@ -125,7 +125,7 @@ use traffic_counts::{
     aadv::Aadv,
     check_data::check,
     create_speed_and_class_count,
-    db::{create_pool, crud::Crud, insert_import_log_entry, LogEntry},
+    db::{create_pool, crud::Crud, insert_import_log_entry, ImportLogEntry},
     denormalize::{Denormalize, *},
     extract_from_file::{Extract, InputCount},
     FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
@@ -290,7 +290,7 @@ fn main() {
                 );
                 insert_import_log_entry(
                     &conn,
-                    LogEntry::new(record_num, msg.to_string(), Level::Error),
+                    ImportLogEntry::new(record_num, msg.to_string(), Level::Error),
                 )
                 .unwrap();
                 cleanup(cleanup_files, path);
@@ -300,7 +300,8 @@ fn main() {
             // Process the file according to InputCount.
             let msg = format!("Extracting data from {path:?}, a {count_type:?} count");
             info!( target: "import", "{msg}" );
-            insert_import_log_entry(&conn, LogEntry::new(record_num, msg, Level::Info)).unwrap();
+            insert_import_log_entry(&conn, ImportLogEntry::new(record_num, msg, Level::Info))
+                .unwrap();
             match count_type {
                 InputCount::IndividualVehicle => {
                     // Extract data from CSV/text file.
@@ -311,7 +312,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                             cleanup(cleanup_files, path);
@@ -347,7 +348,7 @@ fn main() {
                                 error!(target: "import", "{record_num}: {msg}");
                                 insert_import_log_entry(
                                     &conn,
-                                    LogEntry::new(record_num, msg, Level::Error),
+                                    ImportLogEntry::new(record_num, msg, Level::Error),
                                 )
                                 .unwrap();
                                 continue 'paths_loop;
@@ -361,7 +362,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Info),
+                                ImportLogEntry::new(record_num, msg, Level::Info),
                             )
                             .unwrap();
                         }
@@ -370,7 +371,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -385,7 +386,7 @@ fn main() {
                                 error!(target: "import", "{record_num}: {msg}");
                                 insert_import_log_entry(
                                     &conn,
-                                    LogEntry::new(record_num, msg, Level::Error),
+                                    ImportLogEntry::new(record_num, msg, Level::Error),
                                 )
                                 .unwrap();
                                 continue 'paths_loop;
@@ -399,7 +400,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Info),
+                                ImportLogEntry::new(record_num, msg, Level::Info),
                             )
                             .unwrap();
                         }
@@ -408,7 +409,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -429,7 +430,7 @@ fn main() {
                                 error!(target: "import", "{record_num}: {msg}");
                                 insert_import_log_entry(
                                     &conn,
-                                    LogEntry::new(record_num, msg, Level::Error),
+                                    ImportLogEntry::new(record_num, msg, Level::Error),
                                 )
                                 .unwrap();
                                 continue 'paths_loop;
@@ -443,7 +444,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Info),
+                                ImportLogEntry::new(record_num, msg, Level::Info),
                             )
                             .unwrap();
                         }
@@ -452,7 +453,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -467,7 +468,7 @@ fn main() {
                                 error!(target: "import", "{record_num}: {msg}");
                                 insert_import_log_entry(
                                     &conn,
-                                    LogEntry::new(record_num, msg, Level::Error),
+                                    ImportLogEntry::new(record_num, msg, Level::Error),
                                 )
                                 .unwrap();
                                 continue 'paths_loop;
@@ -481,7 +482,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Info),
+                                ImportLogEntry::new(record_num, msg, Level::Info),
                             )
                             .unwrap();
                         }
@@ -490,7 +491,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -502,7 +503,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
                             )
                             .unwrap();
                         }
@@ -511,7 +512,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -524,7 +525,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
                             )
                             .unwrap();
                         }
@@ -533,7 +534,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -548,7 +549,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                             cleanup(cleanup_files, path);
@@ -568,7 +569,7 @@ fn main() {
                                 error!(target: "import", "{record_num}: {msg}");
                                 insert_import_log_entry(
                                     &conn,
-                                    LogEntry::new(record_num, msg, Level::Error),
+                                    ImportLogEntry::new(record_num, msg, Level::Error),
                                 )
                                 .unwrap();
                                 continue 'paths_loop;
@@ -585,7 +586,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -608,7 +609,7 @@ fn main() {
                                 error!(target: "import", "{record_num}: {msg}");
                                 insert_import_log_entry(
                                     &conn,
-                                    LogEntry::new(record_num, msg, Level::Error),
+                                    ImportLogEntry::new(record_num, msg, Level::Error),
                                 )
                                 .unwrap();
                                 continue 'paths_loop;
@@ -622,7 +623,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Info),
+                                ImportLogEntry::new(record_num, msg, Level::Info),
                             )
                             .unwrap();
                         }
@@ -631,7 +632,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -643,7 +644,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
                             )
                             .unwrap();
                         }
@@ -653,7 +654,7 @@ fn main() {
                             );
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -666,7 +667,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
                             )
                             .unwrap();
                         }
@@ -675,7 +676,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -690,7 +691,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                             cleanup(cleanup_files, path);
@@ -710,7 +711,7 @@ fn main() {
                                 error!(target: "import", "{record_num}: {msg}");
                                 insert_import_log_entry(
                                     &conn,
-                                    LogEntry::new(record_num, msg, Level::Error),
+                                    ImportLogEntry::new(record_num, msg, Level::Error),
                                 )
                                 .unwrap();
                                 continue 'paths_loop;
@@ -726,7 +727,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Info),
+                                ImportLogEntry::new(record_num, msg, Level::Info),
                             )
                             .unwrap();
                         }
@@ -737,7 +738,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -749,7 +750,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
                             )
                             .unwrap();
                         }
@@ -758,7 +759,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -771,7 +772,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
                             )
                             .unwrap();
                         }
@@ -780,7 +781,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -795,7 +796,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                             cleanup(cleanup_files, path);
@@ -815,7 +816,7 @@ fn main() {
                                 error!(target: "import", "{record_num}: {msg}");
                                 insert_import_log_entry(
                                     &conn,
-                                    LogEntry::new(record_num, msg, Level::Error),
+                                    ImportLogEntry::new(record_num, msg, Level::Error),
                                 )
                                 .unwrap();
                                 continue 'paths_loop;
@@ -831,7 +832,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Info),
+                                ImportLogEntry::new(record_num, msg, Level::Info),
                             )
                             .unwrap();
                         }
@@ -842,7 +843,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -854,7 +855,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
                             )
                             .unwrap();
                         }
@@ -863,7 +864,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -876,7 +877,7 @@ fn main() {
                             info!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
                             )
                             .unwrap();
                         }
@@ -885,7 +886,7 @@ fn main() {
                             error!(target: "import", "{record_num}: {msg}");
                             insert_import_log_entry(
                                 &conn,
-                                LogEntry::new(record_num, msg, Level::Error),
+                                ImportLogEntry::new(record_num, msg, Level::Error),
                             )
                             .unwrap();
                         }
@@ -900,13 +901,13 @@ fn main() {
             info!(target: "import", "{record_num}: {msg}");
             insert_import_log_entry(
                 &conn,
-                LogEntry::new(record_num, msg.to_string(), Level::Info),
+                ImportLogEntry::new(record_num, msg.to_string(), Level::Info),
             )
             .unwrap();
             if let Err(e) = check(record_num, &conn) {
                 let msg = format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect.");
                 error!(target: "import", "{record_num}: {msg}");
-                insert_import_log_entry(&conn, LogEntry::new(record_num, msg, Level::Error))
+                insert_import_log_entry(&conn, ImportLogEntry::new(record_num, msg, Level::Error))
                     .unwrap();
             }
             cleanup(cleanup_files, path);

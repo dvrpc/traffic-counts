@@ -1,11 +1,11 @@
-/// Various implementations for use with an Oracle database.
+//! Various implementations for use with an Oracle database.
 use std::str::FromStr;
 
 use chrono::NaiveDateTime;
 use log::Level;
 use oracle::{sql_type::FromSql, Error as OracleError, RowValue, SqlValue};
 
-use crate::{db::LogEntry, denormalize::NonNormalVolCount, Direction, Metadata};
+use crate::{db::ImportLogEntry, denormalize::NonNormalVolCount, Direction, Metadata};
 
 impl RowValue for Metadata {
     fn get(row: &oracle::Row) -> oracle::Result<Self> {
@@ -111,14 +111,14 @@ impl RowValue for Metadata {
     }
 }
 
-impl RowValue for LogEntry {
+impl RowValue for ImportLogEntry {
     fn get(row: &oracle::Row) -> oracle::Result<Self> {
         let record_num = row.get("recordnum")?;
         let msg: String = row.get("message")?;
         let level: String = row.get("log_level")?;
         let level = Level::from_str(level.as_str()).unwrap();
         let datetime: NaiveDateTime = row.get("datetime")?;
-        let mut log_record = LogEntry::new(record_num, msg, level);
+        let mut log_record = ImportLogEntry::new(record_num, msg, level);
         log_record.datetime = Some(datetime);
         Ok(log_record)
     }

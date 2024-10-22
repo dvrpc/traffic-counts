@@ -17,7 +17,7 @@ use serde::{de, Deserialize, Deserializer};
 use tower_http::services::ServeDir;
 
 use traffic_counts::{
-    db::{self, LogEntry},
+    db::{self, ImportLogEntry},
     Metadata,
 };
 
@@ -259,7 +259,7 @@ async fn post_insert(
 #[template(path = "admin/import_log.html")]
 struct AdminImportLogTemplate {
     message: Option<String>,
-    log_records: Vec<LogEntry>,
+    log_records: Vec<ImportLogEntry>,
 }
 
 impl Heading for AdminImportLogTemplate {

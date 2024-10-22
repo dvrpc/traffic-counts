@@ -652,6 +652,7 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     Ok(totals)
 }
 
+/// Get days that should be excluded from AADV calculations.
 pub fn excluded_days(conn: &Connection) -> Result<Vec<NaiveDate>, oracle::Error> {
     let results = conn.query_as::<Timestamp>("select excluded_day from aadv_excluded_days", &[])?;
 

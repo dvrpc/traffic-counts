@@ -24,6 +24,7 @@ use serde::Serialize;
 
 use crate::{CountError, Metadata};
 
+/// The maximum number of empty metadata records allowed to be created.
 pub const RECORD_CREATION_LIMIT: u32 = 50;
 
 /// Get database credentials from environment variable.
@@ -45,14 +46,14 @@ pub fn create_pool(username: String, password: String) -> Result<Pool, OracleErr
 
 /// A log entry from data imports.
 #[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct LogEntry {
+pub struct ImportLogEntry {
     pub datetime: Option<NaiveDateTime>,
     pub record_num: u32,
     pub msg: String,
     pub level: String,
 }
 
-impl LogEntry {
+impl ImportLogEntry {
     pub fn new(record_num: u32, msg: String, level: Level) -> Self {
         Self {
             datetime: None,
@@ -63,7 +64,7 @@ impl LogEntry {
     }
 }
 
-impl Display for LogEntry {
+impl Display for ImportLogEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -77,10 +78,10 @@ impl Display for LogEntry {
     }
 }
 
-/// Insert a `LogEntry`.
+/// Insert an [`ImportLogEntry`].
 pub fn insert_import_log_entry(
     conn: &Connection,
-    log_record: LogEntry,
+    log_record: ImportLogEntry,
 ) -> Result<(), oracle::Error> {
     conn.execute(
         "insert into import_log (recordnum, message, log_level) values (:1, :2, :3)",
@@ -89,17 +90,19 @@ pub fn insert_import_log_entry(
     conn.commit()
 }
 
-/// Get the full import log.
+/// Get all [Import Log Entries](ImportLogEntry).
 pub fn get_import_log(
     conn: &Connection,
     record_num: Option<u32>,
-) -> Result<Vec<LogEntry>, oracle::Error> {
+) -> Result<Vec<ImportLogEntry>, oracle::Error> {
     let results = match record_num {
-        Some(v) => conn.query_as::<LogEntry>(
+        Some(v) => conn.query_as::<ImportLogEntry>(
             "select * from import_log WHERE recordnum = :1 order by datetime desc",
             &[&v],
         ),
-        None => conn.query_as::<LogEntry>("select * from import_log order by datetime desc", &[]),
+        None => {
+            conn.query_as::<ImportLogEntry>("select * from import_log order by datetime desc", &[])
+        }
     }?;
 
     let mut log_records = vec![];
@@ -111,12 +114,12 @@ pub fn get_import_log(
     Ok(log_records)
 }
 
-/// Get total number of records in metadata (tc_header) table.
+/// Get total number of records in [`Metadata`] table.
 pub fn get_metadata_total_recs(conn: &Connection) -> Result<u32, CountError> {
     Ok(conn.query_row_as::<u32>("select count(*) from tc_header", &[])?)
 }
 
-/// Get paginated metadata (tc_header) records.
+/// Get a [`Metadata`] record.
 pub fn get_metadata(conn: &Connection, record_num: u32) -> Result<Metadata, CountError> {
     Ok(conn.query_row_as::<Metadata>(
         "select * from tc_header where recordnum = :1",
@@ -124,7 +127,7 @@ pub fn get_metadata(conn: &Connection, record_num: u32) -> Result<Metadata, Coun
     )?)
 }
 
-/// Get paginated metadata (tc_header) records.
+/// Get paginated [`Metadata`] records.
 pub fn get_metadata_paginated(
     conn: &Connection,
     offset: Option<u32>,
@@ -149,7 +152,7 @@ pub fn get_metadata_paginated(
     Ok(records)
 }
 
-/// Insert one or more empty metadata (tc_header) records (with recordnum and created date only).
+/// Insert one or more empty [`Metadata`] records (with recordnum and created date only).
 pub fn insert_empty_metadata(conn: &Connection, number: u32) -> Result<Vec<u32>, CountError> {
     if number == 0 {
         return Err(CountError::DbError("Cannot create 0 records".to_string()));
@@ -174,6 +177,7 @@ pub fn insert_empty_metadata(conn: &Connection, number: u32) -> Result<Vec<u32>,
     Ok(recordnums)
 }
 
+/// Get the type of count for a given record number.
 pub fn get_count_type(conn: &Connection, record_num: u32) -> Result<Option<String>, CountError> {
     match conn.query_row_as::<Option<String>>(
         "select type from tc_header where recordnum = :1",

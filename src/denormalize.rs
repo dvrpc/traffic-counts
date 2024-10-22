@@ -11,6 +11,7 @@ use oracle::Connection;
 
 use crate::{intermediate::*, *};
 
+/// A trait to handle denormalization.
 pub trait Denormalize {
     /// The name of the table that the data will get denormalized from.
     const NORMALIZED_TABLE: &'static str;
@@ -149,7 +150,7 @@ pub struct HourlyCount {
     pub lane: u8,
 }
 
-/// Non-normalized volume counts (TC_VOLCOUNT table).
+/// Non-normalized volume counts.
 ///
 /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
 /// the following day - can start and stop at any time.
@@ -188,7 +189,7 @@ pub struct NonNormalVolCount {
     pub pm11: Option<u32>,
 }
 
-/// Non-normalized average speed counts (TC_SPESUM table).
+/// Non-normalized average speed counts.
 ///
 /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
 /// the following day - can start and stop at any time.

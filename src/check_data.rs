@@ -6,7 +6,7 @@ use log::{warn, Level};
 use oracle::{sql_type::Timestamp, Connection};
 
 use crate::{
-    db::{self, LogEntry},
+    db::{self, ImportLogEntry},
     CountError, Direction,
 };
 
@@ -16,6 +16,7 @@ const DIR_PROPORTION_LOWER_BOUND: f32 = 0.40;
 // Unusually high count for bicycles in a 15-minute period.
 const BIKE_COUNT_MAX: u32 = 20;
 
+/// Used for checking shares by class.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClassCountCheck {
     datetime: NaiveDateTime,
@@ -26,6 +27,7 @@ pub struct ClassCountCheck {
     total: u32,
 }
 
+/// Apply various data checks and log any issues found.
 pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     // Determine what kind of count this is, in order to run the appropriate checks.
     let count_type = match db::get_count_type(conn, recordnum) {
@@ -76,14 +78,16 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         if c2_percent < 75.0 {
             let msg = format!("Class 2 vehicles are less than 75% ({c2_percent:.1}%) of total.");
             warn!(target: "check", "{recordnum}: {msg}");
-            db::insert_import_log_entry(conn, LogEntry::new(recordnum, msg, Level::Warn)).unwrap();
+            db::insert_import_log_entry(conn, ImportLogEntry::new(recordnum, msg, Level::Warn))
+                .unwrap();
         }
 
         if c15_percent > 10.0 {
             let msg =
                 format!("Unclassed vehicles are greater than 10% ({c15_percent:.1}%) of total.");
             warn!(target: "check", "{recordnum}: {msg}");
-            db::insert_import_log_entry(conn, LogEntry::new(recordnum, msg, Level::Warn)).unwrap();
+            db::insert_import_log_entry(conn, ImportLogEntry::new(recordnum, msg, Level::Warn))
+                .unwrap();
         }
     }
 
@@ -120,7 +124,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                         warn!(target: "check", "{recordnum}: {msg}");
                         db::insert_import_log_entry(
                             conn,
-                            LogEntry::new(recordnum, msg, Level::Warn),
+                            ImportLogEntry::new(recordnum, msg, Level::Warn),
                         )
                         .unwrap();
                     }
@@ -191,8 +195,11 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                 if consecutive_zeros > 1 {
                     let msg = format!("Consecutive period ({hour}) with 0 vehicles counted.");
                     warn!(target: "check", "{recordnum}: {msg}");
-                    db::insert_import_log_entry(conn, LogEntry::new(recordnum, msg, Level::Warn))
-                        .unwrap();
+                    db::insert_import_log_entry(
+                        conn,
+                        ImportLogEntry::new(recordnum, msg, Level::Warn),
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -212,7 +219,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                     "More than {BIKE_COUNT_MAX} in a 15-minute period for a bicycle count."
                 );
                 warn!(target: "check", "{recordnum}: {msg}");
-                db::insert_import_log_entry(conn, LogEntry::new(recordnum, msg, Level::Warn))
+                db::insert_import_log_entry(conn, ImportLogEntry::new(recordnum, msg, Level::Warn))
                     .unwrap();
                 break;
             }
