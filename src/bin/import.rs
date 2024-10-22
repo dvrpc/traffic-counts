@@ -124,10 +124,12 @@ use simplelog::{
 use traffic_counts::{
     aadv::Aadv,
     check_data::check,
+    create_speed_and_class_count,
     db::{create_pool, crud::Crud, update_db_import_log, LogRecord},
     denormalize::{Denormalize, *},
-    extract_from_file::Extract,
-    *,
+    extract_from_file::{Extract, InputCount},
+    FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
+    IndividualVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount, TimeInterval,
 };
 
 const LOG: &str = "import.log";
