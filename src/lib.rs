@@ -47,7 +47,8 @@ pub mod intermediate;
 pub mod oracle_impls;
 use intermediate::*;
 
-/// A trait for getting a [`Date`](https://docs.rs/time/latest/time/struct.Date.html) from a type.
+/// A trait for getting a [`NaiveDate`](https://docs.rs/chrono/latest/chrono/struct.NaiveDate.html)
+/// from a type.
 pub trait GetDate {
     fn get_date(&self) -> NaiveDate;
 }
