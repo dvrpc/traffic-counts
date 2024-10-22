@@ -124,7 +124,7 @@ use simplelog::{
 use traffic_counts::{
     aadv::Aadv,
     check_data::check,
-    db::{count_insert::CountInsert, create_pool, update_db_import_log, LogRecord},
+    db::{create_pool, crud::Crud, update_db_import_log, LogRecord},
     denormalize::{Denormalize, *},
     extract_from_file::Extract,
     *,
@@ -352,7 +352,7 @@ fn main() {
                             }
                         }
                     }
-                    let table = <TimeBinnedVehicleClassCount as CountInsert>::COUNT_TABLE;
+                    let table = <TimeBinnedVehicleClassCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             let msg = format!("Successfully committed class data insert to database ({table} table)");
@@ -390,7 +390,7 @@ fn main() {
                             }
                         }
                     }
-                    let table = <TimeBinnedSpeedRangeCount as CountInsert>::COUNT_TABLE;
+                    let table = <TimeBinnedSpeedRangeCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             let msg = format!("Successfully committed speed range data insert to database ({table} table)");
@@ -434,7 +434,7 @@ fn main() {
                             }
                         }
                     }
-                    let table = <NonNormalVolCount as CountInsert>::COUNT_TABLE;
+                    let table = <NonNormalVolCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized class data insert to database ({table} table)");
@@ -472,7 +472,7 @@ fn main() {
                             }
                         }
                     }
-                    let table = <NonNormalAvgSpeedCount as CountInsert>::COUNT_TABLE;
+                    let table = <NonNormalAvgSpeedCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized speed data insert to database ({table} table)");
@@ -573,7 +573,7 @@ fn main() {
                             }
                         }
                     }
-                    let table = <FifteenMinuteVehicle as CountInsert>::COUNT_TABLE;
+                    let table = <FifteenMinuteVehicle as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => (),
                         Err(e) => {
@@ -613,7 +613,7 @@ fn main() {
                             }
                         }
                     }
-                    let table = <NonNormalVolCount as CountInsert>::COUNT_TABLE;
+                    let table = <NonNormalVolCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized data insert to database ({table} table)");
@@ -715,7 +715,7 @@ fn main() {
                             }
                         }
                     }
-                    let table = <FifteenMinuteBicycle as CountInsert>::COUNT_TABLE;
+                    let table = <FifteenMinuteBicycle as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             let msg = format!(
@@ -820,7 +820,7 @@ fn main() {
                             }
                         }
                     }
-                    let table = <FifteenMinutePedestrian as CountInsert>::COUNT_TABLE;
+                    let table = <FifteenMinutePedestrian as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             let msg = format!(

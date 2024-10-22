@@ -1,7 +1,6 @@
-//! Insert/replace count data in the database.
+//! Basic CRUD db operations on count data tables.
 //!
-//! See the [CountInsert trait implementors][CountInsert#implementors] for kinds of counts
-//! and associated tables.
+//! See the [Crud trait implementors][Crud#implementors] for kinds of counts and associated tables.
 
 use chrono::{Datelike, Timelike};
 use oracle::{sql_type::Timestamp, Connection, Statement};
@@ -12,8 +11,8 @@ use crate::{
     TimeBinnedVehicleClassCount,
 };
 
-/// A trait for inserting/replacing count data.
-pub trait CountInsert {
+/// A trait for handling basic CRUD db operations on count data tables.
+pub trait Crud {
     /// The name of the table in the database that this count type corresponds to.
     const COUNT_TABLE: &'static str; // associated constant
     /// Field in COUNT_TABLE with recordnum.
@@ -37,7 +36,7 @@ pub trait CountInsert {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error>;
 }
 
-impl CountInsert for TimeBinnedVehicleClassCount {
+impl Crud for TimeBinnedVehicleClassCount {
     const COUNT_TABLE: &'static str = "tc_clacount";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -98,7 +97,7 @@ impl CountInsert for TimeBinnedVehicleClassCount {
         ])
     }
 }
-impl CountInsert for TimeBinnedSpeedRangeCount {
+impl Crud for TimeBinnedSpeedRangeCount {
     const COUNT_TABLE: &'static str = "tc_specount";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -159,7 +158,7 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
     }
 }
 
-impl CountInsert for NonNormalAvgSpeedCount {
+impl Crud for NonNormalAvgSpeedCount {
     const COUNT_TABLE: &'static str = "tc_spesum";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -220,7 +219,7 @@ impl CountInsert for NonNormalAvgSpeedCount {
     }
 }
 
-impl CountInsert for NonNormalVolCount {
+impl Crud for NonNormalVolCount {
     const COUNT_TABLE: &'static str = "tc_volcount";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -284,7 +283,7 @@ impl CountInsert for NonNormalVolCount {
     }
 }
 
-impl CountInsert for FifteenMinuteVehicle {
+impl Crud for FifteenMinuteVehicle {
     const COUNT_TABLE: &'static str = "tc_15minvolcount";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -329,7 +328,7 @@ impl CountInsert for FifteenMinuteVehicle {
     }
 }
 
-impl CountInsert for FifteenMinuteBicycle {
+impl Crud for FifteenMinuteBicycle {
     const COUNT_TABLE: &'static str = "tc_bikecount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
@@ -375,7 +374,7 @@ impl CountInsert for FifteenMinuteBicycle {
     }
 }
 
-impl CountInsert for FifteenMinutePedestrian {
+impl Crud for FifteenMinutePedestrian {
     const COUNT_TABLE: &'static str = "tc_pedcount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
