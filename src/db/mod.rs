@@ -1,5 +1,7 @@
 //! Shared database functionality.
 
+pub mod count_insert;
+
 use std::env;
 use std::fmt::Display;
 

@@ -41,7 +41,6 @@ use thiserror::Error;
 
 pub mod aadv;
 pub mod check_data;
-pub mod count_insert;
 pub mod db;
 pub mod denormalize;
 pub mod extract_from_file;

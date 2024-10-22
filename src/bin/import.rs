@@ -124,8 +124,7 @@ use simplelog::{
 use traffic_counts::{
     aadv::Aadv,
     check_data::check,
-    count_insert::CountInsert,
-    db::{create_pool, update_db_import_log, LogRecord},
+    db::{count_insert::CountInsert, create_pool, update_db_import_log, LogRecord},
     denormalize::{Denormalize, *},
     extract_from_file::Extract,
     *,
