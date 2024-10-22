@@ -3,7 +3,8 @@
 
 use std::path::Path;
 
-use time::macros::datetime;
+use chrono::NaiveDateTime;
+
 use traffic_counts::{extract_from_file::Extract, intermediate::*, *};
 
 #[test]
@@ -116,7 +117,8 @@ fn empty_periods_created_correctly_166905() {
     assert_eq!(empty_periods, 23);
 
     // first and last periods
-    let expected_first_dt = datetime!(2023-11-06 10:45);
+    let expected_first_dt =
+        NaiveDateTime::parse_from_str("2023-11-06 10:45", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(
         speed_range_count.first().unwrap().datetime,
         expected_first_dt
@@ -125,7 +127,8 @@ fn empty_periods_created_correctly_166905() {
         vehicle_class_count.first().unwrap().datetime,
         expected_first_dt
     );
-    let expected_last_dt = datetime!(2023-11-08 10:45);
+    let expected_last_dt =
+        NaiveDateTime::parse_from_str("2023-11-08 10:45", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
     assert_eq!(
         vehicle_class_count.last().unwrap().datetime,
@@ -169,11 +172,15 @@ fn counts_created_correctly_165367() {
     empty_periods.sort_unstable_by_key(|count| (count.datetime, count.lane));
     assert_eq!(empty_periods.len(), 15);
     assert_eq!(empty_periods[0].total, 0);
-    assert_eq!(empty_periods[0].datetime, datetime!(2023-11-07 1:00));
+    assert_eq!(
+        empty_periods[0].datetime,
+        NaiveDateTime::parse_from_str("2023-11-07 1:00", "%Y-%m-%d %H:%M").unwrap()
+    );
     assert_eq!(empty_periods[0].lane, 1);
 
     // first and last periods
-    let expected_first_dt = datetime!(2023-11-06 11:45);
+    let expected_first_dt =
+        NaiveDateTime::parse_from_str("2023-11-06 11:45", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(
         speed_range_count.first().unwrap().datetime,
         expected_first_dt
@@ -182,7 +189,8 @@ fn counts_created_correctly_165367() {
         vehicle_class_count.first().unwrap().datetime,
         expected_first_dt
     );
-    let expected_last_dt = datetime!(2023-11-10 10:00);
+    let expected_last_dt =
+        NaiveDateTime::parse_from_str("2023-11-10 10:00", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
     assert_eq!(
         vehicle_class_count.last().unwrap().datetime,
@@ -219,7 +227,8 @@ fn counts_created_correctly_101() {
     assert_eq!(empty_periods, 0);
 
     // first and last periods
-    let expected_first_dt = datetime!(2023-11-06 10:45);
+    let expected_first_dt =
+        NaiveDateTime::parse_from_str("2023-11-06 10:45", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(
         speed_range_count.first().unwrap().datetime,
         expected_first_dt
@@ -228,7 +237,8 @@ fn counts_created_correctly_101() {
         vehicle_class_count.first().unwrap().datetime,
         expected_first_dt
     );
-    let expected_last_dt = datetime!(2023-11-06 11:45);
+    let expected_last_dt =
+        NaiveDateTime::parse_from_str("2023-11-06 11:45", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
     assert_eq!(
         vehicle_class_count.last().unwrap().datetime,

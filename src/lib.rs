@@ -34,10 +34,10 @@ use std::io;
 use std::num::ParseIntError;
 use std::path::Path;
 
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use log::error;
 use oracle::sql_type::Timestamp;
 use thiserror::Error;
-use time::{Date, Duration, PrimitiveDateTime, Time};
 
 pub mod aadv;
 pub mod check_data;
@@ -46,6 +46,7 @@ pub mod db;
 pub mod denormalize;
 pub mod extract_from_file;
 pub mod intermediate;
+pub mod oracle_impls;
 use intermediate::*;
 
 // headers stripped of double quotes and spaces
@@ -55,7 +56,7 @@ const FIFTEEN_MINUTE_BIKE_OR_PED_HEADER: &str = "Time,";
 
 /// A trait for getting a [`Date`](https://docs.rs/time/latest/time/struct.Date.html) from a type.
 pub trait GetDate {
-    fn get_date(&self) -> Date;
+    fn get_date(&self) -> NaiveDate;
 }
 
 /// Various errors that can occur.
@@ -98,8 +99,6 @@ pub enum CountError<'a> {
     // Errors from database passed through transparently without specific handling.
     #[error("database error '{0}'")]
     OracleError(#[from] oracle::Error),
-    #[error("datetime error '{0}'")]
-    TimeError(#[from] time::Error),
     #[error("{0}")]
     DataCheckError(String),
 }
@@ -203,23 +202,23 @@ impl InputCount {
 ///   - [NonNormalAvgSpeedCount](denormalize::NonNormalAvgSpeedCount) by [denormalize::create_non_normal_speedavg_count]
 #[derive(Debug, Clone)]
 pub struct IndividualVehicle {
-    pub date: Date,
-    pub time: Time,
+    pub date: NaiveDate,
+    pub time: NaiveTime,
     pub lane: u8,
     pub class: VehicleClass,
     pub speed: f32,
 }
 
 impl GetDate for IndividualVehicle {
-    fn get_date(&self) -> Date {
+    fn get_date(&self) -> NaiveDate {
         self.date.to_owned()
     }
 }
 
 impl IndividualVehicle {
     pub fn new(
-        date: Date,
-        time: Time,
+        date: NaiveDate,
+        time: NaiveTime,
         lane: u8,
         class: u8,
         speed: f32,
@@ -239,15 +238,15 @@ impl IndividualVehicle {
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteBicycle {
     pub record_num: u32,
-    pub date: Date,
-    pub time: Time,
+    pub date: NaiveDate,
+    pub time: NaiveTime,
     pub total: u16,
     pub indir: Option<u16>,
     pub outdir: Option<u16>,
 }
 
 impl GetDate for FifteenMinuteBicycle {
-    fn get_date(&self) -> Date {
+    fn get_date(&self) -> NaiveDate {
         self.date.to_owned()
     }
 }
@@ -255,8 +254,8 @@ impl GetDate for FifteenMinuteBicycle {
 impl FifteenMinuteBicycle {
     pub fn new(
         record_num: u32,
-        date: Date,
-        time: Time,
+        date: NaiveDate,
+        time: NaiveTime,
         total: u16,
         indir: Option<u16>,
         outdir: Option<u16>,
@@ -276,15 +275,15 @@ impl FifteenMinuteBicycle {
 #[derive(Debug, Clone)]
 pub struct FifteenMinutePedestrian {
     pub record_num: u32,
-    pub date: Date,
-    pub time: Time,
+    pub date: NaiveDate,
+    pub time: NaiveTime,
     pub total: u16,
     pub indir: Option<u16>,
     pub outdir: Option<u16>,
 }
 
 impl GetDate for FifteenMinutePedestrian {
-    fn get_date(&self) -> Date {
+    fn get_date(&self) -> NaiveDate {
         self.date.to_owned()
     }
 }
@@ -292,8 +291,8 @@ impl GetDate for FifteenMinutePedestrian {
 impl FifteenMinutePedestrian {
     pub fn new(
         record_num: u32,
-        date: Date,
-        time: Time,
+        date: NaiveDate,
+        time: NaiveTime,
         total: u16,
         indir: Option<u16>,
         outdir: Option<u16>,
@@ -313,15 +312,15 @@ impl FifteenMinutePedestrian {
 #[derive(Debug, Clone)]
 pub struct FifteenMinuteVehicle {
     pub record_num: u32,
-    pub date: Date,
-    pub time: Time,
+    pub date: NaiveDate,
+    pub time: NaiveTime,
     pub count: u16,
     pub direction: Direction,
     pub lane: u8,
 }
 
 impl GetDate for FifteenMinuteVehicle {
-    fn get_date(&self) -> Date {
+    fn get_date(&self) -> NaiveDate {
         self.date.to_owned()
     }
 }
@@ -329,8 +328,8 @@ impl GetDate for FifteenMinuteVehicle {
 impl FifteenMinuteVehicle {
     pub fn new(
         record_num: u32,
-        date: Date,
-        time: Time,
+        date: NaiveDate,
+        time: NaiveTime,
         count: u16,
         direction: Direction,
         lane: u8,
@@ -548,13 +547,6 @@ impl Direction {
             _ => Err(CountError::BadDirection(dir.to_string())),
         }
     }
-
-    fn from_option_string(dir: Option<String>) -> Result<Direction, CountError<'static>> {
-        match dir {
-            Some(v) => Direction::from_string(v),
-            None => Err(CountError::BadDirection("None".to_string())),
-        }
-    }
 }
 
 impl Display for Direction {
@@ -649,7 +641,7 @@ impl VehicleClass {
 /// We almost always want fifteen-minute counts, but hourly is also an option.
 #[derive(Debug, Clone)]
 pub struct TimeBinnedVehicleClassCount {
-    pub datetime: PrimitiveDateTime,
+    pub datetime: NaiveDateTime,
     pub lane: u8,
     pub record_num: u32,
     pub direction: Direction,
@@ -676,7 +668,7 @@ pub struct TimeBinnedVehicleClassCount {
 /// We almost always want fifteen-minute counts, but hourly is also an option.
 #[derive(Debug, Clone)]
 pub struct TimeBinnedSpeedRangeCount {
-    pub datetime: PrimitiveDateTime,
+    pub datetime: NaiveDateTime,
     pub lane: u8,
     pub record_num: u32,
     pub direction: Direction,
@@ -726,15 +718,9 @@ pub fn create_speed_and_class_count(
         };
 
         // Create a key for the Hashmap for time intervals
-        let time_part = match bin_time(count.time, interval) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("{e}");
-                continue;
-            }
-        };
+        let time_part = bin_time(count.time, interval);
         let key = BinnedCountKey {
-            datetime: PrimitiveDateTime::new(count.date, time_part),
+            datetime: NaiveDateTime::new(count.date, time_part),
             lane: count.lane,
         };
 
@@ -770,9 +756,8 @@ pub fn create_speed_and_class_count(
     // for every period to be included, insert any missing.
     counts.sort_unstable_by_key(|c| (c.date, c.time));
 
-    let first_dt =
-        PrimitiveDateTime::new(counts.first().unwrap().date, counts.first().unwrap().time);
-    let last_dt = PrimitiveDateTime::new(counts.last().unwrap().date, counts.last().unwrap().time);
+    let first_dt = NaiveDateTime::new(counts.first().unwrap().date, counts.first().unwrap().time);
+    let last_dt = NaiveDateTime::new(counts.last().unwrap().date, counts.last().unwrap().time);
 
     let all_datetimes = create_time_bins(first_dt, last_dt, interval);
 
@@ -890,17 +875,17 @@ pub enum TimeInterval {
 }
 
 /// Bin time by fifteen-minute or hourly intervals by changing the minute.
-pub fn bin_time(time: Time, interval: TimeInterval) -> Result<Time, time::error::ComponentRange> {
-    let time = time.replace_second(0)?;
+pub fn bin_time(time: NaiveTime, interval: TimeInterval) -> NaiveTime {
+    let time = time.with_second(0).unwrap();
 
     match interval {
-        TimeInterval::Hour => Ok(time.replace_minute(0)?),
+        TimeInterval::Hour => time.with_minute(0).unwrap(),
         TimeInterval::FifteenMin => {
             match time.minute() {
-                0..=14 => Ok(time.replace_minute(0)?),
-                15..=29 => Ok(time.replace_minute(15)?),
-                30..=44 => Ok(time.replace_minute(30)?),
-                _ => Ok(time.replace_minute(45)?), // minute is always 0-59, so this is 45-59
+                0..=14 => time.with_minute(0).unwrap(),
+                15..=29 => time.with_minute(15).unwrap(),
+                30..=44 => time.with_minute(30).unwrap(),
+                _ => time.with_minute(45).unwrap(), // minute is always 0-59, so this is 45-59
             }
         }
     }
@@ -908,30 +893,26 @@ pub fn bin_time(time: Time, interval: TimeInterval) -> Result<Time, time::error:
 
 /// Create all intervals between (and including) a first and last datetime.
 pub fn create_time_bins(
-    first_dt: PrimitiveDateTime,
-    last_dt: PrimitiveDateTime,
+    first_dt: NaiveDateTime,
+    last_dt: NaiveDateTime,
     interval: TimeInterval,
-) -> Vec<PrimitiveDateTime> {
-    let first_bin = PrimitiveDateTime::new(
-        first_dt.date(),
-        bin_time(first_dt.time(), interval).unwrap(),
-    );
+) -> Vec<NaiveDateTime> {
+    let first_bin = NaiveDateTime::new(first_dt.date(), bin_time(first_dt.time(), interval));
 
-    let last_bin =
-        PrimitiveDateTime::new(last_dt.date(), bin_time(last_dt.time(), interval).unwrap());
+    let last_bin = NaiveDateTime::new(last_dt.date(), bin_time(last_dt.time(), interval));
 
-    let mut dts: Vec<PrimitiveDateTime> = vec![];
+    let mut dts: Vec<NaiveDateTime> = vec![];
 
     let mut current_bin = first_bin;
 
     let time_to_add = match interval {
-        TimeInterval::Hour => Duration::HOUR,
-        TimeInterval::FifteenMin => Duration::minutes(15),
+        TimeInterval::Hour => TimeDelta::hours(1),
+        TimeInterval::FifteenMin => TimeDelta::minutes(15),
     };
 
     while current_bin <= last_bin {
         dts.push(current_bin);
-        current_bin = current_bin.saturating_add(time_to_add);
+        current_bin = current_bin.checked_add_signed(time_to_add).unwrap();
     }
     dts
 }
@@ -973,80 +954,79 @@ pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use time::macros::datetime;
 
     #[test]
     fn time_binning_fifteen_min_is_correct() {
         // 1st 15-minute bin
-        let time = Time::from_hms(10, 0, 0).unwrap();
+        let time = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
 
-        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
-        assert_eq!(binned, Time::from_hms(10, 0, 0).unwrap());
-        assert_ne!(binned, Time::from_hms(10, 10, 0).unwrap());
+        let binned = bin_time(time, TimeInterval::FifteenMin);
+        assert_eq!(binned, NaiveTime::from_hms_opt(10, 0, 0).unwrap());
+        assert_ne!(binned, NaiveTime::from_hms_opt(10, 10, 0).unwrap());
 
-        let time = Time::from_hms(10, 14, 00).unwrap();
-        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
-        assert_eq!(binned, Time::from_hms(10, 0, 0).unwrap());
+        let time = NaiveTime::from_hms_opt(10, 14, 0).unwrap();
+        let binned = bin_time(time, TimeInterval::FifteenMin);
+        assert_eq!(binned, NaiveTime::from_hms_opt(10, 0, 0).unwrap());
 
         // 2nd 15-minute bin
-        let time = Time::from_hms(10, 25, 00).unwrap();
+        let time = NaiveTime::from_hms_opt(10, 25, 0).unwrap();
 
-        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
-        assert_eq!(binned, Time::from_hms(10, 15, 0).unwrap());
+        let binned = bin_time(time, TimeInterval::FifteenMin);
+        assert_eq!(binned, NaiveTime::from_hms_opt(10, 15, 0).unwrap());
 
-        let time = Time::from_hms(10, 29, 00).unwrap();
+        let time = NaiveTime::from_hms_opt(10, 29, 0).unwrap();
 
-        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
-        assert_eq!(binned, Time::from_hms(10, 15, 0).unwrap());
+        let binned = bin_time(time, TimeInterval::FifteenMin);
+        assert_eq!(binned, NaiveTime::from_hms_opt(10, 15, 0).unwrap());
 
         // 3rd 15-minute bin
-        let time = Time::from_hms(10, 31, 00).unwrap();
+        let time = NaiveTime::from_hms_opt(10, 31, 0).unwrap();
 
-        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
-        assert_eq!(binned, Time::from_hms(10, 30, 0).unwrap());
+        let binned = bin_time(time, TimeInterval::FifteenMin);
+        assert_eq!(binned, NaiveTime::from_hms_opt(10, 30, 0).unwrap());
 
-        let time = Time::from_hms(10, 44, 00).unwrap();
+        let time = NaiveTime::from_hms_opt(10, 44, 0).unwrap();
 
-        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
-        assert_eq!(binned, Time::from_hms(10, 30, 0).unwrap());
+        let binned = bin_time(time, TimeInterval::FifteenMin);
+        assert_eq!(binned, NaiveTime::from_hms_opt(10, 30, 0).unwrap());
 
         // 4th 15-minute bin
-        let time = Time::from_hms(10, 45, 00).unwrap();
+        let time = NaiveTime::from_hms_opt(10, 45, 0).unwrap();
 
-        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
-        assert_eq!(binned, Time::from_hms(10, 45, 0).unwrap());
+        let binned = bin_time(time, TimeInterval::FifteenMin);
+        assert_eq!(binned, NaiveTime::from_hms_opt(10, 45, 0).unwrap());
 
-        let time = Time::from_hms(10, 59, 00).unwrap();
+        let time = NaiveTime::from_hms_opt(10, 59, 0).unwrap();
 
-        let binned = bin_time(time, TimeInterval::FifteenMin).unwrap();
-        assert_eq!(binned, Time::from_hms(10, 45, 0).unwrap());
+        let binned = bin_time(time, TimeInterval::FifteenMin);
+        assert_eq!(binned, NaiveTime::from_hms_opt(10, 45, 0).unwrap());
     }
 
     #[test]
     fn time_binning_hourly_is_correct() {
         // the time we are trying to bin to
-        let expected = Time::from_hms(10, 0, 0).unwrap();
+        let expected = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
         // the interval to use
         let interval = TimeInterval::Hour;
 
         assert_eq!(
-            bin_time(Time::from_hms(10, 0, 0).unwrap(), interval).unwrap(),
+            bin_time(NaiveTime::from_hms_opt(10, 0, 0).unwrap(), interval),
             expected
         );
         assert_eq!(
-            bin_time(Time::from_hms(10, 15, 0).unwrap(), interval).unwrap(),
+            bin_time(NaiveTime::from_hms_opt(10, 15, 0).unwrap(), interval),
             expected
         );
         assert_eq!(
-            bin_time(Time::from_hms(10, 16, 0).unwrap(), interval).unwrap(),
+            bin_time(NaiveTime::from_hms_opt(10, 16, 0).unwrap(), interval),
             expected
         );
         assert_eq!(
-            bin_time(Time::from_hms(10, 31, 0).unwrap(), interval).unwrap(),
+            bin_time(NaiveTime::from_hms_opt(10, 31, 0).unwrap(), interval),
             expected
         );
         assert_eq!(
-            bin_time(Time::from_hms(10, 59, 0).unwrap(), interval).unwrap(),
+            bin_time(NaiveTime::from_hms_opt(10, 59, 0).unwrap(), interval),
             expected
         );
     }
@@ -1268,59 +1248,59 @@ mod tests {
 
     #[test]
     fn create_time_bins_correct() {
-        let first_dt = datetime!(2024 - 04 - 08 7:00);
-        let last_dt = datetime!(2024 - 04 - 08 7:14);
+        let first_dt = NaiveDateTime::parse_from_str("2024-04-08 7:00", "%Y-%m-%d %-H:%M").unwrap();
+        let last_dt = NaiveDateTime::parse_from_str("2024-04-08 7:14", "%Y-%m-%d %-H:%M").unwrap();
         let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 1);
         assert_eq!(keys_hour.len(), 1);
 
-        let first_dt = datetime!(2024 - 04 - 08 7:00);
-        let last_dt = datetime!(2024 - 04 - 08 7:15);
+        let first_dt = NaiveDateTime::parse_from_str("2024-04-08 7:00", "%Y-%m-%d %-H:%M").unwrap();
+        let last_dt = NaiveDateTime::parse_from_str("2024-04-08 7:15", "%Y-%m-%d %-H:%M").unwrap();
         let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 2);
         assert_eq!(keys_hour.len(), 1);
 
-        let first_dt = datetime!(2024 - 04 - 08 7:00);
-        let last_dt = datetime!(2024 - 04 - 08 7:59);
+        let first_dt = NaiveDateTime::parse_from_str("2024-04-08 7:00", "%Y-%m-%d %-H:%M").unwrap();
+        let last_dt = NaiveDateTime::parse_from_str("2024-04-08 7:59", "%Y-%m-%d %-H:%M").unwrap();
         let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 4);
         assert_eq!(keys_hour.len(), 1);
 
-        let first_dt = datetime!(2024 - 04 - 08 7:00);
-        let last_dt = datetime!(2024 - 04 - 08 8:59);
+        let first_dt = NaiveDateTime::parse_from_str("2024-04-08 7:00", "%Y-%m-%d %-H:%M").unwrap();
+        let last_dt = NaiveDateTime::parse_from_str("2024-04-08 8:59", "%Y-%m-%d %-H:%M").unwrap();
         let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 8);
         assert_eq!(keys_hour.len(), 2);
 
-        let first_dt = datetime!(2024-04-08 0:00);
-        let last_dt = datetime!(2024-04-08 23:59);
+        let first_dt = NaiveDateTime::parse_from_str("2024-04-08 0:00", "%Y-%m-%d %-H:%M").unwrap();
+        let last_dt = NaiveDateTime::parse_from_str("2024-04-08 23:59", "%Y-%m-%d %H:%M").unwrap();
         let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 96);
         assert_eq!(keys_hour.len(), 24);
 
-        let first_dt = datetime!(2024-04-08 0:00);
-        let last_dt = datetime!(2024-04-09 0:00);
+        let first_dt = NaiveDateTime::parse_from_str("2024-04-08 0:00", "%Y-%m-%d %-H:%M").unwrap();
+        let last_dt = NaiveDateTime::parse_from_str("2024-04-09 0:00", "%Y-%m-%d %-H:%M").unwrap();
         let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 97);
         assert_eq!(keys_hour.len(), 25);
 
         // spanning two months
-        let first_dt = datetime!(2024-03-31 23:00);
-        let last_dt = datetime!(2024-04-01 00:01);
+        let first_dt = NaiveDateTime::parse_from_str("2024-03-31 23:00", "%Y-%m-%d %H:%M").unwrap();
+        let last_dt = NaiveDateTime::parse_from_str("2024-04-01 00:01", "%Y-%m-%d %H:%M").unwrap();
         let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 5);
         assert_eq!(keys_hour.len(), 2);
 
         // spanning two years
-        let first_dt = datetime!(2023-12-31 23:00);
-        let last_dt = datetime!(2024-01-01 00:01);
+        let first_dt = NaiveDateTime::parse_from_str("2023-12-31 23:00", "%Y-%m-%d %H:%M").unwrap();
+        let last_dt = NaiveDateTime::parse_from_str("2024-01-01 00:01", "%Y-%m-%d %H:%M").unwrap();
         let keys_15 = create_time_bins(first_dt, last_dt, TimeInterval::FifteenMin);
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 5);

@@ -6,9 +6,10 @@
 //!  * raw data, in the form of [IndividualVehicle]s, is
 //!    [processed and transformed](create_non_normal_speedavg_count)
 //!    into the shape of the TC_SPESUM table ([NonNormalAvgSpeedCount]).
+use chrono::NaiveDate;
 use oracle::Connection;
 
-use crate::{db::YYYY_MM_DD_FMT, intermediate::*, *};
+use crate::{intermediate::*, *};
 
 pub trait Denormalize {
     /// The name of the table that the data will get denormalized from.
@@ -142,7 +143,7 @@ impl Denormalize for FifteenMinuteVehicle {
 #[derive(Debug, Clone)]
 pub struct HourlyCount {
     pub recordnum: u32,
-    pub datetime: PrimitiveDateTime,
+    pub datetime: NaiveDateTime,
     pub count: u32,
     pub dir: Direction,
     pub lane: u8,
@@ -155,7 +156,7 @@ pub struct HourlyCount {
 #[derive(Debug, Clone)]
 pub struct NonNormalVolCount {
     pub record_num: u32,
-    pub date: Date,
+    pub date: NaiveDate,
     pub direction: Direction,
     pub lane: u8,
     pub setflag: Option<i8>,
@@ -194,7 +195,7 @@ pub struct NonNormalVolCount {
 #[derive(Debug, Clone)]
 pub struct NonNormalAvgSpeedCount {
     pub record_num: u32,
-    pub date: Date,
+    pub date: NaiveDate,
     pub direction: Direction,
     pub lane: u8,
     pub am12: Option<f32>,
@@ -535,21 +536,14 @@ pub fn hourly_counts<'a, 'conn>(
     for result in results {
         let (counttime, countdate, count, dir, lane) = result?;
 
-        let date = Date::parse(
-            &format!(
-                "{}-{}-{}",
-                countdate.year(),
-                countdate.month(),
-                countdate.day()
-            ),
-            YYYY_MM_DD_FMT,
-        )
-        .unwrap();
-        let time = Time::from_hms(counttime.hour() as u8, counttime.minute() as u8, 0).unwrap();
+        let datetime = NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(countdate.year(), countdate.month(), countdate.day()).unwrap(),
+            NaiveTime::from_hms_opt(counttime.hour(), counttime.minute(), 0).unwrap(),
+        );
 
         hourly_counts.push(HourlyCount {
             recordnum,
-            datetime: PrimitiveDateTime::new(date, time),
+            datetime,
             count,
             dir: Direction::from_string(dir).unwrap(),
             lane: lane as u8,
@@ -563,7 +557,6 @@ pub fn hourly_counts<'a, 'conn>(
 mod tests {
     use super::*;
     use crate::db::{create_pool, get_creds};
-    use time::macros::date;
 
     #[ignore]
     #[test]
@@ -581,13 +574,19 @@ mod tests {
         non_normal_count.sort_unstable_by_key(|count| (count.date, count.lane));
 
         // Ensure order is what we expect/count starts at correct times.
-        assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
+        assert_eq!(
+            non_normal_count[0].date,
+            NaiveDate::parse_from_str("2023-11-06", "%Y-%m-%d").unwrap()
+        );
         assert!(non_normal_count[0].am9.is_none());
         assert!(non_normal_count[0].am10.is_some());
         assert_eq!(non_normal_count[0].direction, Direction::East);
         assert_eq!(non_normal_count[0].lane, 1);
 
-        assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
+        assert_eq!(
+            non_normal_count[1].date,
+            NaiveDate::parse_from_str("2023-11-06", "%Y-%m-%d").unwrap()
+        );
         assert!(non_normal_count[1].am9.is_none());
         assert!(non_normal_count[1].am10.is_some());
         assert_eq!(non_normal_count[1].direction, Direction::West);
@@ -595,7 +594,10 @@ mod tests {
 
         assert!(non_normal_count[4].am10.is_some());
         assert!(non_normal_count[4].am11.is_none());
-        assert_eq!(non_normal_count[5].date, date!(2023 - 11 - 08));
+        assert_eq!(
+            non_normal_count[5].date,
+            NaiveDate::parse_from_str("2023-11-08", "%Y-%m-%d").unwrap()
+        );
         assert!(non_normal_count[5].am10.is_some());
         assert!(non_normal_count[5].am11.is_none());
         assert_eq!(non_normal_count[5].direction, Direction::West);
@@ -632,25 +634,37 @@ mod tests {
         non_normal_count.sort_unstable_by_key(|count| (count.date, count.lane));
 
         // Ensure order is what we expect/count starts at correct times.
-        assert_eq!(non_normal_count[0].date, date!(2023 - 11 - 06));
+        assert_eq!(
+            non_normal_count[0].date,
+            NaiveDate::parse_from_str("2023-11-06", "%Y-%m-%d").unwrap()
+        );
         assert!(non_normal_count[0].am10.is_none());
         assert!(non_normal_count[0].am11.is_some());
         assert_eq!(non_normal_count[0].direction, Direction::East);
         assert_eq!(non_normal_count[0].lane, 1);
 
-        assert_eq!(non_normal_count[1].date, date!(2023 - 11 - 06));
+        assert_eq!(
+            non_normal_count[1].date,
+            NaiveDate::parse_from_str("2023-11-06", "%Y-%m-%d").unwrap()
+        );
         assert!(non_normal_count[1].am10.is_none());
         assert!(non_normal_count[1].am11.is_some());
         assert_eq!(non_normal_count[1].direction, Direction::East);
         assert_eq!(non_normal_count[1].lane, 2);
 
-        assert_eq!(non_normal_count[8].date, date!(2023 - 11 - 10));
+        assert_eq!(
+            non_normal_count[8].date,
+            NaiveDate::parse_from_str("2023-11-10", "%Y-%m-%d").unwrap()
+        );
         assert!(non_normal_count[8].am10.is_some());
         assert!(non_normal_count[8].am11.is_none());
         assert_eq!(non_normal_count[8].direction, Direction::East);
         assert_eq!(non_normal_count[8].lane, 1);
 
-        assert_eq!(non_normal_count[9].date, date!(2023 - 11 - 10));
+        assert_eq!(
+            non_normal_count[9].date,
+            NaiveDate::parse_from_str("2023-11-10", "%Y-%m-%d").unwrap()
+        );
         assert!(non_normal_count[9].am10.is_some());
         assert!(non_normal_count[9].am11.is_none());
         assert_eq!(non_normal_count[9].direction, Direction::East);

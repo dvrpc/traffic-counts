@@ -3,6 +3,7 @@
 //! See the [CountInsert trait implementors][CountInsert#implementors] for kinds of counts
 //! and associated tables.
 
+use chrono::{Datelike, Timelike};
 use oracle::{sql_type::Timestamp, Connection, Statement};
 
 use crate::{
@@ -55,8 +56,8 @@ impl CountInsert for TimeBinnedVehicleClassCount {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         let oracle_date = Timestamp::new(
             self.datetime.year(),
-            self.datetime.month() as u32,
-            self.datetime.day() as u32,
+            self.datetime.month(),
+            self.datetime.day(),
             0,
             0,
             0,
@@ -65,11 +66,11 @@ impl CountInsert for TimeBinnedVehicleClassCount {
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.datetime.year(),
-            self.datetime.month() as u32,
-            self.datetime.day() as u32,
-            self.datetime.hour() as u32,
-            self.datetime.minute() as u32,
-            self.datetime.second() as u32,
+            self.datetime.month(),
+            self.datetime.day(),
+            self.datetime.hour(),
+            self.datetime.minute(),
+            self.datetime.second(),
             0,
         )?;
 
@@ -116,8 +117,8 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         let oracle_date = Timestamp::new(
             self.datetime.year(),
-            self.datetime.month() as u32,
-            self.datetime.day() as u32,
+            self.datetime.month(),
+            self.datetime.day(),
             0,
             0,
             0,
@@ -126,11 +127,11 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.datetime.year(),
-            self.datetime.month() as u32,
-            self.datetime.day() as u32,
-            self.datetime.hour() as u32,
-            self.datetime.minute() as u32,
-            self.datetime.second() as u32,
+            self.datetime.month(),
+            self.datetime.day(),
+            self.datetime.hour(),
+            self.datetime.minute(),
+            self.datetime.second(),
             0,
         )?;
 
@@ -180,8 +181,8 @@ impl CountInsert for NonNormalAvgSpeedCount {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         let oracle_date = Timestamp::new(
             self.date.year(),
-            self.date.month() as u32,
-            self.date.day() as u32,
+            self.date.month(),
+            self.date.day(),
             0,
             0,
             0,
@@ -242,8 +243,8 @@ impl CountInsert for NonNormalVolCount {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         let oracle_date = Timestamp::new(
             self.date.year(),
-            self.date.month() as u32,
-            self.date.day() as u32,
+            self.date.month(),
+            self.date.day(),
             0,
             0,
             0,
@@ -303,8 +304,8 @@ impl CountInsert for FifteenMinuteVehicle {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         let oracle_date = Timestamp::new(
             self.date.year(),
-            self.date.month() as u32,
-            self.date.day() as u32,
+            self.date.month(),
+            self.date.day(),
             0,
             0,
             0,
@@ -313,11 +314,11 @@ impl CountInsert for FifteenMinuteVehicle {
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.date.year(),
-            self.date.month() as u32,
-            self.date.day() as u32,
-            self.time.hour() as u32,
-            self.time.minute() as u32,
-            self.time.second() as u32,
+            self.date.month(),
+            self.date.day(),
+            self.time.hour(),
+            self.time.minute(),
+            self.time.second(),
             0,
         )?;
 
@@ -349,8 +350,8 @@ impl CountInsert for FifteenMinuteBicycle {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         let oracle_date = Timestamp::new(
             self.date.year(),
-            self.date.month() as u32,
-            self.date.day() as u32,
+            self.date.month(),
+            self.date.day(),
             0,
             0,
             0,
@@ -359,11 +360,11 @@ impl CountInsert for FifteenMinuteBicycle {
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.date.year(),
-            self.date.month() as u32,
-            self.date.day() as u32,
-            self.time.hour() as u32,
-            self.time.minute() as u32,
-            self.time.second() as u32,
+            self.date.month(),
+            self.date.day(),
+            self.time.hour(),
+            self.time.minute(),
+            self.time.second(),
             0,
         )?;
 
@@ -395,8 +396,8 @@ impl CountInsert for FifteenMinutePedestrian {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         let oracle_date = Timestamp::new(
             self.date.year(),
-            self.date.month() as u32,
-            self.date.day() as u32,
+            self.date.month(),
+            self.date.day(),
             0,
             0,
             0,
@@ -405,11 +406,11 @@ impl CountInsert for FifteenMinutePedestrian {
         // COUNTTIME is ok to be full datetime
         let oracle_dt = Timestamp::new(
             self.date.year(),
-            self.date.month() as u32,
-            self.date.day() as u32,
-            self.time.hour() as u32,
-            self.time.minute() as u32,
-            self.time.second() as u32,
+            self.date.month(),
+            self.date.day(),
+            self.time.hour(),
+            self.time.minute(),
+            self.time.second(),
             0,
         )?;
 

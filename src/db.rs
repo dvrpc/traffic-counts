@@ -2,130 +2,18 @@
 
 use std::env;
 use std::fmt::Display;
-use std::str::FromStr;
 
+use chrono::NaiveDateTime;
 use log::Level;
 use oracle::{
     pool::{Pool, PoolBuilder},
-    sql_type::Timestamp,
-    Connection, Error as OracleError, RowValue,
+    Connection, Error as OracleError,
 };
 use serde::Serialize;
-use time::{
-    format_description::BorrowedFormatItem, macros::format_description, Date, PrimitiveDateTime,
-    Time,
-};
 
-use crate::{CountError, Direction, Metadata};
+use crate::{CountError, Metadata};
 
 pub const RECORD_CREATION_LIMIT: u32 = 50;
-pub const YYYY_MM_DD_FMT: &[BorrowedFormatItem<'_>] =
-    format_description!("[year]-[month padding:none]-[day padding:none]");
-
-// TODO: the dates here get converted to Options if errors, but they should be handled properly.
-impl RowValue for Metadata {
-    fn get(row: &oracle::Row) -> oracle::Result<Self> {
-        let amending = row.get("amending")?;
-        let ampeak = row.get("ampeak")?;
-        let bikepeddesc = row.get("bikepeddesc")?;
-        let bikepedfacility = row.get("bikepedfacility")?;
-        let bikepedgroup = row.get("bikepedgroup")?;
-        let cntdir = Direction::from_option_string(row.get("cntdir")?).ok();
-        let comments = row.get("comments")?;
-        let count_type = row.get("type")?;
-        let counterid = row.get("counterid")?;
-        let createheaderdate = row.get("createheaderdate")?;
-        let datelastcounted = row.get("datelastcounted")?;
-        let description = row.get("description")?;
-        let fc = row.get("fc")?;
-        let fromlmt = row.get("fromlmt")?;
-        let importdatadate = row.get("importdatadate")?;
-        let indir = Direction::from_option_string(row.get("indir")?).ok();
-        let isurban = {
-            let isurban: String = row.get("isurban")?;
-            if isurban == *"Y" {
-                Some(true)
-            } else {
-                Some(false)
-            }
-        };
-        let latitude = row.get("latitude")?;
-        let longitude = row.get("longitude")?;
-        let mcd = row.get("mcd")?;
-        let mp = row.get("mp")?;
-        let offset = row.get("offset")?;
-        let outdir = Direction::from_option_string(row.get("outdir")?).ok();
-        let pmending = row.get("pmending")?;
-        let pmpeak = row.get("pmpeak")?;
-        let prj = row.get("prj")?;
-        let program = row.get("program")?;
-        let record_num = row.get("recordnum")?;
-        let rdprefix = row.get("rdprefix")?;
-        let rdsuffix = row.get("rdsuffix")?;
-        let road = row.get("road")?;
-        let route = row.get("route")?;
-        let seg = row.get("seg")?;
-        let sidewalk = row.get("sidewalk")?;
-        let speed_limit = row.get("speedlimit")?;
-        let source = row.get("source")?;
-        let sr = row.get("sr")?;
-        let sri = row.get("sri")?;
-        let stationid = row.get("stationid")?;
-        let technician = row.get("takenby")?;
-        let tolmt = row.get("tolmt")?;
-        let trafdir = Direction::from_option_string(row.get("trafdir")?).ok();
-        let x = row.get("x")?;
-        let y = row.get("y")?;
-
-        let record = Metadata {
-            amending,
-            ampeak,
-            bikepeddesc,
-            bikepedgroup,
-            bikepedfacility,
-            cntdir,
-            comments,
-            count_type,
-            counterid,
-            createheaderdate,
-            datelastcounted,
-            description,
-            fc,
-            fromlmt,
-            importdatadate,
-            indir,
-            isurban,
-            latitude,
-            longitude,
-            mcd,
-            mp,
-            offset,
-            outdir,
-            pmending,
-            pmpeak,
-            prj,
-            program,
-            record_num,
-            rdprefix,
-            rdsuffix,
-            road,
-            route,
-            seg,
-            sidewalk,
-            speed_limit,
-            source,
-            sr,
-            sri,
-            stationid,
-            technician,
-            tolmt,
-            trafdir,
-            x,
-            y,
-        };
-        Ok(record)
-    }
-}
 
 pub fn get_creds() -> (String, String) {
     dotenvy::dotenv().expect("Unable to load .env file.");
@@ -145,43 +33,10 @@ pub fn create_pool(username: String, password: String) -> Result<Pool, OracleErr
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct LogRecord {
-    pub datetime: Option<PrimitiveDateTime>,
+    pub datetime: Option<NaiveDateTime>,
     pub record_num: u32,
     pub msg: String,
     pub level: String,
-}
-
-impl RowValue for LogRecord {
-    fn get(row: &oracle::Row) -> oracle::Result<Self> {
-        let record_num = row.get("recordnum")?;
-        let msg: String = row.get("message")?;
-        let level: String = row.get("log_level")?;
-        let level = Level::from_str(level.as_str()).unwrap();
-
-        let datetime: Timestamp = row.get("datetime")?;
-        let date_format = format_description!("[year]-[month padding:none]-[day padding:none]");
-        let time_format = format_description!("[hour padding:none]:[minute padding:none]");
-        let datetime = PrimitiveDateTime::new(
-            Date::parse(
-                &format!(
-                    "{}-{}-{}",
-                    datetime.year(),
-                    datetime.month(),
-                    datetime.day()
-                ),
-                date_format,
-            )
-            .unwrap(),
-            Time::parse(
-                &format!("{}:{}", datetime.hour(), datetime.minute()),
-                &time_format,
-            )
-            .unwrap(),
-        );
-        let mut log_record = LogRecord::new(record_num, msg, level);
-        log_record.datetime = Some(datetime);
-        Ok(log_record)
-    }
 }
 
 impl LogRecord {

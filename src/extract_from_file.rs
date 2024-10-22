@@ -4,9 +4,9 @@
 use std::fs::File;
 use std::path::Path;
 
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use csv::{Reader, ReaderBuilder};
 use log::error;
-use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
 use crate::{
     num_nondata_rows, CountError, FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian,
@@ -32,14 +32,14 @@ impl Extract for FifteenMinuteVehicle {
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             // Parse date.
-            let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
+            let date_format = "%-m/%-d/%Y";
             let date_col = &row.as_ref().unwrap()[1];
-            let count_date = Date::parse(date_col, &date_format).unwrap();
+            let count_date = NaiveDate::parse_from_str(date_col, date_format).unwrap();
 
             // Parse time.
-            let time_format = format_description!("[hour padding:none repr:12]:[minute] [period]");
+            let time_format = "%-I:%M %P";
             let time_col = &row.as_ref().unwrap()[2];
-            let count_time = Time::parse(time_col, &time_format).unwrap();
+            let count_time = NaiveTime::parse_from_str(time_col, time_format).unwrap();
 
             // There will always be at least one count per row.
             // Extract the first (and perhaps only) direction.
@@ -127,15 +127,14 @@ impl Extract for IndividualVehicle {
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             // Parse date.
-            let date_format = format_description!("[month padding:none]/[day padding:none]/[year]");
+            let date_format = "%-m/%-d/%Y";
             let date_col = &row.as_ref().unwrap()[1];
-            let count_date = Date::parse(date_col, &date_format).unwrap();
+            let count_date = NaiveDate::parse_from_str(date_col, date_format).unwrap();
 
             // Parse time.
-            let time_format =
-                format_description!("[hour padding:none repr:12]:[minute]:[second] [period]");
+            let time_format = "%-I:%M:%S %P";
             let time_col = &row.as_ref().unwrap()[2];
-            let count_time = Time::parse(time_col, &time_format).unwrap();
+            let count_time = NaiveTime::parse_from_str(time_col, time_format).unwrap();
 
             let count = match IndividualVehicle::new(
                 count_date,
@@ -170,10 +169,9 @@ impl Extract for FifteenMinuteBicycle {
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             // Parse datetime.
-            let datetime_format =
-                format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
+            let datetime_format = "%Y-%m-%d %H:%M:%S";
             let datetime_col = &row.as_ref().unwrap()[0];
-            let count_dt = PrimitiveDateTime::parse(datetime_col, &datetime_format).unwrap();
+            let count_dt = NaiveDateTime::parse_from_str(datetime_col, datetime_format).unwrap();
 
             // Determine which fields to collect depending on direction(s) of count.
             match metadata.directions.direction2 {
@@ -230,10 +228,9 @@ impl Extract for FifteenMinutePedestrian {
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             // Parse datetime.
-            let datetime_format =
-                format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
+            let datetime_format = "%Y-%m-%d %H:%M:%S";
             let datetime_col = &row.as_ref().unwrap()[0];
-            let count_dt = PrimitiveDateTime::parse(datetime_col, &datetime_format).unwrap();
+            let count_dt = NaiveDateTime::parse_from_str(datetime_col, datetime_format).unwrap();
 
             // Determine which fields to collect depending on direction(s) of count.
             match metadata.directions.direction2 {

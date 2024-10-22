@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use log::{warn, Level};
 use oracle::{sql_type::Timestamp, Connection};
-use time::{macros::format_description, Date, PrimitiveDateTime, Time};
 
 use crate::{
     db::{update_db_import_log, LogRecord},
@@ -17,7 +17,7 @@ const BIKE_COUNT_MAX: u32 = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClassCountCheck {
-    datetime: PrimitiveDateTime,
+    datetime: NaiveDateTime,
     lane: u8,
     dir: Direction,
     c2: u32,
@@ -54,24 +54,10 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         let mut counts = vec![];
         for result in results {
             let (count_date, count_time, lane, direction, total, c2, c15) = result?;
-            let date_format = format_description!("[year]-[month padding:none]-[day padding:none]");
-            let time_format = format_description!("[hour padding:none]:[minute padding:none]");
-            let datetime = PrimitiveDateTime::new(
-                Date::parse(
-                    &format!(
-                        "{}-{}-{}",
-                        count_date.year(),
-                        count_date.month(),
-                        count_date.day()
-                    ),
-                    date_format,
-                )
-                .unwrap(),
-                Time::parse(
-                    &format!("{}:{}", count_time.hour(), count_time.minute()),
-                    &time_format,
-                )
-                .unwrap(),
+            let datetime = NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(count_date.year(), count_date.month(), count_date.day())
+                    .unwrap(),
+                NaiveTime::from_hms_opt(count_time.hour(), count_time.minute(), 0).unwrap(),
             );
             counts.push(ClassCountCheck {
                 datetime,

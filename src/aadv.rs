@@ -1,9 +1,9 @@
 //! Calculate average annual daily volumes and insert them into the database.
 
+use chrono::{Datelike, Days, Local, NaiveDate};
 use oracle::Connection;
-use time::{Date, OffsetDateTime};
 
-use crate::{db::YYYY_MM_DD_FMT, *};
+use crate::*;
 
 /// A trait for calculating and inserting annual average daily volume.
 pub trait Aadv {
@@ -21,7 +21,7 @@ pub trait Aadv {
     const FACTOR_TABLE: &'static str;
 
     /// Get dates of full-day counts, without excluding any dates.
-    fn get_full_dates(recordnum: u32, conn: &Connection) -> Result<Vec<Date>, CountError> {
+    fn get_full_dates(recordnum: u32, conn: &Connection) -> Result<Vec<NaiveDate>, CountError> {
         let mut dates = vec![];
 
         // Although records inserted since the beginning of the use of this library use full
@@ -61,19 +61,11 @@ pub trait Aadv {
         let last_dt = *results.last().unwrap();
 
         // The first actual day may be an incomplete date, but use this as a starting point.
-        let mut first_full_date = Date::parse(
-            &format!(
-                "{}-{}-{}",
-                first_dt.year(),
-                first_dt.month(),
-                first_dt.day()
-            ),
-            YYYY_MM_DD_FMT,
-        )
-        .unwrap();
+        let mut first_full_date =
+            NaiveDate::from_ymd_opt(first_dt.year(), first_dt.month(), first_dt.day()).unwrap();
 
         if first_dt.hour() != 0 {
-            first_full_date = first_full_date.saturating_add(time::Duration::DAY);
+            first_full_date = first_full_date.checked_add_days(Days::new(1)).unwrap();
         }
 
         // Determine the interval we are working with - hourly or fifteen-minute, based on that
@@ -96,23 +88,20 @@ pub trait Aadv {
         };
 
         // Use last day (regardless if full or not) as starting point to determine last full day.
-        let mut last_full_date = Date::parse(
-            &format!("{}-{}-{}", last_dt.year(), last_dt.month(), last_dt.day()),
-            YYYY_MM_DD_FMT,
-        )
-        .unwrap();
+        let mut last_full_date =
+            NaiveDate::from_ymd_opt(last_dt.year(), last_dt.month(), last_dt.day()).unwrap();
 
         if last_dt.hour() != 23 || last_dt.minute() != minute_to_use {
-            last_full_date = last_full_date.saturating_sub(time::Duration::DAY);
+            last_full_date = last_full_date.checked_sub_days(Days::new(1)).unwrap()
         }
 
         // Get all dates between first and last, inclusive.
         dates.push(first_full_date);
         if first_full_date != last_full_date {
-            let mut next_day = first_full_date.saturating_add(time::Duration::DAY);
+            let mut next_day = first_full_date.checked_add_days(Days::new(1)).unwrap();
             while next_day != last_full_date {
                 dates.push(next_day);
-                next_day = next_day.saturating_add(time::Duration::DAY);
+                next_day = next_day.checked_add_days(Days::new(1)).unwrap();
             }
             dates.push(last_full_date);
         }
@@ -124,7 +113,7 @@ pub trait Aadv {
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<(Date, Option<Direction>), usize>, CountError> {
+    ) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError> {
         // Get dates that have full counts so we only get totals for them.
         let dates = Self::get_full_dates(recordnum, conn)?;
 
@@ -143,14 +132,10 @@ pub trait Aadv {
         // Create hashmap to collect the total.
         // When the Direction is None in the key, that is the overall total (no directionality)
         // for the date, otherwise its for a particular Direction.
-        let mut totals: HashMap<(Date, Option<Direction>), usize> = HashMap::new();
+        let mut totals: HashMap<(NaiveDate, Option<Direction>), usize> = HashMap::new();
         for result in results {
             let (date, total, direction) = result?;
-            let date = Date::parse(
-                &format!("{}-{}-{}", date.year(), date.month(), date.day(),),
-                YYYY_MM_DD_FMT,
-            )
-            .unwrap();
+            let date = NaiveDate::from_ymd_opt(date.year(), date.month(), date.day()).unwrap();
 
             // Don't include any non-full dates.
             if !dates.contains(&date) {
@@ -176,7 +161,7 @@ pub trait Aadv {
     fn get_total_by_non_excluded_date(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<(Date, Option<Direction>), usize>, CountError> {
+    ) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError> {
         // Get day counts for full days.
         let mut day_counts = Self::get_total_by_date(recordnum, conn)?;
 
@@ -197,20 +182,9 @@ pub trait Aadv {
     // Insert/update the set of AADVs (per direction/overall) into the database.
     fn insert_aadv(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         let aadv = &Self::calculate_aadv(recordnum, conn)?;
-        let date = match OffsetDateTime::now_local() {
-            Ok(v) => v.date(),
-            Err(_) => OffsetDateTime::now_utc().date(), // fallback to UTC
-        };
+        let date = Local::now().date_naive();
 
-        let date = Timestamp::new(
-            date.year(),
-            date.month() as u32,
-            date.day() as u32,
-            0,
-            0,
-            0,
-            0,
-        )?;
+        let date = Timestamp::new(date.year(), date.month(), date.day(), 0, 0, 0, 0)?;
 
         // Delete any existing AADVs for same recordnum and date
         if conn.execute("delete from aadv where recordnum = :1 and date_calculated = TO_CHAR(:2, 'DD-MON-YY')", &[&recordnum, &date]).is_ok() {
@@ -280,7 +254,7 @@ impl Aadv for TimeBinnedVehicleClassCount {
             &[&count_type],
         )?;
 
-        let mut daily_aadv: HashMap<(Date, Option<Direction>), f32> = HashMap::new();
+        let mut daily_aadv: HashMap<(NaiveDate, Option<Direction>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
             // Get season factor from factor table. No need to get axle factor, as that
@@ -294,8 +268,8 @@ impl Aadv for TimeBinnedVehicleClassCount {
                 &[
                     &fc,
                     &date.year(),
-                    &(date.month() as u32),
-                    &(date.weekday().number_from_sunday() as u32), // DVRPC uses 1-7 for SUN to SAT
+                    &date.month(),
+                    &date.weekday().number_from_sunday(), // DVRPC uses 1-7 for SUN to SAT
                 ],
             )?;
 
@@ -374,7 +348,7 @@ impl Aadv for FifteenMinuteVehicle {
             &[&count_type],
         )?;
 
-        let mut daily_aadv: HashMap<(Date, Option<Direction>), f32> = HashMap::new();
+        let mut daily_aadv: HashMap<(NaiveDate, Option<Direction>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
             // Get season and axle factors from factor table.
@@ -388,8 +362,8 @@ impl Aadv for FifteenMinuteVehicle {
                 &[
                     &fc,
                     &date.year(),
-                    &(date.month() as u32),
-                    &(date.weekday().number_from_sunday() as u32), // DVRPC uses 1-7 for SUN to SAT
+                    &date.month(),
+                    &date.weekday().number_from_sunday(), // DVRPC uses 1-7 for SUN to SAT
                 ],
             )?;
 
@@ -440,7 +414,7 @@ impl Aadv for FifteenMinuteBicycle {
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<(Date, Option<Direction>), usize>, CountError> {
+    ) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError> {
         let dates = Self::get_full_dates(recordnum, conn)?;
         get_total_by_date_bike_ped(
             recordnum,
@@ -480,7 +454,7 @@ impl Aadv for FifteenMinuteBicycle {
             &[&count_type],
         )?;
 
-        let mut daily_aadv: HashMap<(Date, Option<Direction>), f32> = HashMap::new();
+        let mut daily_aadv: HashMap<(NaiveDate, Option<Direction>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
             // Get season factor from factor table.
@@ -492,8 +466,8 @@ impl Aadv for FifteenMinuteBicycle {
                 &[
                     &bikepedgroup,
                     &date.year(),
-                    &(date.month() as u32),
-                    &(date.weekday().number_from_sunday() as u32), // DVRPC uses 1-7 for SUN to SAT
+                    &date.month(),
+                    &date.weekday().number_from_sunday(), // DVRPC uses 1-7 for SUN to SAT
                 ],
             )?;
 
@@ -535,7 +509,7 @@ impl Aadv for FifteenMinutePedestrian {
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<(Date, Option<Direction>), usize>, CountError> {
+    ) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError> {
         let dates = Self::get_full_dates(recordnum, conn)?;
         get_total_by_date_bike_ped(
             recordnum,
@@ -575,13 +549,13 @@ impl Aadv for FifteenMinutePedestrian {
             &[&count_type],
         )?;
 
-        let mut daily_aadv: HashMap<(Date, Option<Direction>), f32> = HashMap::new();
+        let mut daily_aadv: HashMap<(NaiveDate, Option<Direction>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
             // Get season factor from factor table.
             let season_factor = conn.query_row_as::<f32>(
                 &format!("select factor from {} WHERE month = :1", Self::FACTOR_TABLE,),
-                &[&(date.month() as u32)],
+                &[&date.month()],
             )?;
 
             match equipment_factor {
@@ -616,14 +590,14 @@ impl Aadv for FifteenMinutePedestrian {
 #[allow(clippy::too_many_arguments)]
 fn get_total_by_date_bike_ped<'a, 'conn>(
     recordnum: u32,
-    dates: Vec<Date>,
+    dates: Vec<NaiveDate>,
     total_field: &'a str,
     binned_table: &'a str,
     in_field: &'a str,
     out_field: &'a str,
     recordnum_field: &'a str,
     conn: &'conn Connection,
-) -> Result<HashMap<(Date, Option<Direction>), usize>, CountError<'conn>> {
+) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError<'conn>> {
     // Get direction of incount and outcount.
     let (incount_dir, outcount_dir) = match conn.query_row_as::<(Option<String>, Option<String>)>(
         "select indir, outdir from tc_header where recordnum = :1",
@@ -661,14 +635,10 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     // Create hashmap to collect the total.
     // When the Direction is None in the key, that is the overall total (no directionality)
     // for the date, otherwise its for a particular Direction.
-    let mut totals: HashMap<(Date, Option<Direction>), usize> = HashMap::new();
+    let mut totals: HashMap<(NaiveDate, Option<Direction>), usize> = HashMap::new();
     for result in results {
         let (date, total, incount, outcount) = result?;
-        let date = Date::parse(
-            &format!("{}-{}-{}", date.year(), date.month(), date.day(),),
-            YYYY_MM_DD_FMT,
-        )
-        .unwrap();
+        let date = NaiveDate::from_ymd_opt(date.year(), date.month(), date.day()).unwrap();
 
         // Don't include any non-full dates.
         if !dates.contains(&date) {
@@ -682,27 +652,22 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     Ok(totals)
 }
 
-pub fn excluded_days(conn: &Connection) -> Result<Vec<Date>, oracle::Error> {
+pub fn excluded_days(conn: &Connection) -> Result<Vec<NaiveDate>, oracle::Error> {
     let results = conn.query_as::<Timestamp>("select excluded_day from aadv_excluded_days", &[])?;
 
     Ok(results
         .map(|result| {
             let result = result.unwrap();
             let date = result;
-            Date::parse(
-                &format!("{}-{}-{}", date.year(), date.month(), date.day()),
-                YYYY_MM_DD_FMT,
-            )
-            .unwrap()
+            NaiveDate::from_ymd_opt(date.year(), date.month(), date.day()).unwrap()
         })
-        .collect::<Vec<Date>>())
+        .collect::<Vec<NaiveDate>>())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use db::{create_pool, get_creds};
-    use time::macros::date;
 
     #[ignore]
     #[test]
@@ -711,73 +676,72 @@ mod tests {
         let pool = create_pool(username, password).unwrap();
         let conn = pool.get().unwrap();
 
-        // let expected_dates = vec![date!(2023 - 11 - 07)];
         assert_eq!(
             TimeBinnedVehicleClassCount::get_full_dates(166905, &conn).unwrap(),
-            vec![date!(2023 - 11 - 07)]
+            vec![NaiveDate::from_ymd_opt(2023, 11, 7).unwrap()]
         );
 
         assert_eq!(
             TimeBinnedVehicleClassCount::get_full_dates(165367, &conn).unwrap(),
             vec![
-                date!(2023 - 11 - 07),
-                date![2023 - 11 - 08],
-                date![2023 - 11 - 09]
+                NaiveDate::from_ymd_opt(2023, 11, 7).unwrap(),
+                NaiveDate::from_ymd_opt(2023, 11, 8).unwrap(),
+                NaiveDate::from_ymd_opt(2023, 11, 9).unwrap()
             ]
         );
         assert_eq!(
             FifteenMinuteVehicle::get_full_dates(155381, &conn).unwrap(),
-            vec![date!(2021 - 09 - 28)]
+            vec![NaiveDate::from_ymd_opt(2021, 9, 28).unwrap()]
         );
         assert_eq!(
             FifteenMinuteVehicle::get_full_dates(147582, &conn).unwrap(),
             vec![
-                date!(2019 - 03 - 14),
-                date!(2019 - 03 - 15),
-                date!(2019 - 03 - 16),
-                date!(2019 - 03 - 17),
-                date!(2019 - 03 - 18),
-                date!(2019 - 03 - 19),
-                date!(2019 - 03 - 20),
-                date!(2019 - 03 - 21),
-                date!(2019 - 03 - 22),
-                date!(2019 - 03 - 23),
-                date!(2019 - 03 - 24),
-                date!(2019 - 03 - 25),
-                date!(2019 - 03 - 26),
-                date!(2019 - 03 - 27),
-                date!(2019 - 03 - 28),
-                date!(2019 - 03 - 29),
-                date!(2019 - 03 - 30),
-                date!(2019 - 03 - 31),
-                date!(2019 - 04 - 01),
-                date!(2019 - 04 - 02),
+                NaiveDate::from_ymd_opt(2019, 3, 14).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 15).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 16).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 17).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 18).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 19).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 20).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 21).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 22).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 23).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 24).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 25).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 26).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 27).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 28).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 29).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 30).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 3, 31).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 4, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2019, 4, 2).unwrap(),
             ]
         );
 
         assert_eq!(
             FifteenMinuteBicycle::get_full_dates(156238, &conn).unwrap(),
             vec![
-                date!(2020 - 11 - 22),
-                date!(2020 - 11 - 23),
-                date!(2020 - 11 - 24),
-                date!(2020 - 11 - 25),
-                date!(2020 - 11 - 26),
-                date!(2020 - 11 - 27),
-                date!(2020 - 11 - 28)
+                NaiveDate::from_ymd_opt(2020, 11, 22).unwrap(),
+                NaiveDate::from_ymd_opt(2020, 11, 23).unwrap(),
+                NaiveDate::from_ymd_opt(2020, 11, 24).unwrap(),
+                NaiveDate::from_ymd_opt(2020, 11, 25).unwrap(),
+                NaiveDate::from_ymd_opt(2020, 11, 26).unwrap(),
+                NaiveDate::from_ymd_opt(2020, 11, 27).unwrap(),
+                NaiveDate::from_ymd_opt(2020, 11, 28).unwrap()
             ]
         );
 
         assert_eq!(
             FifteenMinutePedestrian::get_full_dates(136271, &conn).unwrap(),
             vec![
-                date!(2015 - 10 - 15),
-                date!(2015 - 10 - 16),
-                date!(2015 - 10 - 17),
-                date!(2015 - 10 - 18),
-                date!(2015 - 10 - 19),
-                date!(2015 - 10 - 20),
-                date!(2015 - 10 - 21)
+                NaiveDate::from_ymd_opt(2015, 10, 15).unwrap(),
+                NaiveDate::from_ymd_opt(2015, 10, 16).unwrap(),
+                NaiveDate::from_ymd_opt(2015, 10, 17).unwrap(),
+                NaiveDate::from_ymd_opt(2015, 10, 18).unwrap(),
+                NaiveDate::from_ymd_opt(2015, 10, 19).unwrap(),
+                NaiveDate::from_ymd_opt(2015, 10, 20).unwrap(),
+                NaiveDate::from_ymd_opt(2015, 10, 21).unwrap()
             ]
         );
     }
@@ -792,227 +756,394 @@ mod tests {
         let day_counts = TimeBinnedVehicleClassCount::get_total_by_date(166905, &conn).unwrap();
 
         assert_eq!(
-            day_counts.get(&(date!(2023 - 11 - 07), None)).unwrap(),
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2023, 11, 7).unwrap(), None))
+                .unwrap(),
             &4450
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2023 - 11 - 07), Some(Direction::East)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2023, 11, 7).unwrap(),
+                    Some(Direction::East)
+                ))
                 .unwrap(),
             &2045
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2023 - 11 - 07), Some(Direction::West)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2023, 11, 7).unwrap(),
+                    Some(Direction::West)
+                ))
                 .unwrap(),
             &2405
         );
 
         let day_counts = FifteenMinuteVehicle::get_total_by_date(168193, &conn).unwrap();
         assert_eq!(
-            day_counts.get(&(date!(2024 - 01 - 04), None)).unwrap(),
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(), None))
+                .unwrap(),
             &8527
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2024 - 01 - 04), Some(Direction::East)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
+                    Some(Direction::East)
+                ))
                 .unwrap(),
             &4170
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2024 - 01 - 04), Some(Direction::West)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
+                    Some(Direction::West)
+                ))
                 .unwrap(),
             &4357
         );
 
         let day_counts = FifteenMinuteBicycle::get_total_by_date(156238, &conn).unwrap();
         assert_eq!(day_counts.len(), 21);
-        assert_eq!(day_counts.get(&(date!(2020 - 11 - 22), None)).unwrap(), &84);
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 22), Some(Direction::East)))
+                .get(&(NaiveDate::from_ymd_opt(2020, 11, 22).unwrap(), None))
+                .unwrap(),
+            &84
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 22).unwrap(),
+                    Some(Direction::East)
+                ))
                 .unwrap(),
             &50
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 22), Some(Direction::West)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 22).unwrap(),
+                    Some(Direction::West)
+                ))
                 .unwrap(),
             &34
         );
-        assert_eq!(day_counts.get(&(date!(2020 - 11 - 23), None)).unwrap(), &23);
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 23), Some(Direction::East)))
+                .get(&(NaiveDate::from_ymd_opt(2020, 11, 23).unwrap(), None))
+                .unwrap(),
+            &23
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 23).unwrap(),
+                    Some(Direction::East)
+                ))
                 .unwrap(),
             &16
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 23), Some(Direction::West)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 23).unwrap(),
+                    Some(Direction::West)
+                ))
                 .unwrap(),
             &7
         );
-        assert_eq!(day_counts.get(&(date!(2020 - 11 - 24), None)).unwrap(), &40);
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 24), Some(Direction::East)))
+                .get(&(NaiveDate::from_ymd_opt(2020, 11, 24).unwrap(), None))
+                .unwrap(),
+            &40
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 24).unwrap(),
+                    Some(Direction::East)
+                ))
                 .unwrap(),
             &32
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 24), Some(Direction::West)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 24).unwrap(),
+                    Some(Direction::West)
+                ))
                 .unwrap(),
             &8
         );
-        assert_eq!(day_counts.get(&(date!(2020 - 11 - 25), None)).unwrap(), &67);
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 25), Some(Direction::East)))
-                .unwrap(),
-            &43
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2020 - 11 - 25), Some(Direction::West)))
-                .unwrap(),
-            &24
-        );
-        assert_eq!(day_counts.get(&(date!(2020 - 11 - 26), None)).unwrap(), &23);
-        assert_eq!(
-            day_counts
-                .get(&(date!(2020 - 11 - 26), Some(Direction::East)))
-                .unwrap(),
-            &17
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2020 - 11 - 26), Some(Direction::West)))
-                .unwrap(),
-            &6
-        );
-        assert_eq!(day_counts.get(&(date!(2020 - 11 - 27), None)).unwrap(), &92);
-        assert_eq!(
-            day_counts
-                .get(&(date!(2020 - 11 - 27), Some(Direction::East)))
+                .get(&(NaiveDate::from_ymd_opt(2020, 11, 25).unwrap(), None))
                 .unwrap(),
             &67
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 27), Some(Direction::West)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 25).unwrap(),
+                    Some(Direction::East)
+                ))
+                .unwrap(),
+            &43
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 25).unwrap(),
+                    Some(Direction::West)
+                ))
+                .unwrap(),
+            &24
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2020, 11, 26).unwrap(), None))
+                .unwrap(),
+            &23
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 26).unwrap(),
+                    Some(Direction::East)
+                ))
+                .unwrap(),
+            &17
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 26).unwrap(),
+                    Some(Direction::West)
+                ))
+                .unwrap(),
+            &6
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2020, 11, 27).unwrap(), None))
+                .unwrap(),
+            &92
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 27).unwrap(),
+                    Some(Direction::East)
+                ))
+                .unwrap(),
+            &67
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 27).unwrap(),
+                    Some(Direction::West)
+                ))
                 .unwrap(),
             &25
         );
-        assert_eq!(day_counts.get(&(date!(2020 - 11 - 28), None)).unwrap(), &83);
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 28), Some(Direction::East)))
+                .get(&(NaiveDate::from_ymd_opt(2020, 11, 28).unwrap(), None))
+                .unwrap(),
+            &83
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 28).unwrap(),
+                    Some(Direction::East)
+                ))
                 .unwrap(),
             &53
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2020 - 11 - 28), Some(Direction::West)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2020, 11, 28).unwrap(),
+                    Some(Direction::West)
+                ))
                 .unwrap(),
             &30
         );
 
         let day_counts = FifteenMinuteBicycle::get_total_by_date(160252, &conn).unwrap();
         assert_eq!(day_counts.len(), 21);
-        assert_eq!(day_counts.get(&(date!(2021 - 12 - 14), None)).unwrap(), &41);
         assert_eq!(
             day_counts
-                .get(&(date!(2021 - 12 - 14), Some(Direction::South)))
+                .get(&(NaiveDate::from_ymd_opt(2021, 12, 14).unwrap(), None))
+                .unwrap(),
+            &41
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 14).unwrap(),
+                    Some(Direction::South)
+                ))
                 .unwrap(),
             &39
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2021 - 12 - 14), Some(Direction::North)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 14).unwrap(),
+                    Some(Direction::North)
+                ))
                 .unwrap(),
             &2
         );
-        assert_eq!(day_counts.get(&(date!(2021 - 12 - 15), None)).unwrap(), &37);
         assert_eq!(
             day_counts
-                .get(&(date!(2021 - 12 - 15), Some(Direction::South)))
-                .unwrap(),
-            &36
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 15), Some(Direction::North)))
-                .unwrap(),
-            &1
-        );
-        assert_eq!(
-            day_counts.get(&(date!(2021 - 12 - 16), None)).unwrap(),
-            &110
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 16), Some(Direction::South)))
-                .unwrap(),
-            &105
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 16), Some(Direction::North)))
-                .unwrap(),
-            &5
-        );
-        assert_eq!(day_counts.get(&(date!(2021 - 12 - 17), None)).unwrap(), &40);
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 17), Some(Direction::South)))
-                .unwrap(),
-            &40
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 17), Some(Direction::North)))
-                .unwrap(),
-            &0
-        );
-        assert_eq!(day_counts.get(&(date!(2021 - 12 - 18), None)).unwrap(), &22);
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 18), Some(Direction::South)))
-                .unwrap(),
-            &22
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 18), Some(Direction::North)))
-                .unwrap(),
-            &0
-        );
-        assert_eq!(day_counts.get(&(date!(2021 - 12 - 19), None)).unwrap(), &14);
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 19), Some(Direction::South)))
-                .unwrap(),
-            &13
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 19), Some(Direction::North)))
-                .unwrap(),
-            &1
-        );
-        assert_eq!(day_counts.get(&(date!(2021 - 12 - 20), None)).unwrap(), &40);
-        assert_eq!(
-            day_counts
-                .get(&(date!(2021 - 12 - 20), Some(Direction::South)))
+                .get(&(NaiveDate::from_ymd_opt(2021, 12, 15).unwrap(), None))
                 .unwrap(),
             &37
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2021 - 12 - 20), Some(Direction::North)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 15).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &36
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 15).unwrap(),
+                    Some(Direction::North)
+                ))
+                .unwrap(),
+            &1
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2021, 12, 16).unwrap(), None))
+                .unwrap(),
+            &110
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 16).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &105
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 16).unwrap(),
+                    Some(Direction::North)
+                ))
+                .unwrap(),
+            &5
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2021, 12, 17).unwrap(), None))
+                .unwrap(),
+            &40
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 17).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &40
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 17).unwrap(),
+                    Some(Direction::North)
+                ))
+                .unwrap(),
+            &0
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2021, 12, 18).unwrap(), None))
+                .unwrap(),
+            &22
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 18).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &22
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 18).unwrap(),
+                    Some(Direction::North)
+                ))
+                .unwrap(),
+            &0
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2021, 12, 19).unwrap(), None))
+                .unwrap(),
+            &14
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 19).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &13
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 19).unwrap(),
+                    Some(Direction::North)
+                ))
+                .unwrap(),
+            &1
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2021, 12, 20).unwrap(), None))
+                .unwrap(),
+            &40
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 20).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &37
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2021, 12, 20).unwrap(),
+                    Some(Direction::North)
+                ))
                 .unwrap(),
             &3
         );
@@ -1020,97 +1151,171 @@ mod tests {
         let day_counts = FifteenMinutePedestrian::get_total_by_date(136271, &conn).unwrap();
         assert_eq!(day_counts.len(), 21);
 
-        assert_eq!(day_counts.get(&(date!(2015 - 10 - 15), None)).unwrap(), &36);
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 15), Some(Direction::South)))
-                .unwrap(),
-            &21
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2015 - 10 - 15), Some(Direction::North)))
-                .unwrap(),
-            &15
-        );
-        assert_eq!(day_counts.get(&(date!(2015 - 10 - 16), None)).unwrap(), &22);
-        assert_eq!(
-            day_counts
-                .get(&(date!(2015 - 10 - 16), Some(Direction::South)))
-                .unwrap(),
-            &13
-        );
-        assert_eq!(
-            day_counts
-                .get(&(date!(2015 - 10 - 16), Some(Direction::North)))
-                .unwrap(),
-            &9
-        );
-        assert_eq!(day_counts.get(&(date!(2015 - 10 - 17), None)).unwrap(), &68);
-        assert_eq!(
-            day_counts
-                .get(&(date!(2015 - 10 - 17), Some(Direction::South)))
+                .get(&(NaiveDate::from_ymd_opt(2015, 10, 15).unwrap(), None))
                 .unwrap(),
             &36
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 17), Some(Direction::North)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 15).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &21
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 15).unwrap(),
+                    Some(Direction::North)
+                ))
+                .unwrap(),
+            &15
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2015, 10, 16).unwrap(), None))
+                .unwrap(),
+            &22
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 16).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &13
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 16).unwrap(),
+                    Some(Direction::North)
+                ))
+                .unwrap(),
+            &9
+        );
+        assert_eq!(
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2015, 10, 17).unwrap(), None))
+                .unwrap(),
+            &68
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 17).unwrap(),
+                    Some(Direction::South)
+                ))
+                .unwrap(),
+            &36
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 17).unwrap(),
+                    Some(Direction::North)
+                ))
                 .unwrap(),
             &32
         );
-        assert_eq!(day_counts.get(&(date!(2015 - 10 - 18), None)).unwrap(), &81);
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 18), Some(Direction::South)))
+                .get(&(NaiveDate::from_ymd_opt(2015, 10, 18).unwrap(), None))
+                .unwrap(),
+            &81
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 18).unwrap(),
+                    Some(Direction::South)
+                ))
                 .unwrap(),
             &38
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 18), Some(Direction::North)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 18).unwrap(),
+                    Some(Direction::North)
+                ))
                 .unwrap(),
             &43
         );
-        assert_eq!(day_counts.get(&(date!(2015 - 10 - 19), None)).unwrap(), &25);
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 19), Some(Direction::South)))
+                .get(&(NaiveDate::from_ymd_opt(2015, 10, 19).unwrap(), None))
+                .unwrap(),
+            &25
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 19).unwrap(),
+                    Some(Direction::South)
+                ))
                 .unwrap(),
             &14
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 19), Some(Direction::North)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 19).unwrap(),
+                    Some(Direction::North)
+                ))
                 .unwrap(),
             &11
         );
         assert_eq!(
-            day_counts.get(&(date!(2015 - 10 - 20), None)).unwrap(),
+            day_counts
+                .get(&(NaiveDate::from_ymd_opt(2015, 10, 20).unwrap(), None))
+                .unwrap(),
             &134
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 20), Some(Direction::South)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 20).unwrap(),
+                    Some(Direction::South)
+                ))
                 .unwrap(),
             &110
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 20), Some(Direction::North)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 20).unwrap(),
+                    Some(Direction::North)
+                ))
                 .unwrap(),
             &24
         );
-        assert_eq!(day_counts.get(&(date!(2015 - 10 - 21), None)).unwrap(), &76);
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 21), Some(Direction::South)))
+                .get(&(NaiveDate::from_ymd_opt(2015, 10, 21).unwrap(), None))
+                .unwrap(),
+            &76
+        );
+        assert_eq!(
+            day_counts
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 21).unwrap(),
+                    Some(Direction::South)
+                ))
                 .unwrap(),
             &52
         );
         assert_eq!(
             day_counts
-                .get(&(date!(2015 - 10 - 21), Some(Direction::North)))
+                .get(&(
+                    NaiveDate::from_ymd_opt(2015, 10, 21).unwrap(),
+                    Some(Direction::North)
+                ))
                 .unwrap(),
             &24
         );
@@ -1218,8 +1423,8 @@ mod tests {
         let conn = pool.get().unwrap();
 
         let excluded_days = excluded_days(&conn).unwrap();
-        assert!(excluded_days.contains(&date!(2024 - 07 - 03)));
-        assert!(excluded_days.contains(&date!(2023 - 01 - 02)));
+        assert!(excluded_days.contains(&NaiveDate::from_ymd_opt(2024, 7, 3).unwrap()));
+        assert!(excluded_days.contains(&NaiveDate::from_ymd_opt(2023, 1, 2).unwrap()));
     }
 
     #[ignore]
@@ -1236,19 +1441,19 @@ mod tests {
         // 2023-02-20 should be excluded, leaving 10 full days in this count to use for calculation
         // manually:
         /*
-        use time::macros::date;
+        use chrono::NaiveDate;
         // (date, total full day count, pa seasonal factor)
         let data = [
-            (date!(2023 - 02 - 14), 1075, 1.159),
-            (date!(2023 - 02 - 15), 964, 1.007),
-            (date!(2023 - 02 - 16), 1069, 1.035),
-            (date!(2023 - 02 - 17), 1162, 0.953),
-            (date!(2023 - 02 - 18), 868, 1.191),
-            (date!(2023 - 02 - 19), 650, 1.621),
-            (date!(2023 - 02 - 21), 923, 1.159),
-            (date!(2023 - 02 - 22), 959, 1.007),
-            (date!(2023 - 02 - 23), 994, 1.035),
-            (date!(2023 - 02 - 24), 1186, 0.953),
+            (NaiveDate::from_ymd_opt(2023, 2, 14), 1075, 1.159),
+            (NaiveDate::from_ymd_opt(2023, 2, 15), 964, 1.007),
+            (NaiveDate::from_ymd_opt(2023, 2, 16), 1069, 1.035),
+            (NaiveDate::from_ymd_opt(2023, 2, 17), 1162, 0.953),
+            (NaiveDate::from_ymd_opt(2023, 2, 18), 868, 1.191),
+            (NaiveDate::from_ymd_opt(2023, 2, 19), 650, 1.621),
+            (NaiveDate::from_ymd_opt(2023, 2, 21), 923, 1.159),
+            (NaiveDate::from_ymd_opt(2023, 2, 22), 959, 1.007),
+            (NaiveDate::from_ymd_opt(2023, 2, 23), 994, 1.035),
+            (NaiveDate::from_ymd_opt(2023, 2, 24), 1186, 0.953),
         ];
         let manual_aadv = (data.iter().map(|data| data.1 as f64 * data.2).sum::<f64>()
             / data.len() as f64)

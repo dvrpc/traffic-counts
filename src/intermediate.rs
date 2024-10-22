@@ -13,14 +13,14 @@
 //! [`NonNormalCountKey`] + [`NonNormalAvgSpeedValue`] = [`crate::denormalize::NonNormalAvgSpeedCount`].
 //!
 //! [`NonNormalCountKey`] + [`NonNormalVolCountValue`] = [`crate::denormalize::NonNormalVolCount`].
-use time::{Date, PrimitiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, Timelike};
 
 use crate::{denormalize::HourlyCount, Direction, VehicleClass, Weather};
 
 /// The key for records of the TC_SPECOUNT and TC_CLACOUNT tables.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BinnedCountKey {
-    pub datetime: PrimitiveDateTime,
+    pub datetime: NaiveDateTime,
     pub lane: u8,
 }
 
@@ -211,7 +211,7 @@ impl SpeedRangeCount {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NonNormalCountKey {
     pub record_num: u32,
-    pub date: Date,
+    pub date: NaiveDate,
     pub direction: Direction,
     pub lane: u8,
 }
@@ -398,7 +398,7 @@ pub struct NonNormalRawSpeedValue {
 impl NonNormalRawSpeedValue {
     /// Create a `NonNormalAvgSpeedValue` with empty Vecs.
     /// (For the first time a new key is created in a HashMap.)
-    pub fn first(hour: u8, speed: f32) -> Self {
+    pub fn first(hour: u32, speed: f32) -> Self {
         let mut value = Self {
             ..Default::default()
         };
