@@ -1,7 +1,7 @@
 //! This library contains data structures related to DVRPC's traffic counts
 //! and enables performing various kinds of operations on them, like
 //! [extracting][extract_from_file] data from files,
-//! [inserting/replacing][count_insert] count data in the database,
+//! [inserting/replacing][db/crud] count data in the database,
 //! [denormalizing][denormalize] count data,
 //! and [calculating/inserting][aadv] the annual average daily traffic volumes.
 //!
@@ -18,14 +18,6 @@
 //! uses.
 //!
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
-//!
-//! ## A Note about Data Entry/Completeness
-//!
-//! Data for counts are inserted into the database without checking for complete periods. For
-//! example, if the count starts at 10:55am, any records for vehicles counted between 10:55 and
-//! 11am will be added to the database, even though it is not a full 15-minute period. Similarly,
-//! when data is aggregated by hour and inserted into the TC_VOLCOUNT table, the first and last
-//! hours may not be a full hour of count data.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
@@ -44,7 +36,6 @@ pub mod db;
 pub mod denormalize;
 pub mod extract_from_file;
 pub mod intermediate;
-pub mod oracle_impls;
 use intermediate::*;
 
 /// A trait for getting a [`NaiveDate`](https://docs.rs/chrono/latest/chrono/struct.NaiveDate.html)

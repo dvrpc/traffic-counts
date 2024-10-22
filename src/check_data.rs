@@ -1,3 +1,4 @@
+/// Checks on data integrity/validity.
 use std::collections::{BTreeMap, HashMap};
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -5,7 +6,7 @@ use log::{warn, Level};
 use oracle::{sql_type::Timestamp, Connection};
 
 use crate::{
-    db::{update_db_import_log, LogRecord},
+    db::{self, LogEntry},
     CountError, Direction,
 };
 
@@ -27,20 +28,15 @@ pub struct ClassCountCheck {
 
 pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     // Determine what kind of count this is, in order to run the appropriate checks.
-    let count_type = match conn.query_row_as::<Option<String>>(
-        "select type from tc_header where recordnum = :1",
-        &[&recordnum],
-    ) {
+    let count_type = match db::get_count_type(conn, recordnum) {
         Ok(Some(v)) => v,
         Ok(None) => {
             return Err(CountError::DataCheckError(
                 "unable to identify type of count".to_string(),
             ));
         }
-        Err(_) => {
-            return Err(CountError::DbError(format!(
-                "{recordnum} not found in tc_header table"
-            )));
+        Err(e) => {
+            return Err(CountError::DbError(format!("{e}")));
         }
     };
 
@@ -80,14 +76,14 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         if c2_percent < 75.0 {
             let msg = format!("Class 2 vehicles are less than 75% ({c2_percent:.1}%) of total.");
             warn!(target: "check", "{recordnum}: {msg}");
-            update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn)).unwrap();
+            db::insert_import_log_entry(conn, LogEntry::new(recordnum, msg, Level::Warn)).unwrap();
         }
 
         if c15_percent > 10.0 {
             let msg =
                 format!("Unclassed vehicles are greater than 10% ({c15_percent:.1}%) of total.");
             warn!(target: "check", "{recordnum}: {msg}");
-            update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn)).unwrap();
+            db::insert_import_log_entry(conn, LogEntry::new(recordnum, msg, Level::Warn)).unwrap();
         }
     }
 
@@ -122,8 +118,11 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                             DIR_PROPORTION_LOWER_BOUND * 100_f32,
                             100_f32 - DIR_PROPORTION_LOWER_BOUND * 100_f32);
                         warn!(target: "check", "{recordnum}: {msg}");
-                        update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn))
-                            .unwrap();
+                        db::insert_import_log_entry(
+                            conn,
+                            LogEntry::new(recordnum, msg, Level::Warn),
+                        )
+                        .unwrap();
                     }
                 }
             }
@@ -192,7 +191,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                 if consecutive_zeros > 1 {
                     let msg = format!("Consecutive period ({hour}) with 0 vehicles counted.");
                     warn!(target: "check", "{recordnum}: {msg}");
-                    update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn))
+                    db::insert_import_log_entry(conn, LogEntry::new(recordnum, msg, Level::Warn))
                         .unwrap();
                 }
             }
@@ -213,7 +212,8 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                     "More than {BIKE_COUNT_MAX} in a 15-minute period for a bicycle count."
                 );
                 warn!(target: "check", "{recordnum}: {msg}");
-                update_db_import_log(conn, LogRecord::new(recordnum, msg, Level::Warn)).unwrap();
+                db::insert_import_log_entry(conn, LogEntry::new(recordnum, msg, Level::Warn))
+                    .unwrap();
                 break;
             }
         }

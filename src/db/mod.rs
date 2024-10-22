@@ -1,6 +1,15 @@
-//! Shared database functionality.
+//! Database functionality.
+
+//! ## A Note about Data Entry/Completeness
+//!
+//! Data for counts are inserted into the database without checking for complete periods. For
+//! example, if the count starts at 10:55am, any records for vehicles counted between 10:55 and
+//! 11am will be added to the database, even though it is not a full 15-minute period. Similarly,
+//! when data is aggregated by hour and inserted into the TC_VOLCOUNT table, the first and last
+//! hours may not be a full hour of count data.
 
 pub mod crud;
+pub mod oracle_impls;
 
 use std::env;
 use std::fmt::Display;
@@ -17,6 +26,7 @@ use crate::{CountError, Metadata};
 
 pub const RECORD_CREATION_LIMIT: u32 = 50;
 
+/// Get database credentials from environment variable.
 pub fn get_creds() -> (String, String) {
     dotenvy::dotenv().expect("Unable to load .env file.");
 
@@ -33,15 +43,16 @@ pub fn create_pool(username: String, password: String) -> Result<Pool, OracleErr
         .build()
 }
 
+/// A log entry from data imports.
 #[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct LogRecord {
+pub struct LogEntry {
     pub datetime: Option<NaiveDateTime>,
     pub record_num: u32,
     pub msg: String,
     pub level: String,
 }
 
-impl LogRecord {
+impl LogEntry {
     pub fn new(record_num: u32, msg: String, level: Level) -> Self {
         Self {
             datetime: None,
@@ -52,7 +63,7 @@ impl LogRecord {
     }
 }
 
-impl Display for LogRecord {
+impl Display for LogEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -66,7 +77,11 @@ impl Display for LogRecord {
     }
 }
 
-pub fn update_db_import_log(conn: &Connection, log_record: LogRecord) -> Result<(), oracle::Error> {
+/// Insert a `LogEntry`.
+pub fn insert_import_log_entry(
+    conn: &Connection,
+    log_record: LogEntry,
+) -> Result<(), oracle::Error> {
     conn.execute(
         "insert into import_log (recordnum, message, log_level) values (:1, :2, :3)",
         &[&log_record.record_num, &log_record.msg, &log_record.level],
@@ -74,16 +89,17 @@ pub fn update_db_import_log(conn: &Connection, log_record: LogRecord) -> Result<
     conn.commit()
 }
 
+/// Get the full import log.
 pub fn get_import_log(
     conn: &Connection,
     record_num: Option<u32>,
-) -> Result<Vec<LogRecord>, oracle::Error> {
+) -> Result<Vec<LogEntry>, oracle::Error> {
     let results = match record_num {
-        Some(v) => conn.query_as::<LogRecord>(
+        Some(v) => conn.query_as::<LogEntry>(
             "select * from import_log WHERE recordnum = :1 order by datetime desc",
             &[&v],
         ),
-        None => conn.query_as::<LogRecord>("select * from import_log order by datetime desc", &[]),
+        None => conn.query_as::<LogEntry>("select * from import_log order by datetime desc", &[]),
     }?;
 
     let mut log_records = vec![];
@@ -156,6 +172,16 @@ pub fn insert_empty_metadata(conn: &Connection, number: u32) -> Result<Vec<u32>,
     }
     conn.commit()?;
     Ok(recordnums)
+}
+
+pub fn get_count_type(conn: &Connection, record_num: u32) -> Result<Option<String>, CountError> {
+    match conn.query_row_as::<Option<String>>(
+        "select type from tc_header where recordnum = :1",
+        &[&record_num],
+    ) {
+        Ok(v) => Ok(v),
+        Err(e) => Err(CountError::DbError(format!("{e}"))),
+    }
 }
 
 #[cfg(test)]
