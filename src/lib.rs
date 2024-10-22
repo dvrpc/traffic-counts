@@ -193,8 +193,8 @@ impl InputCount {
     }
 }
 
-/// An individual vehicle that has been counted, with no binning applied to it,
-/// including vehicle classification and speed.
+/// An individual vehicle that has been counted, including vehicle classification and speed,
+/// with no binning applied to it.
 ///
 /// Three kinds of counts can be derived from this type of data for insertion into the database:
 ///   - [TimeBinnedVehicleClassCount] by [create_speed_and_class_count]

@@ -8,7 +8,8 @@ use oracle::{sql_type::Timestamp, Connection, Statement};
 
 use crate::{
     denormalize::{NonNormalAvgSpeedCount, NonNormalVolCount},
-    *,
+    FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, TimeBinnedSpeedRangeCount,
+    TimeBinnedVehicleClassCount,
 };
 
 /// A trait for inserting/replacing count data.
@@ -16,7 +17,7 @@ pub trait CountInsert {
     /// The name of the table in the database that this count type corresponds to.
     const COUNT_TABLE: &'static str; // associated constant
     /// Field in COUNT_TABLE with recordnum.
-    const COUNT_RECORDNUM_FIELD: &'static str;
+    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     /// Delete all records in the table with a particular recordnum.
     fn delete(conn: &Connection, recordnum: u32) -> Result<(), oracle::Error> {
@@ -38,7 +39,6 @@ pub trait CountInsert {
 
 impl CountInsert for TimeBinnedVehicleClassCount {
     const COUNT_TABLE: &'static str = "tc_clacount";
-    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
@@ -100,7 +100,6 @@ impl CountInsert for TimeBinnedVehicleClassCount {
 }
 impl CountInsert for TimeBinnedSpeedRangeCount {
     const COUNT_TABLE: &'static str = "tc_specount";
-    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
@@ -162,7 +161,6 @@ impl CountInsert for TimeBinnedSpeedRangeCount {
 
 impl CountInsert for NonNormalAvgSpeedCount {
     const COUNT_TABLE: &'static str = "tc_spesum";
-    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
@@ -224,7 +222,6 @@ impl CountInsert for NonNormalAvgSpeedCount {
 
 impl CountInsert for NonNormalVolCount {
     const COUNT_TABLE: &'static str = "tc_volcount";
-    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
@@ -289,7 +286,6 @@ impl CountInsert for NonNormalVolCount {
 
 impl CountInsert for FifteenMinuteVehicle {
     const COUNT_TABLE: &'static str = "tc_15minvolcount";
-    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
