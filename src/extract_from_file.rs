@@ -403,7 +403,7 @@ pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Direction;
+    use crate::LaneDirection;
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts() {
@@ -453,15 +453,15 @@ mod tests {
         let count0 = fifteen_min_volcount.first().unwrap();
         dbg!(count0);
         assert_eq!(count0.lane, 1);
-        assert_eq!(count0.direction, Direction::West);
+        assert_eq!(count0.direction, LaneDirection::West);
         assert_eq!(count0.count, 49);
         let count1 = fifteen_min_volcount.get(1).unwrap();
         assert_eq!(count1.lane, 2);
-        assert_eq!(count1.direction, Direction::West);
+        assert_eq!(count1.direction, LaneDirection::West);
         assert_eq!(count1.count, 68);
         let count2 = fifteen_min_volcount.get(2).unwrap();
         assert_eq!(count2.lane, 3);
-        assert_eq!(count2.direction, Direction::West);
+        assert_eq!(count2.direction, LaneDirection::West);
         assert_eq!(count2.count, 10);
     }
 

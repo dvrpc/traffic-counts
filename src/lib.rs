@@ -221,7 +221,7 @@ pub struct FifteenMinuteVehicle {
     pub date: NaiveDate,
     pub time: NaiveTime,
     pub count: u16,
-    pub direction: Direction,
+    pub direction: LaneDirection,
     pub lane: u8,
 }
 
@@ -237,7 +237,7 @@ impl FifteenMinuteVehicle {
         date: NaiveDate,
         time: NaiveTime,
         count: u16,
-        direction: Direction,
+        direction: LaneDirection,
         lane: u8,
     ) -> Result<Self, CountError<'static>> {
         Ok(Self {
@@ -259,7 +259,7 @@ pub struct Metadata {
     pub bikepeddesc: Option<String>,
     pub bikepedfacility: Option<String>,
     pub bikepedgroup: Option<String>,
-    pub cntdir: Option<Direction>,
+    pub cntdir: OptionRoadDirection,
     pub comments: Option<String>,
     pub count_type: Option<String>, // just "type" in db
     pub counterid: Option<u32>,
@@ -269,14 +269,14 @@ pub struct Metadata {
     pub fc: Option<u32>,
     pub fromlmt: Option<String>,
     pub importdatadate: Option<NaiveDate>,
-    pub indir: Option<Direction>,
+    pub indir: OptionLaneDirection,
     pub isurban: Option<bool>,
     pub latitude: Option<f32>,
     pub longitude: Option<f32>,
     pub mcd: Option<String>,
     pub mp: Option<String>,
     pub offset: Option<String>,
-    pub outdir: Option<Direction>,
+    pub outdir: OptionLaneDirection,
     pub pmending: Option<String>,
     pub pmpeak: Option<f32>,
     pub prj: Option<String>,
@@ -295,7 +295,7 @@ pub struct Metadata {
     pub stationid: Option<String>,
     pub technician: Option<String>, // "takenby" in db
     pub tolmt: Option<String>,
-    pub trafdir: Option<Direction>,
+    pub trafdir: OptionRoadDirection,
     pub x: Option<f32>,
     pub y: Option<f32>,
 }
@@ -359,37 +359,37 @@ impl FieldMetadata {
 
         let directions: Directions = match parts[2] {
             "nnn" => Directions::new(
-                Direction::North,
-                Some(Direction::North),
-                Some(Direction::North),
+                LaneDirection::North,
+                Some(LaneDirection::North),
+                Some(LaneDirection::North),
             ),
             "sss" => Directions::new(
-                Direction::South,
-                Some(Direction::South),
-                Some(Direction::South),
+                LaneDirection::South,
+                Some(LaneDirection::South),
+                Some(LaneDirection::South),
             ),
             "eee" => Directions::new(
-                Direction::East,
-                Some(Direction::East),
-                Some(Direction::East),
+                LaneDirection::East,
+                Some(LaneDirection::East),
+                Some(LaneDirection::East),
             ),
             "www" => Directions::new(
-                Direction::West,
-                Some(Direction::West),
-                Some(Direction::West),
+                LaneDirection::West,
+                Some(LaneDirection::West),
+                Some(LaneDirection::West),
             ),
-            "ns" => Directions::new(Direction::North, Some(Direction::South), None),
-            "sn" => Directions::new(Direction::South, Some(Direction::North), None),
-            "ew" => Directions::new(Direction::East, Some(Direction::West), None),
-            "we" => Directions::new(Direction::West, Some(Direction::East), None),
-            "nn" => Directions::new(Direction::North, Some(Direction::North), None),
-            "ss" => Directions::new(Direction::South, Some(Direction::South), None),
-            "ee" => Directions::new(Direction::East, Some(Direction::East), None),
-            "ww" => Directions::new(Direction::West, Some(Direction::West), None),
-            "n" => Directions::new(Direction::North, None, None),
-            "s" => Directions::new(Direction::South, None, None),
-            "e" => Directions::new(Direction::East, None, None),
-            "w" => Directions::new(Direction::West, None, None),
+            "ns" => Directions::new(LaneDirection::North, Some(LaneDirection::South), None),
+            "sn" => Directions::new(LaneDirection::South, Some(LaneDirection::North), None),
+            "ew" => Directions::new(LaneDirection::East, Some(LaneDirection::West), None),
+            "we" => Directions::new(LaneDirection::West, Some(LaneDirection::East), None),
+            "nn" => Directions::new(LaneDirection::North, Some(LaneDirection::North), None),
+            "ss" => Directions::new(LaneDirection::South, Some(LaneDirection::South), None),
+            "ee" => Directions::new(LaneDirection::East, Some(LaneDirection::East), None),
+            "ww" => Directions::new(LaneDirection::West, Some(LaneDirection::West), None),
+            "n" => Directions::new(LaneDirection::North, None, None),
+            "s" => Directions::new(LaneDirection::South, None, None),
+            "e" => Directions::new(LaneDirection::East, None, None),
+            "w" => Directions::new(LaneDirection::West, None, None),
             _ => {
                 return Err(CountError::InvalidFileName {
                     problem: FileNameProblem::InvalidDirections,
@@ -434,52 +434,114 @@ impl FieldMetadata {
     }
 }
 
+/// The direction of a road.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum RoadDirection {
+    North,
+    East,
+    South,
+    West,
+    Both,
+}
+
+impl RoadDirection {
+    fn from_string(dir: String) -> Result<RoadDirection, CountError<'static>> {
+        match dir.to_lowercase().as_str() {
+            "north" | "n" => Ok(RoadDirection::North),
+            "east" | "e" => Ok(RoadDirection::East),
+            "south" | "s" => Ok(RoadDirection::South),
+            "west" | "w" => Ok(RoadDirection::West),
+            "both" | "b" => Ok(RoadDirection::Both),
+            _ => Err(CountError::BadDirection(dir.to_string())),
+        }
+    }
+}
+
+impl Display for RoadDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dir = match self {
+            RoadDirection::North => "north".to_string(),
+            RoadDirection::East => "east".to_string(),
+            RoadDirection::South => "south".to_string(),
+            RoadDirection::West => "west".to_string(),
+            RoadDirection::Both => "both".to_string(),
+        };
+        write!(f, "{}", dir)
+    }
+}
+
+// Make newtype on RoadDirection so we can impl oracle's FromSql on it as an Option.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionRoadDirection(Option<RoadDirection>);
+
+impl Display for OptionRoadDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Some(v) => write!(f, "{v}"),
+            None => write!(f, ""),
+        }
+    }
+}
+
 /// The direction of a lane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub enum Direction {
+pub enum LaneDirection {
     North,
     East,
     South,
     West,
 }
 
-impl Direction {
-    fn from_string(dir: String) -> Result<Direction, CountError<'static>> {
+impl LaneDirection {
+    fn from_string(dir: String) -> Result<LaneDirection, CountError<'static>> {
         match dir.to_lowercase().as_str() {
-            "north" | "n" => Ok(Direction::North),
-            "east" | "e" => Ok(Direction::East),
-            "south" | "s" => Ok(Direction::South),
-            "west" | "w" => Ok(Direction::West),
+            "north" | "n" => Ok(LaneDirection::North),
+            "east" | "e" => Ok(LaneDirection::East),
+            "south" | "s" => Ok(LaneDirection::South),
+            "west" | "w" => Ok(LaneDirection::West),
             _ => Err(CountError::BadDirection(dir.to_string())),
         }
     }
 }
 
-impl Display for Direction {
+impl Display for LaneDirection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let dir = match self {
-            Direction::North => "north".to_string(),
-            Direction::East => "east".to_string(),
-            Direction::South => "south".to_string(),
-            Direction::West => "west".to_string(),
+            LaneDirection::North => "north".to_string(),
+            LaneDirection::East => "east".to_string(),
+            LaneDirection::South => "south".to_string(),
+            LaneDirection::West => "west".to_string(),
         };
         write!(f, "{}", dir)
+    }
+}
+
+// Make newtype on LaneDirection so we can impl oracle's FromSql on it as an Option.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionLaneDirection(Option<LaneDirection>);
+
+impl Display for OptionLaneDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Some(v) => write!(f, "{v}"),
+            None => write!(f, ""),
+        }
     }
 }
 
 /// The [`Direction`]s that a count could contain.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Directions {
-    pub direction1: Direction,
-    pub direction2: Option<Direction>,
-    pub direction3: Option<Direction>,
+    pub direction1: LaneDirection,
+    pub direction2: Option<LaneDirection>,
+    pub direction3: Option<LaneDirection>,
 }
 
 impl Directions {
     pub fn new(
-        direction1: Direction,
-        direction2: Option<Direction>,
-        direction3: Option<Direction>,
+        direction1: LaneDirection,
+        direction2: Option<LaneDirection>,
+        direction3: Option<LaneDirection>,
     ) -> Self {
         Self {
             direction1,
@@ -549,7 +611,7 @@ pub struct TimeBinnedVehicleClassCount {
     pub datetime: NaiveDateTime,
     pub lane: u8,
     pub record_num: u32,
-    pub direction: Direction,
+    pub direction: LaneDirection,
     pub c1: u32,
     pub c2: u32,
     pub c3: u32,
@@ -575,7 +637,7 @@ pub struct TimeBinnedSpeedRangeCount {
     pub datetime: NaiveDateTime,
     pub lane: u8,
     pub record_num: u32,
-    pub direction: Direction,
+    pub direction: LaneDirection,
     pub s1: u32,
     pub s2: u32,
     pub s3: u32,

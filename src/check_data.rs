@@ -7,7 +7,7 @@ use oracle::Connection;
 
 use crate::{
     db::{self, ImportLogEntry},
-    CountError, Direction,
+    CountError, LaneDirection,
 };
 
 // If a count is bidirectional, the totals for both directions should be relatively proportional.
@@ -21,7 +21,7 @@ const BIKE_COUNT_MAX: u32 = 20;
 pub struct ClassCountCheck {
     datetime: NaiveDateTime,
     lane: u8,
-    dir: Direction,
+    dir: LaneDirection,
     c2: u32,
     c15: u32,
     total: u32,
@@ -56,7 +56,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
             counts.push(ClassCountCheck {
                 datetime,
                 lane,
-                dir: Direction::from_string(direction).unwrap(),
+                dir: LaneDirection::from_string(direction).unwrap(),
                 c2,
                 c15,
                 total,

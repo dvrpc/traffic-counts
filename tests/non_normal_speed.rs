@@ -3,7 +3,7 @@ use std::path::Path;
 use chrono::NaiveDate;
 
 use traffic_counts::{
-    denormalize::create_non_normal_speedavg_count, extract_from_file::Extract, Direction, *,
+    denormalize::create_non_normal_speedavg_count, extract_from_file::Extract, LaneDirection, *,
 };
 
 #[test]
@@ -25,7 +25,7 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     );
     assert!(non_normal_count[0].am9.is_none());
     assert!(non_normal_count[0].am10.is_some());
-    assert_eq!(non_normal_count[0].direction, Direction::East);
+    assert_eq!(non_normal_count[0].direction, LaneDirection::East);
     assert_eq!(non_normal_count[0].lane, 1);
 
     assert_eq!(
@@ -34,7 +34,7 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     );
     assert!(non_normal_count[1].am9.is_none());
     assert!(non_normal_count[1].am10.is_some());
-    assert_eq!(non_normal_count[1].direction, Direction::West);
+    assert_eq!(non_normal_count[1].direction, LaneDirection::West);
     assert_eq!(non_normal_count[1].lane, 2);
 
     assert_eq!(
@@ -43,7 +43,7 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     );
     assert!(non_normal_count[5].am10.is_some());
     assert!(non_normal_count[5].am11.is_none());
-    assert_eq!(non_normal_count[5].direction, Direction::West);
+    assert_eq!(non_normal_count[5].direction, LaneDirection::West);
     assert_eq!(non_normal_count[5].lane, 2);
 
     // spotcheck averages
@@ -72,7 +72,7 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     );
     assert!(non_normal_count[0].am10.is_none());
     assert!(non_normal_count[0].am11.is_some());
-    assert_eq!(non_normal_count[0].direction, Direction::East);
+    assert_eq!(non_normal_count[0].direction, LaneDirection::East);
     assert_eq!(non_normal_count[0].lane, 1);
 
     assert_eq!(
@@ -81,7 +81,7 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     );
     assert!(non_normal_count[1].am10.is_none());
     assert!(non_normal_count[1].am11.is_some());
-    assert_eq!(non_normal_count[1].direction, Direction::East);
+    assert_eq!(non_normal_count[1].direction, LaneDirection::East);
     assert_eq!(non_normal_count[1].lane, 2);
 
     assert_eq!(
@@ -90,7 +90,7 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     );
     assert!(non_normal_count[8].am10.is_some());
     assert!(non_normal_count[8].am11.is_none());
-    assert_eq!(non_normal_count[8].direction, Direction::East);
+    assert_eq!(non_normal_count[8].direction, LaneDirection::East);
     assert_eq!(non_normal_count[8].lane, 1);
 
     // spotcheck averages

@@ -100,7 +100,7 @@ pub trait Aadv {
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError> {
+    ) -> Result<HashMap<(NaiveDate, Option<LaneDirection>), usize>, CountError> {
         // Get dates that have full counts so we only get totals for them.
         let dates = Self::get_full_dates(recordnum, conn)?;
 
@@ -119,7 +119,7 @@ pub trait Aadv {
         // Create hashmap to collect the total.
         // When the Direction is None in the key, that is the overall total (no directionality)
         // for the date, otherwise its for a particular Direction.
-        let mut totals: HashMap<(NaiveDate, Option<Direction>), usize> = HashMap::new();
+        let mut totals: HashMap<(NaiveDate, Option<LaneDirection>), usize> = HashMap::new();
         for result in results {
             let (date, total, direction) = result?;
 
@@ -130,7 +130,7 @@ pub trait Aadv {
 
             // Insert value for each date/direction.
             if let Some(v) = direction {
-                totals.insert((date, Some(Direction::from_string(v)?)), total);
+                totals.insert((date, Some(LaneDirection::from_string(v)?)), total);
             }
 
             // Insert or update value date/overall.
@@ -147,7 +147,7 @@ pub trait Aadv {
     fn get_total_by_non_excluded_date(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError> {
+    ) -> Result<HashMap<(NaiveDate, Option<LaneDirection>), usize>, CountError> {
         // Get day counts for full days.
         let mut day_counts = Self::get_total_by_date(recordnum, conn)?;
 
@@ -163,7 +163,7 @@ pub trait Aadv {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, u32>, CountError>;
+    ) -> Result<HashMap<Option<LaneDirection>, u32>, CountError>;
 
     // Insert/update the set of AADVs (per direction/overall) into the database.
     fn insert_aadv(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
@@ -204,7 +204,7 @@ impl Aadv for TimeBinnedVehicleClassCount {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
+    ) -> Result<HashMap<Option<LaneDirection>, u32>, CountError> {
         // Get totals by date, without excluded dates.
         let day_counts = Self::get_total_by_non_excluded_date(recordnum, conn)?;
 
@@ -238,7 +238,7 @@ impl Aadv for TimeBinnedVehicleClassCount {
             &[&count_type],
         )?;
 
-        let mut daily_aadv: HashMap<(NaiveDate, Option<Direction>), f32> = HashMap::new();
+        let mut daily_aadv: HashMap<(NaiveDate, Option<LaneDirection>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
             // Get season factor from factor table. No need to get axle factor, as that
@@ -298,7 +298,7 @@ impl Aadv for FifteenMinuteVehicle {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
+    ) -> Result<HashMap<Option<LaneDirection>, u32>, CountError> {
         // Get totals by date, without excluded dates.
         let day_counts = Self::get_total_by_non_excluded_date(recordnum, conn)?;
 
@@ -332,7 +332,7 @@ impl Aadv for FifteenMinuteVehicle {
             &[&count_type],
         )?;
 
-        let mut daily_aadv: HashMap<(NaiveDate, Option<Direction>), f32> = HashMap::new();
+        let mut daily_aadv: HashMap<(NaiveDate, Option<LaneDirection>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
             // Get season and axle factors from factor table.
@@ -398,7 +398,7 @@ impl Aadv for FifteenMinuteBicycle {
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError> {
+    ) -> Result<HashMap<(NaiveDate, Option<LaneDirection>), usize>, CountError> {
         let dates = Self::get_full_dates(recordnum, conn)?;
         get_total_by_date_bike_ped(
             recordnum,
@@ -415,7 +415,7 @@ impl Aadv for FifteenMinuteBicycle {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
+    ) -> Result<HashMap<Option<LaneDirection>, u32>, CountError> {
         // Get totals by date, without excluded dates.
         let day_counts = Self::get_total_by_non_excluded_date(recordnum, conn)?;
 
@@ -438,7 +438,7 @@ impl Aadv for FifteenMinuteBicycle {
             &[&count_type],
         )?;
 
-        let mut daily_aadv: HashMap<(NaiveDate, Option<Direction>), f32> = HashMap::new();
+        let mut daily_aadv: HashMap<(NaiveDate, Option<LaneDirection>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
             // Get season factor from factor table.
@@ -493,7 +493,7 @@ impl Aadv for FifteenMinutePedestrian {
     fn get_total_by_date(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError> {
+    ) -> Result<HashMap<(NaiveDate, Option<LaneDirection>), usize>, CountError> {
         let dates = Self::get_full_dates(recordnum, conn)?;
         get_total_by_date_bike_ped(
             recordnum,
@@ -510,7 +510,7 @@ impl Aadv for FifteenMinutePedestrian {
     fn calculate_aadv(
         recordnum: u32,
         conn: &Connection,
-    ) -> Result<HashMap<Option<Direction>, u32>, CountError> {
+    ) -> Result<HashMap<Option<LaneDirection>, u32>, CountError> {
         // Get totals by date, without excluded dates.
         let day_counts = Self::get_total_by_non_excluded_date(recordnum, conn)?;
 
@@ -533,7 +533,7 @@ impl Aadv for FifteenMinutePedestrian {
             &[&count_type],
         )?;
 
-        let mut daily_aadv: HashMap<(NaiveDate, Option<Direction>), f32> = HashMap::new();
+        let mut daily_aadv: HashMap<(NaiveDate, Option<LaneDirection>), f32> = HashMap::new();
 
         for ((date, direction), total) in day_counts {
             // Get season factor from factor table.
@@ -581,7 +581,7 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     out_field: &'a str,
     recordnum_field: &'a str,
     conn: &'conn Connection,
-) -> Result<HashMap<(NaiveDate, Option<Direction>), usize>, CountError<'conn>> {
+) -> Result<HashMap<(NaiveDate, Option<LaneDirection>), usize>, CountError<'conn>> {
     // Get direction of incount and outcount.
     let (incount_dir, outcount_dir) = match conn.query_row_as::<(Option<String>, Option<String>)>(
         "select indir, outdir from tc_header where recordnum = :1",
@@ -601,8 +601,8 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
         )));
     }
 
-    let incount_dir = Direction::from_string(incount_dir.unwrap())?;
-    let outcount_dir = Direction::from_string(outcount_dir.unwrap())?;
+    let incount_dir = LaneDirection::from_string(incount_dir.unwrap())?;
+    let outcount_dir = LaneDirection::from_string(outcount_dir.unwrap())?;
 
     let results = conn.query_as::<(NaiveDate, usize, usize, usize)>(
         &format!(
@@ -619,7 +619,7 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     // Create hashmap to collect the total.
     // When the Direction is None in the key, that is the overall total (no directionality)
     // for the date, otherwise its for a particular Direction.
-    let mut totals: HashMap<(NaiveDate, Option<Direction>), usize> = HashMap::new();
+    let mut totals: HashMap<(NaiveDate, Option<LaneDirection>), usize> = HashMap::new();
     for result in results {
         let (date, total, incount, outcount) = result?;
 
@@ -749,7 +749,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2023, 11, 7).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &2045
@@ -758,7 +758,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2023, 11, 7).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &2405
@@ -775,7 +775,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &4170
@@ -784,7 +784,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2024, 1, 4).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &4357
@@ -802,7 +802,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 22).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &50
@@ -811,7 +811,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 22).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &34
@@ -826,7 +826,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 23).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &16
@@ -835,7 +835,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 23).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &7
@@ -850,7 +850,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 24).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &32
@@ -859,7 +859,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 24).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &8
@@ -874,7 +874,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 25).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &43
@@ -883,7 +883,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 25).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &24
@@ -898,7 +898,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 26).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &17
@@ -907,7 +907,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 26).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &6
@@ -922,7 +922,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 27).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &67
@@ -931,7 +931,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 27).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &25
@@ -946,7 +946,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 28).unwrap(),
-                    Some(Direction::East)
+                    Some(LaneDirection::East)
                 ))
                 .unwrap(),
             &53
@@ -955,7 +955,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2020, 11, 28).unwrap(),
-                    Some(Direction::West)
+                    Some(LaneDirection::West)
                 ))
                 .unwrap(),
             &30
@@ -973,7 +973,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 14).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &39
@@ -982,7 +982,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 14).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &2
@@ -997,7 +997,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 15).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &36
@@ -1006,7 +1006,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 15).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &1
@@ -1021,7 +1021,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 16).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &105
@@ -1030,7 +1030,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 16).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &5
@@ -1045,7 +1045,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 17).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &40
@@ -1054,7 +1054,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 17).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &0
@@ -1069,7 +1069,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 18).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &22
@@ -1078,7 +1078,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 18).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &0
@@ -1093,7 +1093,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 19).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &13
@@ -1102,7 +1102,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 19).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &1
@@ -1117,7 +1117,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 20).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &37
@@ -1126,7 +1126,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2021, 12, 20).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &3
@@ -1145,7 +1145,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 15).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &21
@@ -1154,7 +1154,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 15).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &15
@@ -1169,7 +1169,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 16).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &13
@@ -1178,7 +1178,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 16).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &9
@@ -1193,7 +1193,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 17).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &36
@@ -1202,7 +1202,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 17).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &32
@@ -1217,7 +1217,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 18).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &38
@@ -1226,7 +1226,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 18).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &43
@@ -1241,7 +1241,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 19).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &14
@@ -1250,7 +1250,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 19).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &11
@@ -1265,7 +1265,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 20).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &110
@@ -1274,7 +1274,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 20).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &24
@@ -1289,7 +1289,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 21).unwrap(),
-                    Some(Direction::South)
+                    Some(LaneDirection::South)
                 ))
                 .unwrap(),
             &52
@@ -1298,7 +1298,7 @@ mod tests {
             day_counts
                 .get(&(
                     NaiveDate::from_ymd_opt(2015, 10, 21).unwrap(),
-                    Some(Direction::North)
+                    Some(LaneDirection::North)
                 ))
                 .unwrap(),
             &24
@@ -1314,8 +1314,8 @@ mod tests {
 
         let aadv = TimeBinnedVehicleClassCount::calculate_aadv(166905, &conn).unwrap();
         assert_eq!(*aadv.get(&None).unwrap(), 3880);
-        assert_eq!(*aadv.get(&Some(Direction::East)).unwrap(), 1783);
-        assert_eq!(*aadv.get(&Some(Direction::West)).unwrap(), 2097);
+        assert_eq!(*aadv.get(&Some(LaneDirection::East)).unwrap(), 1783);
+        assert_eq!(*aadv.get(&Some(LaneDirection::West)).unwrap(), 2097);
 
         // 141216: fc 17, PA, 2018-08-01 (4th day of week from Sunday) only full day
         // pafactor = 0.863; paaxle = 0.976; total for 2018-08-01 (no directionality, because
@@ -1357,8 +1357,8 @@ mod tests {
         */
         let aadv = FifteenMinuteBicycle::calculate_aadv(156238, &conn).unwrap();
         assert_eq!(*aadv.get(&None).unwrap(), 122);
-        assert_eq!(*aadv.get(&Some(Direction::East)).unwrap(), 83);
-        assert_eq!(*aadv.get(&Some(Direction::West)).unwrap(), 40);
+        assert_eq!(*aadv.get(&Some(LaneDirection::East)).unwrap(), 83);
+        assert_eq!(*aadv.get(&Some(LaneDirection::West)).unwrap(), 40);
 
         // 136271: full days from Oct 15, 2015 to Oct 21, 2015, inclusive.
         /* Here's how it was manually calculated:
@@ -1395,8 +1395,8 @@ mod tests {
         */
         let aadv = FifteenMinutePedestrian::calculate_aadv(136271, &conn).unwrap();
         assert_eq!(*aadv.get(&None).unwrap(), 65);
-        assert_eq!(*aadv.get(&Some(Direction::South)).unwrap(), 42);
-        assert_eq!(*aadv.get(&Some(Direction::North)).unwrap(), 23);
+        assert_eq!(*aadv.get(&Some(LaneDirection::South)).unwrap(), 42);
+        assert_eq!(*aadv.get(&Some(LaneDirection::North)).unwrap(), 23);
     }
 
     #[ignore]

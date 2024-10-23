@@ -1,11 +1,14 @@
 //! Various implementations for use with an Oracle database.
 use std::str::FromStr;
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use log::Level;
 use oracle::{sql_type::FromSql, Error as OracleError, RowValue, SqlValue};
 
-use crate::{db::ImportLogEntry, denormalize::NonNormalVolCount, Direction, Metadata};
+use crate::{
+    db::ImportLogEntry, denormalize::NonNormalVolCount, LaneDirection, Metadata,
+    OptionLaneDirection, OptionRoadDirection, RoadDirection,
+};
 
 impl RowValue for Metadata {
     fn get(row: &oracle::Row) -> oracle::Result<Self> {
@@ -18,12 +21,12 @@ impl RowValue for Metadata {
         let comments = row.get("comments")?;
         let count_type = row.get("type")?;
         let counterid = row.get("counterid")?;
-        let createheaderdate = row.get("createheaderdate")?;
-        let datelastcounted = row.get("datelastcounted")?;
+        let createheaderdate = row.get::<&str, Option<NaiveDate>>("createheaderdate")?;
+        let datelastcounted = row.get::<&str, Option<NaiveDate>>("datelastcounted")?;
         let description = row.get("description")?;
         let fc = row.get("fc")?;
         let fromlmt = row.get("fromlmt")?;
-        let importdatadate = row.get("importdatadate")?;
+        let importdatadate = row.get::<&str, Option<NaiveDate>>("importdatadate")?;
         let indir = row.get("indir")?;
         let isurban = {
             let isurban: String = row.get("isurban")?;
@@ -124,10 +127,45 @@ impl RowValue for ImportLogEntry {
     }
 }
 
-impl FromSql for Direction {
+impl FromSql for LaneDirection {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
-        match Direction::from_string(val.to_string()) {
+        match LaneDirection::from_string(val.to_string()) {
             Ok(v) => Ok(v),
+            Err(e) => Err(OracleError::ParseError(Box::new(e))),
+        }
+    }
+}
+
+impl FromSql for OptionLaneDirection {
+    fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
+        match val.is_null() {
+            Ok(true) => Ok(OptionLaneDirection(None)),
+            Ok(false) => match LaneDirection::from_string(val.to_string()) {
+                Ok(v) => Ok(OptionLaneDirection(Some(v))),
+                Err(e) => Err(OracleError::ParseError(Box::new(e))),
+            },
+            Err(e) => Err(OracleError::ParseError(Box::new(e))),
+        }
+    }
+}
+
+impl FromSql for RoadDirection {
+    fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
+        match RoadDirection::from_string(val.to_string()) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(OracleError::ParseError(Box::new(e))),
+        }
+    }
+}
+
+impl FromSql for OptionRoadDirection {
+    fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
+        match val.is_null() {
+            Ok(true) => Ok(OptionRoadDirection(None)),
+            Ok(false) => match RoadDirection::from_string(val.to_string()) {
+                Ok(v) => Ok(OptionRoadDirection(Some(v))),
+                Err(e) => Err(OracleError::ParseError(Box::new(e))),
+            },
             Err(e) => Err(OracleError::ParseError(Box::new(e))),
         }
     }

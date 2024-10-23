@@ -146,7 +146,7 @@ pub struct HourlyCount {
     pub recordnum: u32,
     pub datetime: NaiveDateTime,
     pub count: u32,
-    pub dir: Direction,
+    pub dir: LaneDirection,
     pub lane: u8,
 }
 
@@ -158,7 +158,7 @@ pub struct HourlyCount {
 pub struct NonNormalVolCount {
     pub record_num: u32,
     pub date: NaiveDate,
-    pub direction: Direction,
+    pub direction: LaneDirection,
     pub lane: u8,
     pub setflag: Option<i8>,
     pub totalcount: Option<u32>,
@@ -197,7 +197,7 @@ pub struct NonNormalVolCount {
 pub struct NonNormalAvgSpeedCount {
     pub record_num: u32,
     pub date: NaiveDate,
-    pub direction: Direction,
+    pub direction: LaneDirection,
     pub lane: u8,
     pub am12: Option<f32>,
     pub am1: Option<f32>,
@@ -543,7 +543,7 @@ pub fn hourly_counts<'a, 'conn>(
             recordnum,
             datetime,
             count,
-            dir: Direction::from_string(dir).unwrap(),
+            dir: LaneDirection::from_string(dir).unwrap(),
             lane: lane as u8,
         });
     }
@@ -578,7 +578,7 @@ mod tests {
         );
         assert!(non_normal_count[0].am9.is_none());
         assert!(non_normal_count[0].am10.is_some());
-        assert_eq!(non_normal_count[0].direction, Direction::East);
+        assert_eq!(non_normal_count[0].direction, LaneDirection::East);
         assert_eq!(non_normal_count[0].lane, 1);
 
         assert_eq!(
@@ -587,7 +587,7 @@ mod tests {
         );
         assert!(non_normal_count[1].am9.is_none());
         assert!(non_normal_count[1].am10.is_some());
-        assert_eq!(non_normal_count[1].direction, Direction::West);
+        assert_eq!(non_normal_count[1].direction, LaneDirection::West);
         assert_eq!(non_normal_count[1].lane, 2);
 
         assert!(non_normal_count[4].am10.is_some());
@@ -598,7 +598,7 @@ mod tests {
         );
         assert!(non_normal_count[5].am10.is_some());
         assert!(non_normal_count[5].am11.is_none());
-        assert_eq!(non_normal_count[5].direction, Direction::West);
+        assert_eq!(non_normal_count[5].direction, LaneDirection::West);
         assert_eq!(non_normal_count[5].lane, 2);
 
         // Test total counts.
@@ -638,7 +638,7 @@ mod tests {
         );
         assert!(non_normal_count[0].am10.is_none());
         assert!(non_normal_count[0].am11.is_some());
-        assert_eq!(non_normal_count[0].direction, Direction::East);
+        assert_eq!(non_normal_count[0].direction, LaneDirection::East);
         assert_eq!(non_normal_count[0].lane, 1);
 
         assert_eq!(
@@ -647,7 +647,7 @@ mod tests {
         );
         assert!(non_normal_count[1].am10.is_none());
         assert!(non_normal_count[1].am11.is_some());
-        assert_eq!(non_normal_count[1].direction, Direction::East);
+        assert_eq!(non_normal_count[1].direction, LaneDirection::East);
         assert_eq!(non_normal_count[1].lane, 2);
 
         assert_eq!(
@@ -656,7 +656,7 @@ mod tests {
         );
         assert!(non_normal_count[8].am10.is_some());
         assert!(non_normal_count[8].am11.is_none());
-        assert_eq!(non_normal_count[8].direction, Direction::East);
+        assert_eq!(non_normal_count[8].direction, LaneDirection::East);
         assert_eq!(non_normal_count[8].lane, 1);
 
         assert_eq!(
@@ -665,7 +665,7 @@ mod tests {
         );
         assert!(non_normal_count[9].am10.is_some());
         assert!(non_normal_count[9].am11.is_none());
-        assert_eq!(non_normal_count[9].direction, Direction::East);
+        assert_eq!(non_normal_count[9].direction, LaneDirection::East);
         assert_eq!(non_normal_count[9].lane, 2);
 
         // Test total counts.

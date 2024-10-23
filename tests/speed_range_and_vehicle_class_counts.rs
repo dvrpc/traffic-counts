@@ -10,7 +10,7 @@ use traffic_counts::{extract_from_file::Extract, intermediate::*, *};
 #[test]
 fn speed_binning_is_correct() {
     // Initialize count with the first speed of 0.0.
-    let mut speed_count = SpeedRangeCount::first(123, Direction::West, 0.0);
+    let mut speed_count = SpeedRangeCount::first(123, LaneDirection::West, 0.0);
 
     // s1
     speed_count.insert(-0.0);
@@ -248,13 +248,13 @@ fn counts_created_correctly_101() {
     // Verify period in middle (11:15-11:30)
     assert_eq!(vehicle_class_count[6].total, 24);
     assert_eq!(vehicle_class_count[6].lane, 1);
-    assert_eq!(vehicle_class_count[6].direction, Direction::East);
+    assert_eq!(vehicle_class_count[6].direction, LaneDirection::East);
     assert_eq!(vehicle_class_count[7].total, 18);
     assert_eq!(vehicle_class_count[7].lane, 2);
-    assert_eq!(vehicle_class_count[7].direction, Direction::East);
+    assert_eq!(vehicle_class_count[7].direction, LaneDirection::East);
     assert_eq!(vehicle_class_count[8].total, 2);
     assert_eq!(vehicle_class_count[8].lane, 3);
-    assert_eq!(vehicle_class_count[8].direction, Direction::East);
+    assert_eq!(vehicle_class_count[8].direction, LaneDirection::East);
 
     // verify last period total (lane 3)
     assert_eq!(speed_range_count.last().unwrap().total, 5);
