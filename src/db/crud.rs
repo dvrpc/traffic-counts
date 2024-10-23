@@ -20,7 +20,22 @@ pub trait Crud {
     /// Select all records from the table.
     fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
     where
-        Self: std::marker::Sized;
+        Self: std::marker::Sized + oracle::RowValue,
+    {
+        let sql = &format!(
+            "select * FROM {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
+        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
+
+        let mut data = vec![];
+        for result in results {
+            let result = result?;
+            data.push(result);
+        }
+        Ok(data)
+    }
 
     /// Delete all records in the table with a particular recordnum.
     fn delete(conn: &Connection, recordnum: u32) -> Result<(), oracle::Error> {
@@ -43,24 +58,6 @@ pub trait Crud {
 impl Crud for TimeBinnedVehicleClassCount {
     const COUNT_TABLE: &'static str = "tc_clacount";
 
-    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
-    where
-        Self: std::marker::Sized,
-    {
-        let sql = &format!(
-            "select * FROM {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
-        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
-
-        let mut data = vec![];
-        for result in results {
-            let result = result?;
-            data.push(result);
-        }
-        Ok(data)
-    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {} (recordnum, countdate, counttime, countlane, total, ctdir, \
@@ -102,24 +99,6 @@ impl Crud for TimeBinnedVehicleClassCount {
 impl Crud for TimeBinnedSpeedRangeCount {
     const COUNT_TABLE: &'static str = "tc_specount";
 
-    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
-    where
-        Self: std::marker::Sized,
-    {
-        let sql = &format!(
-            "select * FROM {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
-        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
-
-        let mut data = vec![];
-        for result in results {
-            let result = result?;
-            data.push(result);
-        }
-        Ok(data)
-    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {} (
@@ -162,24 +141,6 @@ impl Crud for TimeBinnedSpeedRangeCount {
 impl Crud for NonNormalAvgSpeedCount {
     const COUNT_TABLE: &'static str = "tc_spesum";
 
-    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
-    where
-        Self: std::marker::Sized,
-    {
-        let sql = &format!(
-            "select * FROM {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
-        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
-
-        let mut data = vec![];
-        for result in results {
-            let result = result?;
-            data.push(result);
-        }
-        Ok(data)
-    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -231,24 +192,6 @@ impl Crud for NonNormalAvgSpeedCount {
 impl Crud for NonNormalVolCount {
     const COUNT_TABLE: &'static str = "tc_volcount";
 
-    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
-    where
-        Self: std::marker::Sized,
-    {
-        let sql = &format!(
-            "select * FROM {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
-        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
-
-        let mut data = vec![];
-        for result in results {
-            let result = result?;
-            data.push(result);
-        }
-        Ok(data)
-    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -302,24 +245,6 @@ impl Crud for NonNormalVolCount {
 impl Crud for FifteenMinuteVehicle {
     const COUNT_TABLE: &'static str = "tc_15minvolcount";
 
-    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
-    where
-        Self: std::marker::Sized,
-    {
-        let sql = &format!(
-            "select * FROM {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
-        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
-
-        let mut data = vec![];
-        for result in results {
-            let result = result?;
-            data.push(result);
-        }
-        Ok(data)
-    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -346,24 +271,6 @@ impl Crud for FifteenMinuteBicycle {
     const COUNT_TABLE: &'static str = "tc_bikecount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
-    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
-    where
-        Self: std::marker::Sized,
-    {
-        let sql = &format!(
-            "select * FROM {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
-        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
-
-        let mut data = vec![];
-        for result in results {
-            let result = result?;
-            data.push(result);
-        }
-        Ok(data)
-    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -390,24 +297,6 @@ impl Crud for FifteenMinutePedestrian {
     const COUNT_TABLE: &'static str = "tc_pedcount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
-    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
-    where
-        Self: std::marker::Sized,
-    {
-        let sql = &format!(
-            "select * FROM {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
-        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
-
-        let mut data = vec![];
-        for result in results {
-            let result = result?;
-            data.push(result);
-        }
-        Ok(data)
-    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
