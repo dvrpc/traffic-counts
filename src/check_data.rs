@@ -1,9 +1,9 @@
 //! Checks on data integrity/validity.
 use std::collections::{BTreeMap, HashMap};
 
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime};
 use log::{warn, Level};
-use oracle::{sql_type::Timestamp, Connection};
+use oracle::Connection;
 
 use crate::{
     db::{self, ImportLogEntry},
@@ -44,7 +44,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
 
     // Warn if share of unclassed vehicles is too high or class 2 is too low.
     if count_type == "Class" {
-        let results = conn.query_as::<(Timestamp, Timestamp, u8, String, u32, u32, u32)>(
+        let results = conn.query_as::<(NaiveDate, NaiveDateTime, u8, String, u32, u32, u32)>(
         "select countdate, counttime, countlane, ctdir, total, cars_and_tlrs, unclassified from tc_clacount where recordnum = :1",
         &[&recordnum],
     )?;
@@ -52,11 +52,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         let mut counts = vec![];
         for result in results {
             let (count_date, count_time, lane, direction, total, c2, c15) = result?;
-            let datetime = NaiveDateTime::new(
-                NaiveDate::from_ymd_opt(count_date.year(), count_date.month(), count_date.day())
-                    .unwrap(),
-                NaiveTime::from_hms_opt(count_time.hour(), count_time.minute(), 0).unwrap(),
-            );
+            let datetime = NaiveDateTime::new(count_date, count_time.time());
             counts.push(ClassCountCheck {
                 datetime,
                 lane,

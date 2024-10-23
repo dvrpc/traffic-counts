@@ -26,7 +26,6 @@ use std::path::Path;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use log::error;
-use oracle::sql_type::Timestamp;
 use thiserror::Error;
 
 pub mod aadv;
@@ -264,12 +263,12 @@ pub struct Metadata {
     pub comments: Option<String>,
     pub count_type: Option<String>, // just "type" in db
     pub counterid: Option<u32>,
-    pub createheaderdate: Option<Timestamp>,
-    pub datelastcounted: Option<Timestamp>,
+    pub createheaderdate: Option<NaiveDate>,
+    pub datelastcounted: Option<NaiveDate>,
     pub description: Option<String>,
     pub fc: Option<u32>,
     pub fromlmt: Option<String>,
-    pub importdatadate: Option<Timestamp>,
+    pub importdatadate: Option<NaiveDate>,
     pub indir: Option<Direction>,
     pub isurban: Option<bool>,
     pub latitude: Option<f32>,

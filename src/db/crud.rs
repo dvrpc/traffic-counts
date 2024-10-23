@@ -2,8 +2,8 @@
 //!
 //! See the [Crud trait implementors][Crud#implementors] for kinds of counts and associated tables.
 
-use chrono::{Datelike, Timelike};
-use oracle::{sql_type::Timestamp, Connection, Statement};
+use chrono::NaiveDateTime;
+use oracle::{Connection, Statement};
 
 use crate::{
     denormalize::{NonNormalAvgSpeedCount, NonNormalVolCount},
@@ -53,30 +53,10 @@ impl Crud for TimeBinnedVehicleClassCount {
         conn.statement(sql).build()
     }
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let oracle_date = Timestamp::new(
-            self.datetime.year(),
-            self.datetime.month(),
-            self.datetime.day(),
-            0,
-            0,
-            0,
-            0,
-        )?;
-        // COUNTTIME is ok to be full datetime
-        let oracle_dt = Timestamp::new(
-            self.datetime.year(),
-            self.datetime.month(),
-            self.datetime.day(),
-            self.datetime.hour(),
-            self.datetime.minute(),
-            self.datetime.second(),
-            0,
-        )?;
-
         stmt.execute(&[
             &self.record_num,
-            &oracle_date,
-            &oracle_dt,
+            &self.datetime.date(),
+            &self.datetime,
             &self.lane,
             &self.total,
             &format!("{}", self.direction),
@@ -112,31 +92,12 @@ impl Crud for TimeBinnedSpeedRangeCount {
         );
         conn.statement(sql).build()
     }
-    fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let oracle_date = Timestamp::new(
-            self.datetime.year(),
-            self.datetime.month(),
-            self.datetime.day(),
-            0,
-            0,
-            0,
-            0,
-        )?;
-        // COUNTTIME is ok to be full datetime
-        let oracle_dt = Timestamp::new(
-            self.datetime.year(),
-            self.datetime.month(),
-            self.datetime.day(),
-            self.datetime.hour(),
-            self.datetime.minute(),
-            self.datetime.second(),
-            0,
-        )?;
 
+    fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.record_num,
-            &oracle_date,
-            &oracle_dt,
+            &self.datetime.date(),
+            &self.datetime,
             &self.lane,
             &self.total,
             &format!("{}", self.direction),
@@ -176,19 +137,9 @@ impl Crud for NonNormalAvgSpeedCount {
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let oracle_date = Timestamp::new(
-            self.date.year(),
-            self.date.month(),
-            self.date.day(),
-            0,
-            0,
-            0,
-            0,
-        )?;
-
         stmt.execute(&[
             &self.record_num,
-            &oracle_date,
+            &self.date,
             &format!("{}", self.direction),
             &self.lane,
             &self.am12,
@@ -237,19 +188,9 @@ impl Crud for NonNormalVolCount {
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let oracle_date = Timestamp::new(
-            self.date.year(),
-            self.date.month(),
-            self.date.day(),
-            0,
-            0,
-            0,
-            0,
-        )?;
-
         stmt.execute(&[
             &self.record_num,
-            &oracle_date,
+            &self.date,
             &"", // setflag
             &self.totalcount,
             &"", // weather
@@ -297,30 +238,11 @@ impl Crud for FifteenMinuteVehicle {
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let oracle_date = Timestamp::new(
-            self.date.year(),
-            self.date.month(),
-            self.date.day(),
-            0,
-            0,
-            0,
-            0,
-        )?;
-        // COUNTTIME is ok to be full datetime
-        let oracle_dt = Timestamp::new(
-            self.date.year(),
-            self.date.month(),
-            self.date.day(),
-            self.time.hour(),
-            self.time.minute(),
-            self.time.second(),
-            0,
-        )?;
-
+        let dt = NaiveDateTime::new(self.date, self.time);
         stmt.execute(&[
             &self.record_num,
-            &oracle_date,
-            &oracle_dt,
+            &self.date,
+            &dt,
             &self.count,
             &format!("{}", self.direction),
             &self.lane,
@@ -343,30 +265,11 @@ impl Crud for FifteenMinuteBicycle {
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let oracle_date = Timestamp::new(
-            self.date.year(),
-            self.date.month(),
-            self.date.day(),
-            0,
-            0,
-            0,
-            0,
-        )?;
-        // COUNTTIME is ok to be full datetime
-        let oracle_dt = Timestamp::new(
-            self.date.year(),
-            self.date.month(),
-            self.date.day(),
-            self.time.hour(),
-            self.time.minute(),
-            self.time.second(),
-            0,
-        )?;
-
+        let dt = NaiveDateTime::new(self.date, self.time);
         stmt.execute(&[
             &self.record_num,
-            &oracle_date,
-            &oracle_dt,
+            &self.date,
+            &dt,
             &self.total,
             &self.indir,
             &self.outdir,
@@ -389,30 +292,11 @@ impl Crud for FifteenMinutePedestrian {
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let oracle_date = Timestamp::new(
-            self.date.year(),
-            self.date.month(),
-            self.date.day(),
-            0,
-            0,
-            0,
-            0,
-        )?;
-        // COUNTTIME is ok to be full datetime
-        let oracle_dt = Timestamp::new(
-            self.date.year(),
-            self.date.month(),
-            self.date.day(),
-            self.time.hour(),
-            self.time.minute(),
-            self.time.second(),
-            0,
-        )?;
-
+        let dt = NaiveDateTime::new(self.date, self.time);
         stmt.execute(&[
             &self.record_num,
-            &oracle_date,
-            &oracle_dt,
+            &self.date,
+            &dt,
             &self.total,
             &self.indir,
             &self.outdir,

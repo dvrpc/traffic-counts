@@ -26,10 +26,10 @@ pub trait Aadv {
 
         // Although records inserted since the beginning of the use of this library use full
         // datetime for the counttime field, previous records split date into countdate and time
-        // into counttime (with no date/default date stored in countime), so we have to use both
+        // into counttime (with no date/default date stored in counttime), so we have to use both
         // and get individual component from each for backwards compatibility.
         let results = conn
-            .query_as::<(Timestamp, Timestamp)>(
+            .query_as::<(NaiveDate, NaiveDateTime)>(
                 &format!("select countdate, counttime from {} where {} = :1 order by countdate ASC, counttime ASC", &Self::BINNED_TABLE, &Self::BINNED_RECORDNUM_FIELD),
                 &[&recordnum],
             )?;
@@ -37,20 +37,9 @@ pub trait Aadv {
         let results = results
             .map(|result| {
                 let result = result.unwrap();
-                let date = result.0;
-                let time = result.1;
-                Timestamp::new(
-                    date.year(),
-                    date.month(),
-                    date.day(),
-                    time.hour(),
-                    time.minute(),
-                    time.second(),
-                    0,
-                )
-                .unwrap()
+                NaiveDateTime::new(result.0, result.1.time())
             })
-            .collect::<Vec<Timestamp>>();
+            .collect::<Vec<NaiveDateTime>>();
 
         if results.is_empty() {
             return Ok(dates);
@@ -61,8 +50,7 @@ pub trait Aadv {
         let last_dt = *results.last().unwrap();
 
         // The first actual day may be an incomplete date, but use this as a starting point.
-        let mut first_full_date =
-            NaiveDate::from_ymd_opt(first_dt.year(), first_dt.month(), first_dt.day()).unwrap();
+        let mut first_full_date = first_dt.date();
 
         if first_dt.hour() != 0 {
             first_full_date = first_full_date.checked_add_days(Days::new(1)).unwrap();
@@ -88,8 +76,7 @@ pub trait Aadv {
         };
 
         // Use last day (regardless if full or not) as starting point to determine last full day.
-        let mut last_full_date =
-            NaiveDate::from_ymd_opt(last_dt.year(), last_dt.month(), last_dt.day()).unwrap();
+        let mut last_full_date = last_dt.date();
 
         if last_dt.hour() != 23 || last_dt.minute() != minute_to_use {
             last_full_date = last_full_date.checked_sub_days(Days::new(1)).unwrap()
@@ -117,7 +104,7 @@ pub trait Aadv {
         // Get dates that have full counts so we only get totals for them.
         let dates = Self::get_full_dates(recordnum, conn)?;
 
-        let results = conn.query_as::<(Timestamp, usize, Option<String>)>(
+        let results = conn.query_as::<(NaiveDate, usize, Option<String>)>(
             &format!(
                 "select countdate, sum({}), {} from {} where {} = :1 group by countdate, {}",
                 &Self::TOTAL_FIELD,
@@ -135,7 +122,6 @@ pub trait Aadv {
         let mut totals: HashMap<(NaiveDate, Option<Direction>), usize> = HashMap::new();
         for result in results {
             let (date, total, direction) = result?;
-            let date = NaiveDate::from_ymd_opt(date.year(), date.month(), date.day()).unwrap();
 
             // Don't include any non-full dates.
             if !dates.contains(&date) {
@@ -183,8 +169,6 @@ pub trait Aadv {
     fn insert_aadv(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         let aadv = &Self::calculate_aadv(recordnum, conn)?;
         let date = Local::now().date_naive();
-
-        let date = Timestamp::new(date.year(), date.month(), date.day(), 0, 0, 0, 0)?;
 
         // Delete any existing AADVs for same recordnum and date
         if conn.execute("delete from aadv where recordnum = :1 and date_calculated = TO_CHAR(:2, 'DD-MON-YY')", &[&recordnum, &date]).is_ok() {
@@ -620,7 +604,7 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     let incount_dir = Direction::from_string(incount_dir.unwrap())?;
     let outcount_dir = Direction::from_string(outcount_dir.unwrap())?;
 
-    let results = conn.query_as::<(Timestamp, usize, usize, usize)>(
+    let results = conn.query_as::<(NaiveDate, usize, usize, usize)>(
         &format!(
             "select countdate, sum({}), sum(\"{}\"), sum({}) from {} where {} = :1 group by countdate",
             &total_field,
@@ -638,7 +622,6 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     let mut totals: HashMap<(NaiveDate, Option<Direction>), usize> = HashMap::new();
     for result in results {
         let (date, total, incount, outcount) = result?;
-        let date = NaiveDate::from_ymd_opt(date.year(), date.month(), date.day()).unwrap();
 
         // Don't include any non-full dates.
         if !dates.contains(&date) {
@@ -654,15 +637,15 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
 
 /// Get days that should be excluded from AADV calculations.
 pub fn excluded_days(conn: &Connection) -> Result<Vec<NaiveDate>, oracle::Error> {
-    let results = conn.query_as::<Timestamp>("select excluded_day from aadv_excluded_days", &[])?;
+    let results = conn.query_as::<NaiveDate>("select excluded_day from aadv_excluded_days", &[])?;
 
-    Ok(results
-        .map(|result| {
-            let result = result.unwrap();
-            let date = result;
-            NaiveDate::from_ymd_opt(date.year(), date.month(), date.day()).unwrap()
-        })
-        .collect::<Vec<NaiveDate>>())
+    let mut days = vec![];
+
+    for result in results {
+        let result = result?;
+        days.push(result)
+    }
+    Ok(days)
 }
 
 #[cfg(test)]

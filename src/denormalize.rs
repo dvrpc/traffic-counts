@@ -514,7 +514,7 @@ pub fn hourly_counts<'a, 'conn>(
     vol_field: &'a str,
     conn: &'conn Connection,
 ) -> Result<Vec<HourlyCount>, CountError<'conn>> {
-    let results = match conn.query_as::<(Timestamp, Timestamp, u32, String, u32)>(
+    let results = match conn.query_as::<(NaiveDateTime, NaiveDate, u32, String, u32)>(
         &format!(
             "select TRUNC(counttime, 'HH24'), countdate, sum({}), {}, countlane 
                 from {} 
@@ -537,10 +537,7 @@ pub fn hourly_counts<'a, 'conn>(
     for result in results {
         let (counttime, countdate, count, dir, lane) = result?;
 
-        let datetime = NaiveDateTime::new(
-            NaiveDate::from_ymd_opt(countdate.year(), countdate.month(), countdate.day()).unwrap(),
-            NaiveTime::from_hms_opt(counttime.hour(), counttime.minute(), 0).unwrap(),
-        );
+        let datetime = NaiveDateTime::new(countdate, counttime.time());
 
         hourly_counts.push(HourlyCount {
             recordnum,
