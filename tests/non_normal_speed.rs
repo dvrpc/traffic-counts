@@ -21,7 +21,7 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     // Ensure order is what we expect/count starts at correct times.
     assert_eq!(
         non_normal_count[0].date,
-        NaiveDate::from_ymd_opt(2023, 11, 06).unwrap()
+        NaiveDate::from_ymd_opt(2023, 11, 6).unwrap()
     );
     assert!(non_normal_count[0].am9.is_none());
     assert!(non_normal_count[0].am10.is_some());
@@ -30,7 +30,7 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
 
     assert_eq!(
         non_normal_count[1].date,
-        NaiveDate::from_ymd_opt(2023, 11, 06).unwrap()
+        NaiveDate::from_ymd_opt(2023, 11, 6).unwrap()
     );
     assert!(non_normal_count[1].am9.is_none());
     assert!(non_normal_count[1].am10.is_some());
@@ -39,7 +39,7 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
 
     assert_eq!(
         non_normal_count[5].date,
-        NaiveDate::from_ymd_opt(2023, 11, 08).unwrap()
+        NaiveDate::from_ymd_opt(2023, 11, 8).unwrap()
     );
     assert!(non_normal_count[5].am10.is_some());
     assert!(non_normal_count[5].am11.is_none());
@@ -68,7 +68,7 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     // Ensure order is what we expect/count starts at correct times.
     assert_eq!(
         non_normal_count[0].date,
-        NaiveDate::from_ymd_opt(2023, 11, 06).unwrap()
+        NaiveDate::from_ymd_opt(2023, 11, 6).unwrap()
     );
     assert!(non_normal_count[0].am10.is_none());
     assert!(non_normal_count[0].am11.is_some());
@@ -77,7 +77,7 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
 
     assert_eq!(
         non_normal_count[1].date,
-        NaiveDate::from_ymd_opt(2023, 11, 06).unwrap()
+        NaiveDate::from_ymd_opt(2023, 11, 6).unwrap()
     );
     assert!(non_normal_count[1].am10.is_none());
     assert!(non_normal_count[1].am11.is_some());

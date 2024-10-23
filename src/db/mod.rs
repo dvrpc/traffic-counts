@@ -48,16 +48,16 @@ pub fn create_pool(username: String, password: String) -> Result<Pool, OracleErr
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct ImportLogEntry {
     pub datetime: Option<NaiveDateTime>,
-    pub record_num: u32,
+    pub recordnum: u32,
     pub msg: String,
     pub level: String,
 }
 
 impl ImportLogEntry {
-    pub fn new(record_num: u32, msg: String, level: Level) -> Self {
+    pub fn new(recordnum: u32, msg: String, level: Level) -> Self {
         Self {
             datetime: None,
-            record_num,
+            recordnum,
             msg,
             level: level.to_string(),
         }
@@ -71,7 +71,7 @@ impl Display for ImportLogEntry {
             "{:?}:{:?} {}{}{}",
             self.datetime.unwrap().date(),
             self.datetime.unwrap().time(),
-            self.record_num,
+            self.recordnum,
             self.msg,
             self.level
         )
@@ -85,7 +85,7 @@ pub fn insert_import_log_entry(
 ) -> Result<(), oracle::Error> {
     conn.execute(
         "insert into import_log (recordnum, message, log_level) values (:1, :2, :3)",
-        &[&log_record.record_num, &log_record.msg, &log_record.level],
+        &[&log_record.recordnum, &log_record.msg, &log_record.level],
     )?;
     conn.commit()
 }
@@ -93,9 +93,9 @@ pub fn insert_import_log_entry(
 /// Get all [Import Log Entries](ImportLogEntry).
 pub fn get_import_log(
     conn: &Connection,
-    record_num: Option<u32>,
+    recordnum: Option<u32>,
 ) -> Result<Vec<ImportLogEntry>, oracle::Error> {
-    let results = match record_num {
+    let results = match recordnum {
         Some(v) => conn.query_as::<ImportLogEntry>(
             "select * from import_log WHERE recordnum = :1 order by datetime desc",
             &[&v],
@@ -120,10 +120,10 @@ pub fn get_metadata_total_recs(conn: &Connection) -> Result<u32, CountError> {
 }
 
 /// Get a [`Metadata`] record.
-pub fn get_metadata(conn: &Connection, record_num: u32) -> Result<Metadata, CountError> {
+pub fn get_metadata(conn: &Connection, recordnum: u32) -> Result<Metadata, CountError> {
     Ok(conn.query_row_as::<Metadata>(
         "select * from tc_header where recordnum = :1",
-        &[&record_num],
+        &[&recordnum],
     )?)
 }
 
@@ -167,21 +167,21 @@ pub fn insert_empty_metadata(conn: &Connection, number: u32) -> Result<Vec<u32>,
     let mut recordnums = vec![];
     for _ in 0..number {
         let stmt = conn.execute(
-            "insert into tc_header (createheaderdate) values (CURRENT_DATE) RETURNING recordnum INTO :record_num",
+            "insert into tc_header (createheaderdate) values (CURRENT_DATE) RETURNING recordnum INTO :recordnum",
             &[&None::<u32>],
         )?;
-        let record_num: u32 = stmt.returned_values("record_num")?[0];
-        recordnums.push(record_num);
+        let recordnum: u32 = stmt.returned_values("recordnum")?[0];
+        recordnums.push(recordnum);
     }
     conn.commit()?;
     Ok(recordnums)
 }
 
 /// Get the type of count for a given record number.
-pub fn get_count_type(conn: &Connection, record_num: u32) -> Result<Option<String>, CountError> {
+pub fn get_count_type(conn: &Connection, recordnum: u32) -> Result<Option<String>, CountError> {
     match conn.query_row_as::<Option<String>>(
         "select type from tc_header where recordnum = :1",
-        &[&record_num],
+        &[&recordnum],
     ) {
         Ok(v) => Ok(v),
         Err(e) => Err(CountError::DbError(format!("{e}"))),

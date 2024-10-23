@@ -9,7 +9,7 @@ fn field_metadata_parse_from_path_ok() {
     let expected_field_metadata = {
         FieldMetadata {
             technician: "rc".to_string(),
-            record_num: 166905,
+            recordnum: 166905,
             directions: Directions::new(LaneDirection::East, None, None),
             counter_id: 40972,
             speed_limit: Some(35),
@@ -22,7 +22,7 @@ fn field_metadata_parse_from_path_ok() {
     let expected_field_metadata = {
         FieldMetadata {
             technician: "rc".to_string(),
-            record_num: 166905,
+            recordnum: 166905,
             directions: Directions::new(LaneDirection::East, Some(LaneDirection::West), None),
             counter_id: 40972,
             speed_limit: Some(35),
@@ -35,7 +35,7 @@ fn field_metadata_parse_from_path_ok() {
     let expected_field_metadata = {
         FieldMetadata {
             technician: "rc".to_string(),
-            record_num: 166905,
+            recordnum: 166905,
             directions: Directions::new(
                 LaneDirection::East,
                 Some(LaneDirection::East),
@@ -55,7 +55,7 @@ fn field_metadata_parse_from_path_ok_with_na_speed_limit() {
     let expected_field_metadata = {
         FieldMetadata {
             technician: "rc".to_string(),
-            record_num: 166905,
+            recordnum: 166905,
             directions: Directions::new(LaneDirection::East, Some(LaneDirection::West), None),
             counter_id: 40972,
             speed_limit: None,
@@ -101,7 +101,7 @@ fn field_metadata_parse_from_path_errs_if_technician_bad() {
 }
 
 #[test]
-fn field_metadata_parse_from_path_errs_if_record_num_bad() {
+fn field_metadata_parse_from_path_errs_if_recordnum_bad() {
     let path = Path::new("some/path/rc-letters-ew-40972-35.txt");
     assert!(matches!(
         FieldMetadata::from_path(path),

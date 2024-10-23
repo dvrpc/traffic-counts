@@ -5,7 +5,7 @@
         {{ item.datetime.unwrap().date()|safe }}
         {{ item.datetime.unwrap().hour()|safe }}:{{ item.datetime.unwrap().minute()|safe }}
       </td>
-      <td><a href="{{ ADMIN_METADATA_DETAIL_PATH }}?record_num={{ item.record_num }}">{{ item.record_num }}</a></td>
+      <td><a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">{{ item.recordnum }}</a></td>
       <td>{{ item.level }}</td>
       <td>{{ item.msg }}</td>
     </tr>

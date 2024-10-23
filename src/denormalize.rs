@@ -7,7 +7,7 @@
 //!    [processed and transformed](create_non_normal_speedavg_count)
 //!    into the shape of the TC_SPESUM table ([NonNormalAvgSpeedCount]).
 use chrono::NaiveDate;
-use oracle::Connection;
+use oracle::{Connection, RowValue};
 
 use crate::{intermediate::*, *};
 
@@ -22,11 +22,11 @@ pub trait Denormalize {
 
     /// Create denormalized volume counts from [`HourlyCount`]s.
     fn denormalize_vol_count(
-        record_num: u32,
+        recordnum: u32,
         conn: &Connection,
     ) -> Result<Vec<NonNormalVolCount>, CountError> {
         let counts = hourly_counts(
-            record_num,
+            recordnum,
             Self::NORMALIZED_TABLE,
             Self::DIR_FIELD,
             Self::VOL_FIELD,
@@ -42,7 +42,7 @@ pub trait Denormalize {
 
         for count in counts {
             let key = NonNormalCountKey {
-                record_num: count.recordnum,
+                recordnum: count.recordnum,
                 date: count.datetime.date(),
                 direction: count.dir,
                 lane: count.lane,
@@ -89,13 +89,12 @@ pub trait Denormalize {
         let mut non_normal_vol_count = vec![];
         for (key, value) in non_normal_vol_map {
             non_normal_vol_count.push(NonNormalVolCount {
-                record_num: key.record_num,
+                recordnum: key.recordnum,
                 date: key.date,
                 direction: key.direction,
                 lane: key.lane,
                 setflag: None,
                 totalcount: value.totalcount,
-                weather: value.weather,
                 am12: value.am12,
                 am1: value.am1,
                 am2: value.am2,
@@ -154,15 +153,17 @@ pub struct HourlyCount {
 ///
 /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
 /// the following day - can start and stop at any time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, RowValue)]
 pub struct NonNormalVolCount {
-    pub record_num: u32,
+    pub recordnum: u32,
+    #[row_value(rename = "countdate")]
     pub date: NaiveDate,
+    #[row_value(rename = "cntdir")]
     pub direction: LaneDirection,
+    #[row_value(rename = "countlane")]
     pub lane: u8,
     pub setflag: Option<i8>,
     pub totalcount: Option<u32>,
-    pub weather: Option<Weather>,
     pub am12: Option<u32>,
     pub am1: Option<u32>,
     pub am2: Option<u32>,
@@ -193,11 +194,14 @@ pub struct NonNormalVolCount {
 ///
 /// Hourly fields are `Option` because traffic counts aren't done from 12am one day to 12am the
 /// the following day - can start and stop at any time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, RowValue)]
 pub struct NonNormalAvgSpeedCount {
-    pub record_num: u32,
+    pub recordnum: u32,
+    #[row_value(rename = "countdate")]
     pub date: NaiveDate,
+    #[row_value(rename = "ctdir")]
     pub direction: LaneDirection,
+    #[row_value(rename = "countlane")]
     pub lane: u8,
     pub am12: Option<f32>,
     pub am1: Option<f32>,
@@ -253,8 +257,8 @@ pub fn create_non_normal_speedavg_count(
         };
 
         let key = NonNormalCountKey {
-            record_num: metadata.record_num,
-            date: count.date,
+            recordnum: metadata.recordnum,
+            date: count.datetime.date(),
             direction,
             lane: count.lane,
         };
@@ -263,7 +267,7 @@ pub fn create_non_normal_speedavg_count(
         non_normal_raw_speed_map
             .entry(key)
             .and_modify(|c| {
-                match count.time.hour() {
+                match count.datetime.time().hour() {
                     0 => c.am12.push(count.speed),
                     1 => c.am1.push(count.speed),
                     2 => c.am2.push(count.speed),
@@ -292,7 +296,7 @@ pub fn create_non_normal_speedavg_count(
                 };
             })
             .or_insert(NonNormalRawSpeedValue::first(
-                count.time.hour(),
+                count.datetime.time().hour(),
                 count.speed,
             ));
     }
@@ -473,7 +477,7 @@ pub fn create_non_normal_speedavg_count(
     let mut non_normal_speed_avg_count = vec![];
     for (key, value) in non_normal_avg_speed_map {
         non_normal_speed_avg_count.push(NonNormalAvgSpeedCount {
-            record_num: key.record_num,
+            recordnum: key.recordnum,
             date: key.date,
             direction: key.direction,
             lane: key.lane,

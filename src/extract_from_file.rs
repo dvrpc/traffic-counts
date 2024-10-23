@@ -124,14 +124,15 @@ impl Extract for FifteenMinuteVehicle {
             let time_col = &row.as_ref().unwrap()[2];
             let count_time = NaiveTime::parse_from_str(time_col, time_format).unwrap();
 
+            let datetime = NaiveDateTime::new(count_date, count_time);
+
             // There will always be at least one count per row.
             // Extract the first (and perhaps only) direction.
             match row.as_ref().unwrap().get(3) {
                 Some(count) => match count.parse() {
                     Ok(count) => match FifteenMinuteVehicle::new(
-                        metadata.record_num,
-                        count_date,
-                        count_time,
+                        metadata.recordnum,
+                        datetime,
                         count,
                         metadata.directions.direction1,
                         1,
@@ -152,9 +153,8 @@ impl Extract for FifteenMinuteVehicle {
                 match row.as_ref().unwrap().get(4) {
                     Some(count) => match count.parse() {
                         Ok(count) => match FifteenMinuteVehicle::new(
-                            metadata.record_num,
-                            count_date,
-                            count_time,
+                            metadata.recordnum,
+                            datetime,
                             count,
                             direction,
                             2,
@@ -175,9 +175,8 @@ impl Extract for FifteenMinuteVehicle {
                 match row.as_ref().unwrap().get(5) {
                     Some(count) => match count.parse() {
                         Ok(count) => match FifteenMinuteVehicle::new(
-                            metadata.record_num,
-                            count_date,
-                            count_time,
+                            metadata.recordnum,
+                            datetime,
                             count,
                             direction,
                             3,
@@ -219,9 +218,10 @@ impl Extract for IndividualVehicle {
             let time_col = &row.as_ref().unwrap()[2];
             let count_time = NaiveTime::parse_from_str(time_col, time_format).unwrap();
 
+            let datetime = NaiveDateTime::new(count_date, count_time);
+
             let count = match IndividualVehicle::new(
-                count_date,
-                count_time,
+                datetime,
                 row.as_ref().unwrap()[3].parse().unwrap(),
                 row.as_ref().unwrap()[4].parse().unwrap(),
                 row.as_ref().unwrap()[5].parse().unwrap(),
@@ -261,9 +261,8 @@ impl Extract for FifteenMinuteBicycle {
                 // If there's only one direction for this count, we only need the total.
                 None => {
                     match FifteenMinuteBicycle::new(
-                        metadata.record_num,
-                        count_dt.date(),
-                        count_dt.time(),
+                        metadata.recordnum,
+                        count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
                         None,
                         None,
@@ -278,9 +277,8 @@ impl Extract for FifteenMinuteBicycle {
                 // If there are two directions, we need total, indir, and outdir.
                 Some(_) => {
                     match FifteenMinuteBicycle::new(
-                        metadata.record_num,
-                        count_dt.date(),
-                        count_dt.time(),
+                        metadata.recordnum,
+                        count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
                         Some(row.as_ref().unwrap()[2].parse().unwrap()),
                         Some(row.as_ref().unwrap()[3].parse().unwrap()),
@@ -320,9 +318,8 @@ impl Extract for FifteenMinutePedestrian {
                 // If there's only one direction for this count, we only need the total.
                 None => {
                     match FifteenMinutePedestrian::new(
-                        metadata.record_num,
-                        count_dt.date(),
-                        count_dt.time(),
+                        metadata.recordnum,
+                        count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
                         None,
                         None,
@@ -337,9 +334,8 @@ impl Extract for FifteenMinutePedestrian {
                 // If there are two directions, we need total, indir, and outdir.
                 Some(_) => {
                     match FifteenMinutePedestrian::new(
-                        metadata.record_num,
-                        count_dt.date(),
-                        count_dt.time(),
+                        metadata.recordnum,
+                        count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
                         Some(row.as_ref().unwrap()[2].parse().unwrap()),
                         Some(row.as_ref().unwrap()[3].parse().unwrap()),
@@ -447,7 +443,7 @@ mod tests {
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_102() {
         let path = Path::new("test_files/15minutevehicle/kw-102-www-21-35.csv");
         let mut fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
-        fifteen_min_volcount.sort_unstable_by_key(|count| (count.date, count.time, count.lane));
+        fifteen_min_volcount.sort_unstable_by_key(|count| (count.datetime, count.lane));
         assert_eq!(fifteen_min_volcount.len(), 57);
 
         let count0 = fifteen_min_volcount.first().unwrap();

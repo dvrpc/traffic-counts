@@ -70,8 +70,8 @@
           {% for item in metadata %}
             <tr>
               <th>
-                <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?record_num={{ item.record_num }}">
-                  {{ item.record_num }}
+                <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
+                  {{ item.recordnum }}
                 </a>
               </th>
               <td>{{ self::display_some(item.count_type) }}</td>

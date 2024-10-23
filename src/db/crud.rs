@@ -2,13 +2,12 @@
 //!
 //! See the [Crud trait implementors][Crud#implementors] for kinds of counts and associated tables.
 
-use chrono::NaiveDateTime;
 use oracle::{Connection, Statement};
 
 use crate::{
     denormalize::{NonNormalAvgSpeedCount, NonNormalVolCount},
-    FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, TimeBinnedSpeedRangeCount,
-    TimeBinnedVehicleClassCount,
+    CountError, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
+    TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
 };
 
 /// A trait for handling basic CRUD db operations on count data tables.
@@ -17,6 +16,11 @@ pub trait Crud {
     const COUNT_TABLE: &'static str; // associated constant
     /// Field in COUNT_TABLE with recordnum.
     const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
+
+    /// Select all records from the table.
+    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
+    where
+        Self: std::marker::Sized;
 
     /// Delete all records in the table with a particular recordnum.
     fn delete(conn: &Connection, recordnum: u32) -> Result<(), oracle::Error> {
@@ -39,6 +43,24 @@ pub trait Crud {
 impl Crud for TimeBinnedVehicleClassCount {
     const COUNT_TABLE: &'static str = "tc_clacount";
 
+    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
+    where
+        Self: std::marker::Sized,
+    {
+        let sql = &format!(
+            "select * FROM {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
+        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
+
+        let mut data = vec![];
+        for result in results {
+            let result = result?;
+            data.push(result);
+        }
+        Ok(data)
+    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {} (recordnum, countdate, counttime, countlane, total, ctdir, \
@@ -54,7 +76,7 @@ impl Crud for TimeBinnedVehicleClassCount {
     }
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
-            &self.record_num,
+            &self.recordnum,
             &self.datetime.date(),
             &self.datetime,
             &self.lane,
@@ -80,6 +102,24 @@ impl Crud for TimeBinnedVehicleClassCount {
 impl Crud for TimeBinnedSpeedRangeCount {
     const COUNT_TABLE: &'static str = "tc_specount";
 
+    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
+    where
+        Self: std::marker::Sized,
+    {
+        let sql = &format!(
+            "select * FROM {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
+        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
+
+        let mut data = vec![];
+        for result in results {
+            let result = result?;
+            data.push(result);
+        }
+        Ok(data)
+    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {} (
@@ -95,7 +135,7 @@ impl Crud for TimeBinnedSpeedRangeCount {
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
-            &self.record_num,
+            &self.recordnum,
             &self.datetime.date(),
             &self.datetime,
             &self.lane,
@@ -122,6 +162,24 @@ impl Crud for TimeBinnedSpeedRangeCount {
 impl Crud for NonNormalAvgSpeedCount {
     const COUNT_TABLE: &'static str = "tc_spesum";
 
+    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
+    where
+        Self: std::marker::Sized,
+    {
+        let sql = &format!(
+            "select * FROM {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
+        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
+
+        let mut data = vec![];
+        for result in results {
+            let result = result?;
+            data.push(result);
+        }
+        Ok(data)
+    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -138,7 +196,7 @@ impl Crud for NonNormalAvgSpeedCount {
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
-            &self.record_num,
+            &self.recordnum,
             &self.date,
             &format!("{}", self.direction),
             &self.lane,
@@ -173,15 +231,33 @@ impl Crud for NonNormalAvgSpeedCount {
 impl Crud for NonNormalVolCount {
     const COUNT_TABLE: &'static str = "tc_volcount";
 
+    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
+    where
+        Self: std::marker::Sized,
+    {
+        let sql = &format!(
+            "select * FROM {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
+        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
+
+        let mut data = vec![];
+        for result in results {
+            let result = result?;
+            data.push(result);
+        }
+        Ok(data)
+    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
-            (recordnum, countdate, setflag, totalcount, weather, cntdir, countlane, \
+            (recordnum, countdate, setflag, totalcount, cntdir, countlane, \
             am12, am1, am2, am3, am4, am5, am6, am7, am8, am9, am10, am11, pm12, \
             pm1, pm2, pm3, pm4, pm5, pm6, pm7, pm8, pm9, pm10, pm11)
             VALUES \
             (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
-            :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31)",
+            :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30)",
             &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
@@ -189,11 +265,10 @@ impl Crud for NonNormalVolCount {
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
-            &self.record_num,
+            &self.recordnum,
             &self.date,
             &"", // setflag
             &self.totalcount,
-            &"", // weather
             &format!("{}", self.direction),
             &self.lane,
             &self.am12,
@@ -227,6 +302,24 @@ impl Crud for NonNormalVolCount {
 impl Crud for FifteenMinuteVehicle {
     const COUNT_TABLE: &'static str = "tc_15minvolcount";
 
+    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
+    where
+        Self: std::marker::Sized,
+    {
+        let sql = &format!(
+            "select * FROM {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
+        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
+
+        let mut data = vec![];
+        for result in results {
+            let result = result?;
+            data.push(result);
+        }
+        Ok(data)
+    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -238,11 +331,10 @@ impl Crud for FifteenMinuteVehicle {
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let dt = NaiveDateTime::new(self.date, self.time);
         stmt.execute(&[
-            &self.record_num,
-            &self.date,
-            &dt,
+            &self.recordnum,
+            &self.datetime.date(),
+            &self.datetime,
             &self.count,
             &format!("{}", self.direction),
             &self.lane,
@@ -254,6 +346,24 @@ impl Crud for FifteenMinuteBicycle {
     const COUNT_TABLE: &'static str = "tc_bikecount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
+    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
+    where
+        Self: std::marker::Sized,
+    {
+        let sql = &format!(
+            "select * FROM {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
+        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
+
+        let mut data = vec![];
+        for result in results {
+            let result = result?;
+            data.push(result);
+        }
+        Ok(data)
+    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -265,11 +375,10 @@ impl Crud for FifteenMinuteBicycle {
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let dt = NaiveDateTime::new(self.date, self.time);
         stmt.execute(&[
-            &self.record_num,
-            &self.date,
-            &dt,
+            &self.recordnum,
+            &self.datetime.date(),
+            &self.datetime,
             &self.total,
             &self.indir,
             &self.outdir,
@@ -281,6 +390,24 @@ impl Crud for FifteenMinutePedestrian {
     const COUNT_TABLE: &'static str = "tc_pedcount";
     const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
 
+    fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
+    where
+        Self: std::marker::Sized,
+    {
+        let sql = &format!(
+            "select * FROM {} where {} = :1",
+            &Self::COUNT_TABLE,
+            &Self::COUNT_RECORDNUM_FIELD
+        );
+        let results = conn.query_as::<Self>(sql, &[&recordnum])?;
+
+        let mut data = vec![];
+        for result in results {
+            let result = result?;
+            data.push(result);
+        }
+        Ok(data)
+    }
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
@@ -292,11 +419,10 @@ impl Crud for FifteenMinutePedestrian {
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        let dt = NaiveDateTime::new(self.date, self.time);
         stmt.execute(&[
-            &self.record_num,
-            &self.date,
-            &dt,
+            &self.recordnum,
+            &self.datetime.date(),
+            &self.datetime,
             &self.total,
             &self.indir,
             &self.outdir,

@@ -17,7 +17,8 @@ use serde::{de, Deserialize, Deserializer};
 use tower_http::services::ServeDir;
 
 use traffic_counts::{
-    db::{self, ImportLogEntry},
+    db::{self, crud::Crud, ImportLogEntry},
+    denormalize::NonNormalVolCount,
     Metadata,
 };
 
@@ -25,6 +26,7 @@ const ADMIN_PATH: &str = "/admin";
 const ADMIN_METADATA_LIST_PATH: &str = "/admin/metadata-list";
 const ADMIN_METADATA_DETAIL_PATH: &str = "/admin/metadata-detail";
 const ADMIN_METADATA_INSERT_PATH: &str = "/admin/insert";
+const ADMIN_COUNT_DATA: &str = "/admin/count";
 const ADMIN_IMPORT_LOG_PATH: &str = "/admin/import-log";
 
 /// A trait to set the heading for the main section of the page by template.
@@ -67,6 +69,7 @@ async fn main() {
             ADMIN_IMPORT_LOG_PATH,
             get(get_view_import_log).post(post_view_import_log),
         )
+        .route_with_tsr(ADMIN_COUNT_DATA, get(get_count_data))
         .with_state(state)
         .nest_service("/static", ServeDir::new("static"));
 
@@ -168,7 +171,7 @@ impl Heading for AdminMetadataDetailTemplate {
 
 async fn get_metadata_detail(
     State(state): State<AppState>,
-    record_num: Query<HashMap<String, u32>>,
+    recordnum: Query<HashMap<String, u32>>,
 ) -> AdminMetadataDetailTemplate {
     let conn = state.conn_pool.get().unwrap();
     let mut detail = AdminMetadataDetailTemplate {
@@ -176,7 +179,7 @@ async fn get_metadata_detail(
         condition: ResponseCondition::GetInput,
         metadata: None,
     };
-    let record_num = match record_num.0.get("record_num") {
+    let recordnum = match recordnum.0.get("recordnum") {
         Some(v) => v,
         None => {
             detail.message = Some("Please provide a record number.".to_string());
@@ -184,7 +187,7 @@ async fn get_metadata_detail(
         }
     };
 
-    detail.metadata = match db::get_metadata(&conn, *record_num) {
+    detail.metadata = match db::get_metadata(&conn, *recordnum) {
         Ok(v) => Some(v),
         Err(e) => {
             // Handle the one error that is probable (no matching recordnum in db).
@@ -194,7 +197,7 @@ async fn get_metadata_detail(
                     OracleErrorKind::NoDataFound
                 )
             }) {
-                detail.message = Some(format!("Record {record_num} not found."))
+                detail.message = Some(format!("Record {recordnum} not found."))
             } else {
                 detail.message = Some(format!("{e}"))
             }
@@ -202,6 +205,47 @@ async fn get_metadata_detail(
         }
     };
     detail
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/count_data.html")]
+struct AdminCountDataTemplate {
+    message: Option<String>,
+    condition: ResponseCondition,
+    non_normal_volcount: Option<Vec<NonNormalVolCount>>,
+}
+
+impl Heading for AdminCountDataTemplate {
+    fn heading() -> String {
+        "Count data".to_string()
+    }
+}
+
+async fn get_count_data(
+    State(state): State<AppState>,
+    recordnum: Query<HashMap<String, u32>>,
+) -> AdminCountDataTemplate {
+    let conn = state.conn_pool.get().unwrap();
+    let mut count_data = AdminCountDataTemplate {
+        message: None,
+        condition: ResponseCondition::GetInput,
+        non_normal_volcount: None,
+    };
+    let recordnum = match recordnum.0.get("recordnum") {
+        Some(v) => v,
+        None => {
+            count_data.message = Some("Please provide a record number.".to_string());
+            return count_data;
+        }
+    };
+    count_data.non_normal_volcount = match NonNormalVolCount::select(&conn, *recordnum) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            count_data.message = Some(format!("{e}"));
+            return count_data;
+        }
+    };
+    count_data
 }
 
 #[derive(Template, Debug, Default)]
