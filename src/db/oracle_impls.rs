@@ -129,7 +129,7 @@ impl RowValue for ImportLogEntry {
 
 impl FromSql for LaneDirection {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
-        match LaneDirection::from_string(val.to_string()) {
+        match LaneDirection::from_str(&val.to_string()) {
             Ok(v) => Ok(v),
             Err(e) => Err(OracleError::ParseError(Box::new(e))),
         }
@@ -140,7 +140,7 @@ impl FromSql for OptionLaneDirection {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
         match val.is_null() {
             Ok(true) => Ok(OptionLaneDirection(None)),
-            Ok(false) => match LaneDirection::from_string(val.to_string()) {
+            Ok(false) => match LaneDirection::from_str(&val.to_string()) {
                 Ok(v) => Ok(OptionLaneDirection(Some(v))),
                 Err(e) => Err(OracleError::ParseError(Box::new(e))),
             },
@@ -151,7 +151,7 @@ impl FromSql for OptionLaneDirection {
 
 impl FromSql for RoadDirection {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
-        match RoadDirection::from_string(val.to_string()) {
+        match RoadDirection::from_str(&val.to_string()) {
             Ok(v) => Ok(v),
             Err(e) => Err(OracleError::ParseError(Box::new(e))),
         }
@@ -162,7 +162,7 @@ impl FromSql for OptionRoadDirection {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
         match val.is_null() {
             Ok(true) => Ok(OptionRoadDirection(None)),
-            Ok(false) => match RoadDirection::from_string(val.to_string()) {
+            Ok(false) => match RoadDirection::from_str(&val.to_string()) {
                 Ok(v) => Ok(OptionRoadDirection(Some(v))),
                 Err(e) => Err(OracleError::ParseError(Box::new(e))),
             },

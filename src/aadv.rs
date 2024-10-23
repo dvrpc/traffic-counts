@@ -1,9 +1,15 @@
 //! Calculate average annual daily volumes and insert them into the database.
 
-use chrono::{Datelike, Days, Local, NaiveDate};
+use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
+
+use chrono::{Datelike, Days, Local, NaiveDate, NaiveDateTime, Timelike};
 use oracle::Connection;
 
-use crate::*;
+use crate::{
+    CountError, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, LaneDirection,
+    TimeBinnedVehicleClassCount,
+};
 
 /// A trait for calculating and inserting annual average daily volume.
 pub trait Aadv {
@@ -130,7 +136,7 @@ pub trait Aadv {
 
             // Insert value for each date/direction.
             if let Some(v) = direction {
-                totals.insert((date, Some(LaneDirection::from_string(v)?)), total);
+                totals.insert((date, Some(LaneDirection::from_str(&v)?)), total);
             }
 
             // Insert or update value date/overall.
@@ -572,7 +578,7 @@ impl Aadv for FifteenMinutePedestrian {
 
 /// Get totals by date for bicycle and pedestrian counts.
 #[allow(clippy::too_many_arguments)]
-fn get_total_by_date_bike_ped<'a, 'conn>(
+fn get_total_by_date_bike_ped<'a>(
     recordnum: u32,
     dates: Vec<NaiveDate>,
     total_field: &'a str,
@@ -580,8 +586,8 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     in_field: &'a str,
     out_field: &'a str,
     recordnum_field: &'a str,
-    conn: &'conn Connection,
-) -> Result<HashMap<(NaiveDate, Option<LaneDirection>), usize>, CountError<'conn>> {
+    conn: &Connection,
+) -> Result<HashMap<(NaiveDate, Option<LaneDirection>), usize>, CountError> {
     // Get direction of incount and outcount.
     let (incount_dir, outcount_dir) = match conn.query_row_as::<(Option<String>, Option<String>)>(
         "select indir, outdir from tc_header where recordnum = :1",
@@ -601,8 +607,8 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
         )));
     }
 
-    let incount_dir = LaneDirection::from_string(incount_dir.unwrap())?;
-    let outcount_dir = LaneDirection::from_string(outcount_dir.unwrap())?;
+    let incount_dir = LaneDirection::from_str(&incount_dir.unwrap())?;
+    let outcount_dir = LaneDirection::from_str(&outcount_dir.unwrap())?;
 
     let results = conn.query_as::<(NaiveDate, usize, usize, usize)>(
         &format!(
@@ -651,7 +657,7 @@ pub fn excluded_days(conn: &Connection) -> Result<Vec<NaiveDate>, oracle::Error>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use db::{create_pool, get_creds};
+    use crate::db::{create_pool, get_creds};
 
     #[ignore]
     #[test]

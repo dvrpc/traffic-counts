@@ -50,13 +50,13 @@ impl InputCount {
         // Get the directory immediately above the file.
         let parent = path
             .parent()
-            .ok_or(CountError::BadPath(path))?
+            .ok_or(CountError::BadPath(path.to_owned()))?
             .components()
             .last()
-            .ok_or(CountError::BadPath(path))?
+            .ok_or(CountError::BadPath(path.to_owned()))?
             .as_os_str()
             .to_str()
-            .ok_or(CountError::BadPath(path))?;
+            .ok_or(CountError::BadPath(path.to_owned()))?;
 
         match parent {
             "15minutebicycle" => Ok(InputCount::FifteenMinuteBicycle),
@@ -87,10 +87,10 @@ impl InputCount {
             if count_type_from_location != InputCount::FifteenMinuteBicycle
                 && count_type_from_location != InputCount::FifteenMinutePedestrian
             {
-                return Err(CountError::LocationHeaderMisMatch(path));
+                return Err(CountError::LocationHeaderMisMatch(path.to_owned()));
             }
         } else if count_type_from_location != count_type_from_header {
-            return Err(CountError::LocationHeaderMisMatch(path));
+            return Err(CountError::LocationHeaderMisMatch(path.to_owned()));
         }
         Ok(count_type_from_location)
     }
@@ -145,7 +145,7 @@ impl Extract for FifteenMinuteVehicle {
                     },
                     Err(e) => return Err(CountError::ParseError(e)),
                 },
-                None => return Err(CountError::DirectionLenMisMatch(path)),
+                None => return Err(CountError::DirectionLenMisMatch(path.to_owned())),
             }
 
             // There may also be a second count within the row.
@@ -167,7 +167,7 @@ impl Extract for FifteenMinuteVehicle {
                         },
                         Err(e) => return Err(CountError::ParseError(e)),
                     },
-                    None => return Err(CountError::DirectionLenMisMatch(path)),
+                    None => return Err(CountError::DirectionLenMisMatch(path.to_owned())),
                 }
             }
             // There may also be a third count within the row.
@@ -189,7 +189,7 @@ impl Extract for FifteenMinuteVehicle {
                         },
                         Err(e) => return Err(CountError::ParseError(e)),
                     },
-                    None => return Err(CountError::DirectionLenMisMatch(path)),
+                    None => return Err(CountError::DirectionLenMisMatch(path.to_owned())),
                 }
             }
         }
@@ -387,7 +387,7 @@ fn count_type_and_num_nondata_rows(path: &Path) -> Result<(InputCount, usize), C
             return Ok((InputCount::IndividualVehicle, num_rows));
         }
     }
-    Err(CountError::BadHeader(path))
+    Err(CountError::BadHeader(path.to_owned()))
 }
 
 /// Get the number of nondata rows in a file.

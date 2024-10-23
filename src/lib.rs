@@ -18,11 +18,12 @@
 //!
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::io;
 use std::num::ParseIntError;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use log::error;
@@ -45,26 +46,28 @@ pub trait GetDate {
 
 /// Various errors that can occur.
 #[derive(Debug, Error)]
-pub enum CountError<'a> {
+pub enum CountError {
+    #[error("unknown count type '{0}'")]
+    UnknownCountType(String),
     #[error("problem with file or directory path")]
-    BadPath(&'a Path),
+    BadPath(PathBuf),
     #[error("unable to open file '{0}'")]
     CannotOpenFile(#[from] io::Error),
     #[error("the filename at {path:?} is not to specification: {problem:?}")]
     InvalidFileName {
         problem: FileNameProblem,
-        path: &'a Path,
+        path: PathBuf,
     },
     #[error("no matching count type for directory '{0}'")]
     BadLocation(String),
     #[error("no matching count type for header in '{0}'")]
-    BadHeader(&'a Path),
+    BadHeader(PathBuf),
     #[error("no such direction '{0}'")]
     BadDirection(String),
     #[error("mismatch in count types between file location ('{0}') and header of that file")]
-    LocationHeaderMisMatch(&'a Path),
+    LocationHeaderMisMatch(PathBuf),
     #[error("mismatch in number of directions between filename ('{0}') and data in that file")]
-    DirectionLenMisMatch(&'a Path),
+    DirectionLenMisMatch(PathBuf),
     #[error("cannot parse value as number")]
     ParseError(#[from] ParseIntError),
     #[error("no such vehicle class '{0}'")]
@@ -99,6 +102,54 @@ pub enum FileNameProblem {
     InvalidSpeedLimit,
 }
 
+/// All of the kinds of counts.
+pub enum CountKind {
+    Crosswalk,
+    Bicycle1,
+    Bicycle2,
+    Bicycle3,
+    Bicycle4,
+    Bicycle6,
+    Pedestrian2,
+    Volume,
+    Class,
+    ManualClass,
+    EightDay,
+    Loop,
+    Speed,
+    FifteenMinVolume,
+    Bicycle5,
+    Pedestrian,
+    TurningMovement,
+}
+
+impl FromStr for CountKind {
+    type Err = CountError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Crosswalk" => Ok(CountKind::Crosswalk),
+            "Bicycle 1" => Ok(CountKind::Bicycle1),
+            "Bicycle 2" => Ok(CountKind::Bicycle2),
+            "Bicycle 3" => Ok(CountKind::Bicycle3),
+            "Bicycle 4" => Ok(CountKind::Bicycle4),
+            "Bicycle 5" => Ok(CountKind::Bicycle5),
+            "Bicycle 6" => Ok(CountKind::Bicycle6),
+            "Pedestrian 2" => Ok(CountKind::Pedestrian2),
+            "Volume" => Ok(CountKind::Volume),
+            "Class" => Ok(CountKind::Class),
+            "Manual Class" => Ok(CountKind::ManualClass),
+            "8 Day" => Ok(CountKind::EightDay),
+            "Loop" => Ok(CountKind::Loop),
+            "Speed" => Ok(CountKind::Speed),
+            "15 min Volume" => Ok(CountKind::FifteenMinVolume),
+            "Pedestrian" => Ok(CountKind::Pedestrian),
+            "Turning Movement" => Ok(CountKind::TurningMovement),
+            _ => Err(CountError::UnknownCountType(s.to_string())),
+        }
+    }
+}
+
 /// An individual vehicle that has been counted, including
 /// [vehicle classification](VehicleClass) and speed,
 /// with no binning applied to it.
@@ -127,7 +178,7 @@ impl IndividualVehicle {
         lane: u8,
         class: u8,
         speed: f32,
-    ) -> Result<Self, CountError<'static>> {
+    ) -> Result<Self, CountError> {
         let class = VehicleClass::from_num(class)?;
         Ok(Self {
             datetime,
@@ -161,7 +212,7 @@ impl FifteenMinuteBicycle {
         total: u16,
         indir: Option<u16>,
         outdir: Option<u16>,
-    ) -> Result<Self, CountError<'static>> {
+    ) -> Result<Self, CountError> {
         Ok(Self {
             recordnum,
             datetime,
@@ -195,7 +246,7 @@ impl FifteenMinutePedestrian {
         total: u16,
         indir: Option<u16>,
         outdir: Option<u16>,
-    ) -> Result<Self, CountError<'static>> {
+    ) -> Result<Self, CountError> {
         Ok(Self {
             recordnum,
             datetime,
@@ -229,7 +280,7 @@ impl FifteenMinuteVehicle {
         count: u16,
         direction: LaneDirection,
         lane: u8,
-    ) -> Result<Self, CountError<'static>> {
+    ) -> Result<Self, CountError> {
         Ok(Self {
             recordnum,
             datetime,
@@ -307,22 +358,22 @@ impl FieldMetadata {
     pub fn from_path(path: &Path) -> Result<Self, CountError> {
         let parts: Vec<&str> = path
             .file_stem()
-            .ok_or(CountError::BadPath(path))?
+            .ok_or(CountError::BadPath(path.to_owned()))?
             .to_str()
-            .ok_or(CountError::BadPath(path))?
+            .ok_or(CountError::BadPath(path.to_owned()))?
             .split('-')
             .collect();
 
         if parts.len() < 5 {
             return Err(CountError::InvalidFileName {
                 problem: FileNameProblem::TooFewParts,
-                path,
+                path: path.to_owned(),
             });
         }
         if parts.len() > 5 {
             return Err(CountError::InvalidFileName {
                 problem: FileNameProblem::TooManyParts,
-                path,
+                path: path.to_owned(),
             });
         }
 
@@ -330,7 +381,7 @@ impl FieldMetadata {
         if parts[0].parse::<u32>().is_ok() {
             return Err(CountError::InvalidFileName {
                 problem: FileNameProblem::InvalidTech,
-                path,
+                path: path.to_owned(),
             });
         }
 
@@ -341,7 +392,7 @@ impl FieldMetadata {
             Err(_) => {
                 return Err(CountError::InvalidFileName {
                     problem: FileNameProblem::InvalidRecordNum,
-                    path,
+                    path: path.to_owned(),
                 })
             }
         };
@@ -382,7 +433,7 @@ impl FieldMetadata {
             _ => {
                 return Err(CountError::InvalidFileName {
                     problem: FileNameProblem::InvalidDirections,
-                    path,
+                    path: path.to_owned(),
                 })
             }
         };
@@ -392,7 +443,7 @@ impl FieldMetadata {
             Err(_) => {
                 return Err(CountError::InvalidFileName {
                     problem: FileNameProblem::InvalidCounterID,
-                    path,
+                    path: path.to_owned(),
                 })
             }
         };
@@ -405,7 +456,7 @@ impl FieldMetadata {
                 Err(_) => {
                     return Err(CountError::InvalidFileName {
                         problem: FileNameProblem::InvalidSpeedLimit,
-                        path,
+                        path: path.to_owned(),
                     })
                 }
             }
@@ -433,15 +484,17 @@ pub enum RoadDirection {
     Both,
 }
 
-impl RoadDirection {
-    fn from_string(dir: String) -> Result<RoadDirection, CountError<'static>> {
-        match dir.to_lowercase().as_str() {
+impl FromStr for RoadDirection {
+    type Err = CountError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
             "north" | "n" => Ok(RoadDirection::North),
             "east" | "e" => Ok(RoadDirection::East),
             "south" | "s" => Ok(RoadDirection::South),
             "west" | "w" => Ok(RoadDirection::West),
             "both" | "b" => Ok(RoadDirection::Both),
-            _ => Err(CountError::BadDirection(dir.to_string())),
+            _ => Err(CountError::BadDirection(s.to_string())),
         }
     }
 }
@@ -481,14 +534,16 @@ pub enum LaneDirection {
     West,
 }
 
-impl LaneDirection {
-    fn from_string(dir: String) -> Result<LaneDirection, CountError<'static>> {
-        match dir.to_lowercase().as_str() {
+impl FromStr for LaneDirection {
+    type Err = CountError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
             "north" | "n" => Ok(LaneDirection::North),
             "east" | "e" => Ok(LaneDirection::East),
             "south" | "s" => Ok(LaneDirection::South),
             "west" | "w" => Ok(LaneDirection::West),
-            _ => Err(CountError::BadDirection(dir.to_string())),
+            _ => Err(CountError::BadDirection(s.to_string())),
         }
     }
 }
@@ -571,7 +626,7 @@ pub enum VehicleClass {
 
 impl VehicleClass {
     /// Create a VehicleClass from a number.
-    pub fn from_num(num: u8) -> Result<Self, CountError<'static>> {
+    pub fn from_num(num: u8) -> Result<Self, CountError> {
         match num {
             1 => Ok(VehicleClass::Motorcycles),
             2 => Ok(VehicleClass::PassengerCars),

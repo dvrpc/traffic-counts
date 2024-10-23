@@ -511,13 +511,13 @@ pub fn create_non_normal_speedavg_count(
 }
 
 /// Get hourly counts from a database table.
-pub fn hourly_counts<'a, 'conn>(
+pub fn hourly_counts<'a>(
     recordnum: u32,
     table: &'a str,
     dir_field: &'a str,
     vol_field: &'a str,
-    conn: &'conn Connection,
-) -> Result<Vec<HourlyCount>, CountError<'conn>> {
+    conn: &Connection,
+) -> Result<Vec<HourlyCount>, CountError> {
     let results = match conn.query_as::<(NaiveDateTime, NaiveDate, u32, String, u32)>(
         &format!(
             "select TRUNC(counttime, 'HH24'), countdate, sum({}), {}, countlane 
@@ -547,7 +547,7 @@ pub fn hourly_counts<'a, 'conn>(
             recordnum,
             datetime,
             count,
-            dir: LaneDirection::from_string(dir).unwrap(),
+            dir: LaneDirection::from_str(&dir).unwrap(),
             lane: lane as u8,
         });
     }

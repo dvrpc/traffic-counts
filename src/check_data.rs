@@ -1,5 +1,6 @@
 //! Checks on data integrity/validity.
 use std::collections::{BTreeMap, HashMap};
+use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime};
 use log::{warn, Level};
@@ -56,7 +57,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
             counts.push(ClassCountCheck {
                 datetime,
                 lane,
-                dir: LaneDirection::from_string(direction).unwrap(),
+                dir: LaneDirection::from_str(&direction).unwrap(),
                 c2,
                 c15,
                 total,
