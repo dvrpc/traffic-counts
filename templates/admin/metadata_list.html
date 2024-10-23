@@ -60,7 +60,7 @@
             <th>route</th>
             <th>seg</th>
             <th>sidewalk</th>
-            <th>speed_limit</th>
+            <th>speed limit</th>
             <th>source</th>
             <th>sr</th>
             <th>sri</th>
@@ -74,7 +74,7 @@
                   {{ item.recordnum }}
                 </a>
               </th>
-              <td>{{ self::display_some(item.count_type) }}</td>
+              <td>{{ item.count_kind }}</td>
               <td>{{ self::display_some(item.datelastcounted) }}</td>
               <td>{{ self::display_some(item.technician) }}</td>
               <td>{{ self::display_some(item.counterid) }}</td>
@@ -112,7 +112,7 @@
               <td>{{ self::display_some(item.route) }}</td>
               <td>{{ self::display_some(item.seg) }}</td>
               <td>{{ self::display_some(item.sidewalk) }}</td>
-              <td>{{ self::display_some(item.speed_limit) }}</td>
+              <td>{{ self::display_some(item.speedlimit) }}</td>
               <td>{{ self::display_some(item.source) }}</td>
               <td>{{ self::display_some(item.sr) }}</td>
               <td>{{ self::display_some(item.sri) }}</td>

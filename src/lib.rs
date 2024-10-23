@@ -103,6 +103,7 @@ pub enum FileNameProblem {
 }
 
 /// All of the kinds of counts.
+#[derive(Debug, PartialEq, Clone)]
 pub enum CountKind {
     Crosswalk,
     Bicycle1,
@@ -146,6 +147,43 @@ impl FromStr for CountKind {
             "Pedestrian" => Ok(CountKind::Pedestrian),
             "Turning Movement" => Ok(CountKind::TurningMovement),
             _ => Err(CountError::UnknownCountType(s.to_string())),
+        }
+    }
+}
+
+impl Display for CountKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CountKind::Crosswalk => write!(f, "Crosswalk"),
+            CountKind::Bicycle1 => write!(f, "Bicycle 1"),
+            CountKind::Bicycle2 => write!(f, "Bicycle 2"),
+            CountKind::Bicycle3 => write!(f, "Bicycle 3"),
+            CountKind::Bicycle4 => write!(f, "Bicycle 4"),
+            CountKind::Bicycle5 => write!(f, "Bicycle 5"),
+            CountKind::Bicycle6 => write!(f, "Bicycle 6"),
+            CountKind::Pedestrian2 => write!(f, "Pedestrian 2"),
+            CountKind::Volume => write!(f, "Volume"),
+            CountKind::Class => write!(f, "Class"),
+            CountKind::ManualClass => write!(f, "Manual Class"),
+            CountKind::EightDay => write!(f, "8 Day"),
+            CountKind::Loop => write!(f, "Loop"),
+            CountKind::Speed => write!(f, "Speed"),
+            CountKind::FifteenMinVolume => write!(f, "15 min Volume"),
+            CountKind::Pedestrian => write!(f, "Pedestrian"),
+            CountKind::TurningMovement => write!(f, "Turning Movement"),
+        }
+    }
+}
+
+// Make newtype on CountKind so we can impl oracle's FromSql on it as an Option.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionCountKind(Option<CountKind>);
+
+impl Display for OptionCountKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Some(v) => write!(f, "{v}"),
+            None => write!(f, ""),
         }
     }
 }
@@ -292,7 +330,7 @@ impl FifteenMinuteVehicle {
 }
 
 /// The full metadata of a count, which corresponds to the "tc_header" table in the database.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, RowValue)]
 pub struct Metadata {
     pub amending: Option<String>,
     pub ampeak: Option<f32>,
@@ -301,7 +339,8 @@ pub struct Metadata {
     pub bikepedgroup: Option<String>,
     pub cntdir: OptionRoadDirection,
     pub comments: Option<String>,
-    pub count_type: Option<String>, // just "type" in db
+    #[row_value(rename = "type")]
+    pub count_kind: OptionCountKind,
     pub counterid: Option<u32>,
     pub createheaderdate: Option<NaiveDate>,
     pub datelastcounted: Option<NaiveDate>,
@@ -310,7 +349,7 @@ pub struct Metadata {
     pub fromlmt: Option<String>,
     pub importdatadate: Option<NaiveDate>,
     pub indir: OptionLaneDirection,
-    pub isurban: Option<bool>,
+    pub isurban: Option<String>,
     pub latitude: Option<f32>,
     pub longitude: Option<f32>,
     pub mcd: Option<String>,
@@ -321,19 +360,20 @@ pub struct Metadata {
     pub pmpeak: Option<f32>,
     pub prj: Option<String>,
     pub program: Option<String>,
-    pub recordnum: u32, // no underscore in db
+    pub recordnum: u32,
     pub rdprefix: Option<String>,
     pub rdsuffix: Option<String>,
     pub road: Option<String>,
     pub route: Option<u32>,
     pub seg: Option<String>,
     pub sidewalk: Option<String>,
-    pub speed_limit: Option<u8>, // no underscore in database
+    pub speedlimit: Option<u8>,
     pub source: Option<String>,
     pub sr: Option<String>,
     pub sri: Option<String>,
     pub stationid: Option<String>,
-    pub technician: Option<String>, // "takenby" in db
+    #[row_value(rename = "takenby")]
+    pub technician: Option<String>,
     pub tolmt: Option<String>,
     pub trafdir: OptionRoadDirection,
     pub x: Option<f32>,
