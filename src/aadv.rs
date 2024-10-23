@@ -117,8 +117,8 @@ pub trait Aadv {
         )?;
 
         // Create hashmap to collect the total.
-        // When the Direction is None in the key, that is the overall total (no directionality)
-        // for the date, otherwise its for a particular Direction.
+        // When the LaneDirection is None in the key, that is the overall total (no directionality)
+        // for the date, otherwise its for a particular LaneDirection.
         let mut totals: HashMap<(NaiveDate, Option<LaneDirection>), usize> = HashMap::new();
         for result in results {
             let (date, total, direction) = result?;
@@ -264,7 +264,7 @@ impl Aadv for TimeBinnedVehicleClassCount {
         }
 
         // Determine the divisor by which we'll average the counts.
-        // First, determine number of unique Option<Direction>s there are - will be 1, 2, or 3.
+        // First, determine number of unique Option<LaneDirection>s there are - will be 1, 2, or 3.
         // (Old counts have no directionality and so just 1, new counts have at least two (one
         // direction and no direction), but could have three (bidirectional and no direction).)
         let directions_per_day = daily_aadv
@@ -468,7 +468,7 @@ impl Aadv for FifteenMinuteBicycle {
             .collect::<HashSet<_>>();
         let divisor = (daily_aadv.len() / directions_per_day.len()) as f32;
 
-        // Average totals from each day over each Option<Direction>.
+        // Average totals from each day over each Option<LaneDirection>.
         let mut aadv = HashMap::new();
         for direction in directions_per_day {
             let aadv_per_dir: f32 = daily_aadv
@@ -555,7 +555,7 @@ impl Aadv for FifteenMinutePedestrian {
             .collect::<HashSet<_>>();
         let divisor = (daily_aadv.len() / directions_per_day.len()) as f32;
 
-        // Average totals from each day over each Option<Direction>.
+        // Average totals from each day over each Option<LaneDirection>.
         let mut aadv = HashMap::new();
         for direction in directions_per_day {
             let aadv_per_dir: f32 = daily_aadv
@@ -617,8 +617,8 @@ fn get_total_by_date_bike_ped<'a, 'conn>(
     )?;
 
     // Create hashmap to collect the total.
-    // When the Direction is None in the key, that is the overall total (no directionality)
-    // for the date, otherwise its for a particular Direction.
+    // When the LaneDirection is None in the key, that is the overall total (no directionality)
+    // for the date, otherwise its for a particular LaneDirection.
     let mut totals: HashMap<(NaiveDate, Option<LaneDirection>), usize> = HashMap::new();
     for result in results {
         let (date, total, incount, outcount) = result?;

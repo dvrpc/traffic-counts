@@ -518,7 +518,7 @@ impl Display for OptionLaneDirection {
     }
 }
 
-/// The [`Direction`]s that a count could contain.
+/// The [`LaneDirection`]s that a count could contain.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Directions {
     pub direction1: LaneDirection,
