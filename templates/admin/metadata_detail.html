@@ -12,14 +12,14 @@
           <tbody>
             <tr>
             <tr><td>recordnum</td><td>{{ metadata.recordnum }}</tr>
-              <tr><td>count_type</td><td>{{ metadata.count_kind }}</td></tr>
+              <tr><td>count_type</td><td>{{ self::display_some(metadata.count_kind) }}</td></tr>
               <tr><td>datelastcounted</td><td>{{ self::display_some(metadata.datelastcounted) }}</td></tr>
               <tr><td>technician</td><td>{{ self::display_some(metadata.technician) }}</td></tr>
               <tr><td>counterid</td><td>{{ self::display_some(metadata.counterid) }}</td></tr>
-              <tr><td>cntdir</td><td>{{ metadata.cntdir }}</td></tr>
-              <tr><td>trafdir</td><td>{{ metadata.trafdir }}</td></tr>
-              <tr><td>indir</td><td>{{ metadata.indir }}</td></tr>
-              <tr><td>outdir</td><td>{{ metadata.outdir }}</td></tr>
+              <tr><td>cntdir</td><td>{{ self::display_some(metadata.cntdir) }}</td></tr>
+              <tr><td>trafdir</td><td>{{ self::display_some(metadata.trafdir) }}</td></tr>
+              <tr><td>indir</td><td>{{ self::display_some(metadata.indir) }}</td></tr>
+              <tr><td>outdir</td><td>{{ self::display_some(metadata.outdir) }}</td></tr>
               <tr><td>fromlmt</td><td>{{ self::display_some(metadata.fromlmt) }}</td></tr>
               <tr><td>tolmt</td><td>{{ self::display_some(metadata.tolmt) }}</td></tr>
               <tr><td>latitude</td><td>{{ self::display_some(metadata.latitude) }}</td></tr>

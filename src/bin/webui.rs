@@ -19,7 +19,7 @@ use tower_http::services::ServeDir;
 use traffic_counts::{
     db::{self, crud::Crud, ImportLogEntry},
     denormalize::NonNormalVolCount,
-    CountKind, Metadata,
+    Metadata,
 };
 
 const ADMIN_PATH: &str = "/admin";

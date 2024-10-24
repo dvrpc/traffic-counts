@@ -103,25 +103,30 @@ pub enum FileNameProblem {
 }
 
 /// All of the kinds of counts.
+///
+/// These are all the types that are in both tc_header and tc_counttype tables.
+/// tc_countype doesn't include Video, that's only in tc_header.
+/// tc_header doesn't include EightDay or Loop, they're only in tc_counttype.
 #[derive(Debug, PartialEq, Clone)]
 pub enum CountKind {
-    Crosswalk,
     Bicycle1,
     Bicycle2,
     Bicycle3,
     Bicycle4,
+    Bicycle5,
     Bicycle6,
+    Pedestrian,
     Pedestrian2,
+    Crosswalk,
     Volume,
+    FifteenMinVolume,
     Class,
     ManualClass,
+    Speed,
     EightDay,
     Loop,
-    Speed,
-    FifteenMinVolume,
-    Bicycle5,
-    Pedestrian,
     TurningMovement,
+    Video,
 }
 
 impl FromStr for CountKind {
@@ -129,23 +134,24 @@ impl FromStr for CountKind {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "Crosswalk" => Ok(CountKind::Crosswalk),
             "Bicycle 1" => Ok(CountKind::Bicycle1),
             "Bicycle 2" => Ok(CountKind::Bicycle2),
             "Bicycle 3" => Ok(CountKind::Bicycle3),
             "Bicycle 4" => Ok(CountKind::Bicycle4),
             "Bicycle 5" => Ok(CountKind::Bicycle5),
             "Bicycle 6" => Ok(CountKind::Bicycle6),
+            "Pedestrian" => Ok(CountKind::Pedestrian),
             "Pedestrian 2" => Ok(CountKind::Pedestrian2),
+            "Crosswalk" => Ok(CountKind::Crosswalk),
             "Volume" => Ok(CountKind::Volume),
+            "15 min Volume" => Ok(CountKind::FifteenMinVolume),
             "Class" => Ok(CountKind::Class),
             "Manual Class" => Ok(CountKind::ManualClass),
+            "Speed" => Ok(CountKind::Speed),
             "8 Day" => Ok(CountKind::EightDay),
             "Loop" => Ok(CountKind::Loop),
-            "Speed" => Ok(CountKind::Speed),
-            "15 min Volume" => Ok(CountKind::FifteenMinVolume),
-            "Pedestrian" => Ok(CountKind::Pedestrian),
             "Turning Movement" => Ok(CountKind::TurningMovement),
+            "Video" => Ok(CountKind::Video),
             _ => Err(CountError::UnknownCountType(s.to_string())),
         }
     }
@@ -154,36 +160,24 @@ impl FromStr for CountKind {
 impl Display for CountKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CountKind::Crosswalk => write!(f, "Crosswalk"),
             CountKind::Bicycle1 => write!(f, "Bicycle 1"),
             CountKind::Bicycle2 => write!(f, "Bicycle 2"),
             CountKind::Bicycle3 => write!(f, "Bicycle 3"),
             CountKind::Bicycle4 => write!(f, "Bicycle 4"),
             CountKind::Bicycle5 => write!(f, "Bicycle 5"),
             CountKind::Bicycle6 => write!(f, "Bicycle 6"),
+            CountKind::Pedestrian => write!(f, "Pedestrian"),
             CountKind::Pedestrian2 => write!(f, "Pedestrian 2"),
+            CountKind::Crosswalk => write!(f, "Crosswalk"),
             CountKind::Volume => write!(f, "Volume"),
+            CountKind::FifteenMinVolume => write!(f, "15 min Volume"),
             CountKind::Class => write!(f, "Class"),
             CountKind::ManualClass => write!(f, "Manual Class"),
+            CountKind::Speed => write!(f, "Speed"),
             CountKind::EightDay => write!(f, "8 Day"),
             CountKind::Loop => write!(f, "Loop"),
-            CountKind::Speed => write!(f, "Speed"),
-            CountKind::FifteenMinVolume => write!(f, "15 min Volume"),
-            CountKind::Pedestrian => write!(f, "Pedestrian"),
             CountKind::TurningMovement => write!(f, "Turning Movement"),
-        }
-    }
-}
-
-// Make newtype on CountKind so we can impl oracle's FromSql on it as an Option.
-#[derive(Debug, Clone, PartialEq)]
-pub struct OptionCountKind(Option<CountKind>);
-
-impl Display for OptionCountKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Some(v) => write!(f, "{v}"),
-            None => write!(f, ""),
+            CountKind::Video => write!(f, "Video"),
         }
     }
 }
@@ -337,10 +331,10 @@ pub struct Metadata {
     pub bikepeddesc: Option<String>,
     pub bikepedfacility: Option<String>,
     pub bikepedgroup: Option<String>,
-    pub cntdir: OptionRoadDirection,
+    pub cntdir: Option<RoadDirection>,
     pub comments: Option<String>,
     #[row_value(rename = "type")]
-    pub count_kind: OptionCountKind,
+    pub count_kind: Option<CountKind>,
     pub counterid: Option<u32>,
     pub createheaderdate: Option<NaiveDate>,
     pub datelastcounted: Option<NaiveDate>,
@@ -348,14 +342,14 @@ pub struct Metadata {
     pub fc: Option<u32>,
     pub fromlmt: Option<String>,
     pub importdatadate: Option<NaiveDate>,
-    pub indir: OptionLaneDirection,
+    pub indir: Option<LaneDirection>,
     pub isurban: Option<String>,
     pub latitude: Option<f32>,
     pub longitude: Option<f32>,
     pub mcd: Option<String>,
     pub mp: Option<String>,
     pub offset: Option<String>,
-    pub outdir: OptionLaneDirection,
+    pub outdir: Option<LaneDirection>,
     pub pmending: Option<String>,
     pub pmpeak: Option<f32>,
     pub prj: Option<String>,
@@ -375,7 +369,7 @@ pub struct Metadata {
     #[row_value(rename = "takenby")]
     pub technician: Option<String>,
     pub tolmt: Option<String>,
-    pub trafdir: OptionRoadDirection,
+    pub trafdir: Option<RoadDirection>,
     pub x: Option<f32>,
     pub y: Option<f32>,
 }
@@ -552,19 +546,6 @@ impl Display for RoadDirection {
     }
 }
 
-// Make newtype on RoadDirection so we can impl oracle's FromSql on it as an Option.
-#[derive(Debug, Clone, PartialEq)]
-pub struct OptionRoadDirection(Option<RoadDirection>);
-
-impl Display for OptionRoadDirection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Some(v) => write!(f, "{v}"),
-            None => write!(f, ""),
-        }
-    }
-}
-
 /// The direction of a lane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum LaneDirection {
@@ -597,19 +578,6 @@ impl Display for LaneDirection {
             LaneDirection::West => "west".to_string(),
         };
         write!(f, "{}", dir)
-    }
-}
-
-// Make newtype on LaneDirection so we can impl oracle's FromSql on it as an Option.
-#[derive(Debug, Clone, PartialEq)]
-pub struct OptionLaneDirection(Option<LaneDirection>);
-
-impl Display for OptionLaneDirection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Some(v) => write!(f, "{v}"),
-            None => write!(f, ""),
-        }
     }
 }
 
