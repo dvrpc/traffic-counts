@@ -5,12 +5,13 @@ use chrono::NaiveDateTime;
 use log::Level;
 use oracle::{sql_type::FromSql, Error as OracleError, RowValue, SqlValue};
 
-use crate::{db::ImportLogEntry, CountKind, LaneDirection, RoadDirection};
+use crate::{db::ImportLogEntry, CountError, CountKind, LaneDirection, RoadDirection};
 
 impl FromSql for CountKind {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
         match CountKind::from_str(&val.to_string()) {
             Ok(v) => Ok(v),
+            Err(CountError::UnknownCountType(_)) => Err(OracleError::NullValue),
             Err(e) => Err(OracleError::ParseError(Box::new(e))),
         }
     }
@@ -33,6 +34,7 @@ impl FromSql for LaneDirection {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
         match LaneDirection::from_str(&val.to_string()) {
             Ok(v) => Ok(v),
+            Err(CountError::BadDirection(_)) => Err(OracleError::NullValue),
             Err(e) => Err(OracleError::ParseError(Box::new(e))),
         }
     }
@@ -42,6 +44,7 @@ impl FromSql for RoadDirection {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
         match RoadDirection::from_str(&val.to_string()) {
             Ok(v) => Ok(v),
+            Err(CountError::BadDirection(_)) => Err(OracleError::NullValue),
             Err(e) => Err(OracleError::ParseError(Box::new(e))),
         }
     }
