@@ -192,7 +192,8 @@ impl Display for CountKind {
 ///   - [NonNormalAvgSpeedCount](denormalize::NonNormalAvgSpeedCount) by [denormalize::create_non_normal_speedavg_count]
 #[derive(Debug, Clone)]
 pub struct IndividualVehicle {
-    pub datetime: NaiveDateTime,
+    pub date: NaiveDate,
+    pub time: NaiveDateTime,
     pub lane: u8,
     pub class: VehicleClass,
     pub speed: f32,
@@ -200,20 +201,22 @@ pub struct IndividualVehicle {
 
 impl GetDate for IndividualVehicle {
     fn get_date(&self) -> NaiveDate {
-        self.datetime.date().to_owned()
+        self.date
     }
 }
 
 impl IndividualVehicle {
     pub fn new(
-        datetime: NaiveDateTime,
+        date: NaiveDate,
+        time: NaiveDateTime,
         lane: u8,
         class: u8,
         speed: f32,
     ) -> Result<Self, CountError> {
         let class = VehicleClass::from_num(class)?;
         Ok(Self {
-            datetime,
+            date,
+            time,
             lane,
             class,
             speed,
@@ -224,30 +227,38 @@ impl IndividualVehicle {
 /// Pre-binned, 15-minute bicycle volume counts.
 #[derive(Debug, Clone, RowValue)]
 pub struct FifteenMinuteBicycle {
+    #[row_value(rename = "dvrpcnum")]
     pub recordnum: u32,
-    pub datetime: NaiveDateTime,
+    #[row_value(rename = "countdate")]
+    pub date: NaiveDate,
+    #[row_value(rename = "counttime")]
+    pub time: NaiveDateTime,
     pub total: u16,
+    #[row_value(rename = "incount")]
     pub indir: Option<u16>,
+    #[row_value(rename = "outcount")]
     pub outdir: Option<u16>,
 }
 
 impl GetDate for FifteenMinuteBicycle {
     fn get_date(&self) -> NaiveDate {
-        self.datetime.date().to_owned()
+        self.date
     }
 }
 
 impl FifteenMinuteBicycle {
     pub fn new(
         recordnum: u32,
-        datetime: NaiveDateTime,
+        date: NaiveDate,
+        time: NaiveDateTime,
         total: u16,
         indir: Option<u16>,
         outdir: Option<u16>,
     ) -> Result<Self, CountError> {
         Ok(Self {
             recordnum,
-            datetime,
+            date,
+            time,
             total,
             indir,
             outdir,
@@ -258,30 +269,38 @@ impl FifteenMinuteBicycle {
 /// Pre-binned, 15-minute pedestrian volume counts.
 #[derive(Debug, Clone, RowValue)]
 pub struct FifteenMinutePedestrian {
+    #[row_value(rename = "dvrpcnum")]
     pub recordnum: u32,
-    pub datetime: NaiveDateTime,
+    #[row_value(rename = "countdate")]
+    pub date: NaiveDate,
+    #[row_value(rename = "counttime")]
+    pub time: NaiveDateTime,
     pub total: u16,
+    #[row_value(rename = "incount")]
     pub indir: Option<u16>,
+    #[row_value(rename = "outcount")]
     pub outdir: Option<u16>,
 }
 
 impl GetDate for FifteenMinutePedestrian {
     fn get_date(&self) -> NaiveDate {
-        self.datetime.date().to_owned()
+        self.date
     }
 }
 
 impl FifteenMinutePedestrian {
     pub fn new(
         recordnum: u32,
-        datetime: NaiveDateTime,
+        date: NaiveDate,
+        time: NaiveDateTime,
         total: u16,
         indir: Option<u16>,
         outdir: Option<u16>,
     ) -> Result<Self, CountError> {
         Ok(Self {
             recordnum,
-            datetime,
+            date,
+            time,
             total,
             indir,
             outdir,
@@ -293,29 +312,37 @@ impl FifteenMinutePedestrian {
 #[derive(Debug, Clone, RowValue)]
 pub struct FifteenMinuteVehicle {
     pub recordnum: u32,
-    pub datetime: NaiveDateTime,
+    #[row_value(rename = "countdate")]
+    pub date: NaiveDate,
+    #[row_value(rename = "counttime")]
+    pub time: NaiveDateTime,
+    #[row_value(rename = "volcount")]
     pub count: u16,
-    pub direction: LaneDirection,
-    pub lane: u8,
+    #[row_value(rename = "cntdir")]
+    pub direction: Option<LaneDirection>,
+    #[row_value(rename = "countlane")]
+    pub lane: Option<u8>,
 }
 
 impl GetDate for FifteenMinuteVehicle {
     fn get_date(&self) -> NaiveDate {
-        self.datetime.date().to_owned()
+        self.date
     }
 }
 
 impl FifteenMinuteVehicle {
     pub fn new(
         recordnum: u32,
-        datetime: NaiveDateTime,
+        date: NaiveDate,
+        time: NaiveDateTime,
         count: u16,
-        direction: LaneDirection,
-        lane: u8,
+        direction: Option<LaneDirection>,
+        lane: Option<u8>,
     ) -> Result<Self, CountError> {
         Ok(Self {
             recordnum,
-            datetime,
+            date,
+            time,
             count,
             direction,
             lane,
@@ -660,24 +687,43 @@ impl VehicleClass {
 /// We almost always want fifteen-minute counts, but hourly is also an option.
 #[derive(Debug, Clone, RowValue)]
 pub struct TimeBinnedVehicleClassCount {
-    pub datetime: NaiveDateTime,
-    pub lane: u8,
+    #[row_value(rename = "countdate")]
+    pub date: NaiveDate,
+    #[row_value(rename = "counttime")]
+    pub time: NaiveDateTime,
+    #[row_value(rename = "countlane")]
+    pub lane: Option<u8>,
     pub recordnum: u32,
-    pub direction: LaneDirection,
+    #[row_value(rename = "ctdir")]
+    pub direction: Option<LaneDirection>,
+    #[row_value(rename = "bikes")]
     pub c1: u32,
+    #[row_value(rename = "cars_and_tlrs")]
     pub c2: u32,
+    #[row_value(rename = "ax2_long")]
     pub c3: u32,
+    #[row_value(rename = "buses")]
     pub c4: u32,
+    #[row_value(rename = "ax2_6_tire")]
     pub c5: u32,
+    #[row_value(rename = "ax3_single")]
     pub c6: u32,
+    #[row_value(rename = "ax4_single")]
     pub c7: u32,
+    #[row_value(rename = "lt_5_ax_double")]
     pub c8: u32,
+    #[row_value(rename = "ax5_double")]
     pub c9: u32,
+    #[row_value(rename = "gt_5_ax_double")]
     pub c10: u32,
+    #[row_value(rename = "lt_6_ax_multi")]
     pub c11: u32,
+    #[row_value(rename = "ax6_multi")]
     pub c12: u32,
+    #[row_value(rename = "gt_6_ax_multi")]
     pub c13: u32,
-    pub c15: u32,
+    #[row_value(rename = "unclassified")]
+    pub c15: Option<u32>,
     pub total: u32,
 }
 
@@ -686,10 +732,15 @@ pub struct TimeBinnedVehicleClassCount {
 /// We almost always want fifteen-minute counts, but hourly is also an option.
 #[derive(Debug, Clone, RowValue)]
 pub struct TimeBinnedSpeedRangeCount {
-    pub datetime: NaiveDateTime,
-    pub lane: u8,
+    #[row_value(rename = "countdate")]
+    pub date: NaiveDate,
+    #[row_value(rename = "counttime")]
+    pub time: NaiveDateTime,
+    #[row_value(rename = "countlane")]
+    pub lane: Option<u8>,
     pub recordnum: u32,
-    pub direction: LaneDirection,
+    #[row_value(rename = "ctdir")]
+    pub direction: Option<LaneDirection>,
     pub s1: u32,
     pub s2: u32,
     pub s3: u32,
@@ -736,9 +787,10 @@ pub fn create_speed_and_class_count(
         };
 
         // Create a key for the Hashmap for time intervals
-        let time_part = bin_time(count.datetime.time(), interval);
+        let time_part = bin_time(count.time.time(), interval);
         let key = BinnedCountKey {
-            datetime: NaiveDateTime::new(count.datetime.date(), time_part),
+            date: count.date,
+            time: NaiveDateTime::new(count.date, time_part),
             lane: count.lane,
         };
 
@@ -772,10 +824,16 @@ pub fn create_speed_and_class_count(
 
     // Sort counts by date and time, get range, check if number of records is less than expected
     // for every period to be included, insert any missing.
-    counts.sort_unstable_by_key(|c| (c.datetime.date(), c.datetime.time()));
+    counts.sort_unstable_by_key(|c| (c.date, c.time.time()));
 
-    let first_dt = counts.first().unwrap().datetime;
-    let last_dt = counts.last().unwrap().datetime;
+    let first_dt = NaiveDateTime::new(
+        counts.first().unwrap().date,
+        counts.first().unwrap().time.time(),
+    );
+    let last_dt = NaiveDateTime::new(
+        counts.last().unwrap().date,
+        counts.last().unwrap().time.time(),
+    );
 
     let all_datetimes = create_time_bins(first_dt, last_dt, interval);
 
@@ -795,7 +853,8 @@ pub fn create_speed_and_class_count(
         for datetime in all_datetimes.clone() {
             for lane in all_lanes.iter() {
                 all_keys.push(BinnedCountKey {
-                    datetime,
+                    date: datetime.date(),
+                    time: datetime,
                     lane: *lane,
                 })
             }
@@ -824,10 +883,11 @@ pub fn create_speed_and_class_count(
     let mut speed_range_count = vec![];
     for (key, value) in speed_range_map {
         speed_range_count.push(TimeBinnedSpeedRangeCount {
-            datetime: key.datetime,
-            lane: key.lane,
+            date: key.date,
+            time: key.time,
+            lane: Some(key.lane),
             recordnum: value.recordnum,
-            direction: value.direction,
+            direction: Some(value.direction),
             s1: value.s1,
             s2: value.s2,
             s3: value.s3,
@@ -850,10 +910,11 @@ pub fn create_speed_and_class_count(
     let mut vehicle_class_count = vec![];
     for (key, value) in vehicle_class_map {
         vehicle_class_count.push(TimeBinnedVehicleClassCount {
-            datetime: key.datetime,
-            lane: key.lane,
+            date: key.date,
+            time: key.time,
+            lane: Some(key.lane),
             recordnum: value.recordnum,
-            direction: value.direction,
+            direction: Some(value.direction),
             c1: value.c1,
             c2: value.c2,
             c3: value.c3,
@@ -867,7 +928,7 @@ pub fn create_speed_and_class_count(
             c11: value.c11,
             c12: value.c12,
             c13: value.c13,
-            c15: value.c15,
+            c15: Some(value.c15),
             total: value.total,
         });
     }

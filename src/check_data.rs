@@ -8,7 +8,7 @@ use oracle::Connection;
 
 use crate::{
     db::{self, ImportLogEntry},
-    CountError, LaneDirection,
+    CountError, CountKind, LaneDirection,
 };
 
 // If a count is bidirectional, the totals for both directions should be relatively proportional.
@@ -31,7 +31,7 @@ pub struct ClassCountCheck {
 /// Apply various data checks and log any issues found.
 pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     // Determine what kind of count this is, in order to run the appropriate checks.
-    let count_type = match db::get_count_type(conn, recordnum) {
+    let count_kind = match db::get_count_kind(conn, recordnum) {
         Ok(Some(v)) => v,
         Ok(None) => {
             return Err(CountError::DataCheckError(
@@ -44,7 +44,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     };
 
     // Warn if share of unclassed vehicles is too high or class 2 is too low.
-    if count_type == "Class" {
+    if count_kind == CountKind::Class {
         let results = conn.query_as::<(NaiveDate, NaiveDateTime, u8, String, u32, u32, u32)>(
         "select countdate, counttime, countlane, ctdir, total, cars_and_tlrs, unclassified from tc_clacount where recordnum = :1",
         &[&recordnum],
@@ -89,7 +89,10 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     }
 
     // Warn if motor vehicle counts don't have relatively even proportion of total per direction.
-    if ["Class", "Volume", "15 min Volume"].contains(&count_type.as_str()) {
+    if matches!(
+        count_kind,
+        CountKind::Class | CountKind::Volume | CountKind::FifteenMinVolume
+    ) {
         let results = conn.query_as::<(u32, String)>(
             "select totalcount, cntdir from tc_volcount where recordnum = :1",
             &[&recordnum],
@@ -131,7 +134,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     }
 
     // Warn if more than 1 consecutive 0-count/hour between 4am and 10pm for motor vehicles.
-    if ["Class", "Volume", "15 min Volume"].contains(&count_type.as_str()) {
+    if matches!(count_kind, CountKind::Class | CountKind::FifteenMinVolume) {
         let results = conn.query_as::<(
             Option<u32>,
             Option<u32>,
@@ -203,7 +206,15 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     }
 
     // Warn about bicycle counts having more than 20 in any 15-minute period.
-    if count_type.as_str().contains("Bicycle") {
+    if matches!(
+        count_kind,
+        CountKind::Bicycle1
+            | CountKind::Bicycle2
+            | CountKind::Bicycle3
+            | CountKind::Bicycle4
+            | CountKind::Bicycle5
+            | CountKind::Bicycle6,
+    ) {
         let results = conn.query_as::<u32>(
             "select total from tc_bikecount where dvrpcnum = :1",
             &[&recordnum],

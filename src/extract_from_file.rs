@@ -132,10 +132,11 @@ impl Extract for FifteenMinuteVehicle {
                 Some(count) => match count.parse() {
                     Ok(count) => match FifteenMinuteVehicle::new(
                         metadata.recordnum,
+                        count_date,
                         datetime,
                         count,
-                        metadata.directions.direction1,
-                        1,
+                        Some(metadata.directions.direction1),
+                        Some(1),
                     ) {
                         Ok(v) => counts.push(v),
                         Err(e) => {
@@ -154,10 +155,11 @@ impl Extract for FifteenMinuteVehicle {
                     Some(count) => match count.parse() {
                         Ok(count) => match FifteenMinuteVehicle::new(
                             metadata.recordnum,
+                            count_date,
                             datetime,
                             count,
-                            direction,
-                            2,
+                            Some(direction),
+                            Some(2),
                         ) {
                             Ok(v) => counts.push(v),
                             Err(e) => {
@@ -176,10 +178,11 @@ impl Extract for FifteenMinuteVehicle {
                     Some(count) => match count.parse() {
                         Ok(count) => match FifteenMinuteVehicle::new(
                             metadata.recordnum,
+                            count_date,
                             datetime,
                             count,
-                            direction,
-                            3,
+                            Some(direction),
+                            Some(3),
                         ) {
                             Ok(v) => counts.push(v),
                             Err(e) => {
@@ -221,6 +224,7 @@ impl Extract for IndividualVehicle {
             let datetime = NaiveDateTime::new(count_date, count_time);
 
             let count = match IndividualVehicle::new(
+                count_date,
                 datetime,
                 row.as_ref().unwrap()[3].parse().unwrap(),
                 row.as_ref().unwrap()[4].parse().unwrap(),
@@ -262,6 +266,7 @@ impl Extract for FifteenMinuteBicycle {
                 None => {
                     match FifteenMinuteBicycle::new(
                         metadata.recordnum,
+                        count_dt.date(),
                         count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
                         None,
@@ -278,6 +283,7 @@ impl Extract for FifteenMinuteBicycle {
                 Some(_) => {
                     match FifteenMinuteBicycle::new(
                         metadata.recordnum,
+                        count_dt.date(),
                         count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
                         Some(row.as_ref().unwrap()[2].parse().unwrap()),
@@ -319,6 +325,7 @@ impl Extract for FifteenMinutePedestrian {
                 None => {
                     match FifteenMinutePedestrian::new(
                         metadata.recordnum,
+                        count_dt.date(),
                         count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
                         None,
@@ -335,6 +342,7 @@ impl Extract for FifteenMinutePedestrian {
                 Some(_) => {
                     match FifteenMinutePedestrian::new(
                         metadata.recordnum,
+                        count_dt.date(),
                         count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
                         Some(row.as_ref().unwrap()[2].parse().unwrap()),
@@ -443,21 +451,21 @@ mod tests {
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_102() {
         let path = Path::new("test_files/15minutevehicle/kw-102-www-21-35.csv");
         let mut fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
-        fifteen_min_volcount.sort_unstable_by_key(|count| (count.datetime, count.lane));
+        fifteen_min_volcount.sort_unstable_by_key(|count| (count.date, count.time, count.lane));
         assert_eq!(fifteen_min_volcount.len(), 57);
 
         let count0 = fifteen_min_volcount.first().unwrap();
         dbg!(count0);
-        assert_eq!(count0.lane, 1);
-        assert_eq!(count0.direction, LaneDirection::West);
+        assert_eq!(count0.lane, Some(1));
+        assert_eq!(count0.direction, Some(LaneDirection::West));
         assert_eq!(count0.count, 49);
         let count1 = fifteen_min_volcount.get(1).unwrap();
-        assert_eq!(count1.lane, 2);
-        assert_eq!(count1.direction, LaneDirection::West);
+        assert_eq!(count1.lane, Some(2));
+        assert_eq!(count1.direction, Some(LaneDirection::West));
         assert_eq!(count1.count, 68);
         let count2 = fifteen_min_volcount.get(2).unwrap();
-        assert_eq!(count2.lane, 3);
-        assert_eq!(count2.direction, LaneDirection::West);
+        assert_eq!(count2.lane, Some(3));
+        assert_eq!(count2.direction, Some(LaneDirection::West));
         assert_eq!(count2.count, 10);
     }
 

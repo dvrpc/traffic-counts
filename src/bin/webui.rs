@@ -18,8 +18,9 @@ use tower_http::services::ServeDir;
 
 use traffic_counts::{
     db::{self, crud::Crud, ImportLogEntry},
-    denormalize::NonNormalVolCount,
-    Metadata,
+    denormalize::{NonNormalAvgSpeedCount, NonNormalVolCount},
+    CountKind, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, Metadata,
+    TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
 };
 
 const ADMIN_PATH: &str = "/admin";
@@ -106,7 +107,7 @@ async fn admin() -> AdminMainTemplate {
 }
 
 #[derive(Template, Debug, Default)]
-#[template(path = "admin/metadata_list.html")]
+#[template(path = "counts/metadata_list.html")]
 struct AdminMetadataListTemplate {
     message: Option<String>,
     condition: ResponseCondition,
@@ -156,7 +157,7 @@ async fn get_metadata_list(
 }
 
 #[derive(Template, Debug, Default)]
-#[template(path = "admin/metadata_detail.html")]
+#[template(path = "counts/metadata_detail.html")]
 struct AdminMetadataDetailTemplate {
     message: Option<String>,
     condition: ResponseCondition,
@@ -208,11 +209,17 @@ async fn get_metadata_detail(
 }
 
 #[derive(Template, Debug, Default)]
-#[template(path = "admin/count_data.html")]
+#[template(path = "counts/count_data.html")]
 struct AdminCountDataTemplate {
     message: Option<String>,
     condition: ResponseCondition,
-    non_normal_volcount: Option<Vec<NonNormalVolCount>>,
+    non_normal_volume: Option<Vec<NonNormalVolCount>>,
+    non_normal_avg_speed: Option<Vec<NonNormalAvgSpeedCount>>,
+    fifteen_min_ped: Option<Vec<FifteenMinutePedestrian>>,
+    fifteen_min_bike: Option<Vec<FifteenMinuteBicycle>>,
+    fifteen_min_vehicle: Option<Vec<FifteenMinuteVehicle>>,
+    fifteen_min_class: Option<Vec<TimeBinnedVehicleClassCount>>,
+    fifteen_min_speed: Option<Vec<TimeBinnedSpeedRangeCount>>,
 }
 
 impl Heading for AdminCountDataTemplate {
@@ -221,30 +228,189 @@ impl Heading for AdminCountDataTemplate {
     }
 }
 
+#[derive(Debug, Deserialize)]
+enum CountDataFormat {
+    Volume15Min,
+    VolumeHourly,
+    VolumeDayByHour,
+    Class15Min,
+    ClassHourly,
+    Speed15Min,
+    SpeedHourly,
+    SpeedDayByHour,
+}
+
+#[derive(Debug, Deserialize)]
+struct CountDataParams {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    recordnum: Option<u32>,
+    format: Option<CountDataFormat>,
+}
+
 async fn get_count_data(
     State(state): State<AppState>,
-    recordnum: Query<HashMap<String, u32>>,
+    params: Query<CountDataParams>,
 ) -> AdminCountDataTemplate {
     let conn = state.conn_pool.get().unwrap();
+    let params = params.0;
     let mut count_data = AdminCountDataTemplate {
         message: None,
         condition: ResponseCondition::GetInput,
-        non_normal_volcount: None,
+        non_normal_volume: None,
+        non_normal_avg_speed: None,
+        fifteen_min_ped: None,
+        fifteen_min_bike: None,
+        fifteen_min_vehicle: None,
+        fifteen_min_class: None,
+        fifteen_min_speed: None,
     };
-    let recordnum = match recordnum.0.get("recordnum") {
+    let recordnum = match params.recordnum {
         Some(v) => v,
         None => {
             count_data.message = Some("Please provide a record number.".to_string());
             return count_data;
         }
     };
-    count_data.non_normal_volcount = match NonNormalVolCount::select(&conn, *recordnum) {
-        Ok(v) => Some(v),
-        Err(e) => {
-            count_data.message = Some(format!("{e}"));
+    let format = match params.format {
+        Some(v) => v,
+        None => {
+            count_data.message =
+                Some("Please provide the format for the data to be presented in.".to_string());
             return count_data;
         }
     };
+
+    // Get the kind of count this, in order to check if the desired format is available for it.
+    let count_kind = match db::get_count_kind(&conn, recordnum) {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            count_data.message = Some(
+                "Cannot determine kind of count, and thus unable to fetch count data.".to_string(),
+            );
+            return count_data;
+        }
+        Err(_) => {
+            count_data.message = Some(
+                "Error fetching count kind from database, and thus unable to fetch count data."
+                    .to_string(),
+            );
+            return count_data;
+        }
+    };
+
+    // Get data according to format/count kind and put into appropriate variable of template.
+    match format {
+        CountDataFormat::Volume15Min => match count_kind {
+            CountKind::FifteenMinVolume => {
+                count_data.fifteen_min_vehicle =
+                    match FifteenMinuteVehicle::select(&conn, recordnum) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            count_data.message = Some(format!("{e}"));
+                            return count_data;
+                        }
+                    };
+            }
+            CountKind::Bicycle1
+            | CountKind::Bicycle2
+            | CountKind::Bicycle3
+            | CountKind::Bicycle4
+            | CountKind::Bicycle5
+            | CountKind::Bicycle6 => {
+                count_data.fifteen_min_bike = match FifteenMinuteBicycle::select(&conn, recordnum) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        count_data.message = Some(format!("{e}"));
+                        return count_data;
+                    }
+                };
+            }
+            CountKind::Pedestrian | CountKind::Pedestrian2 => {
+                count_data.fifteen_min_ped = match FifteenMinutePedestrian::select(&conn, recordnum)
+                {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        count_data.message = Some(format!("{e}"));
+                        return count_data;
+                    }
+                };
+            }
+            _ => (),
+        },
+        CountDataFormat::VolumeHourly => {}
+        CountDataFormat::VolumeDayByHour => {
+            if matches!(
+                count_kind,
+                CountKind::Class | CountKind::Volume | CountKind::FifteenMinVolume
+            ) {
+                count_data.non_normal_volume = match NonNormalVolCount::select(&conn, recordnum) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        count_data.message = Some(format!("{e}"));
+                        return count_data;
+                    }
+                };
+            } else {
+                count_data.message = Some(format!(
+                    "{:?} format is not available for {:?} counts.",
+                    format, count_kind
+                ));
+            }
+        }
+        CountDataFormat::Class15Min => {
+            if count_kind == CountKind::Class {
+                count_data.fifteen_min_class =
+                    match TimeBinnedVehicleClassCount::select(&conn, recordnum) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            count_data.message = Some(format!("{e}"));
+                            return count_data;
+                        }
+                    };
+            } else {
+                count_data.message = Some(format!(
+                    "{:?} format is not available for {:?} counts.",
+                    format, count_kind
+                ));
+            }
+        }
+        CountDataFormat::ClassHourly => {}
+        CountDataFormat::Speed15Min => {
+            if count_kind == CountKind::Speed || count_kind == CountKind::Class {
+                count_data.fifteen_min_speed =
+                    match TimeBinnedSpeedRangeCount::select(&conn, recordnum) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            count_data.message = Some(format!("{e}"));
+                            return count_data;
+                        }
+                    };
+            } else {
+                count_data.message = Some(format!(
+                    "{:?} format is not available for {:?} counts.",
+                    format, count_kind
+                ));
+            }
+        }
+        CountDataFormat::SpeedHourly => {}
+        CountDataFormat::SpeedDayByHour => {
+            if count_kind == CountKind::Speed || count_kind == CountKind::Class {
+                count_data.non_normal_avg_speed =
+                    match NonNormalAvgSpeedCount::select(&conn, recordnum) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            count_data.message = Some(format!("{e}"));
+                            return count_data;
+                        }
+                    };
+            } else {
+                count_data.message = Some(format!(
+                    "{:?} format is not available for {:?} counts.",
+                    format, count_kind
+                ));
+            }
+        }
+    }
     count_data
 }
 

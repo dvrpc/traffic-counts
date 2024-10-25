@@ -1,0 +1,331 @@
+{% extends "admin/main.html" %}
+{% block main %}
+  {% if condition == ResponseCondition::GetInput %}
+    <div id="scroll-table-container">
+      <table id="scroll-table">
+        {% if let Some(non_normal_volume) = non_normal_volume %}
+          <thead><tr>
+            <th>recordnum</th>
+            <th>date</th>
+            <th>direction</th>
+            <th>lane</th>
+            <th>totalcount</th>
+            <th>am12</th>
+            <th>am1</th>
+            <th>am2</th>
+            <th>am3</th>
+            <th>am4</th>
+            <th>am5</th>
+            <th>am6</th>
+            <th>am7</th>
+            <th>am8</th>
+            <th>am9</th>
+            <th>am10</th>
+            <th>am11</th>
+            <th>pm12</th>
+            <th>pm1</th>
+            <th>pm2</th>
+            <th>pm3</th>
+            <th>pm4</th>
+            <th>pm5</th>
+            <th>pm6</th>
+            <th>pm7</th>
+            <th>pm8</th>
+            <th>pm9</th>
+            <th>pm10</th>
+            <th>pm11</th>
+          </tr></thead>
+          <tbody>
+          {% for item in non_normal_volume  %}
+            <tr>
+              <th>
+                <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
+                  {{ item.recordnum }}
+                </a>
+              </th>
+              <td>{{ item.date }}</td>
+              <td>{{ self::display_some(item.direction) }}</td>
+              <td>{{ self::display_some(item.lane) }}</td>
+              <td>{{ self::display_some(item.totalcount) }}</td>
+              <td>{{ self::display_some(item.am12) }}</td>
+              <td>{{ self::display_some(item.am1) }}</td>
+              <td>{{ self::display_some(item.am2) }}</td>
+              <td>{{ self::display_some(item.am3) }}</td>
+              <td>{{ self::display_some(item.am4) }}</td>
+              <td>{{ self::display_some(item.am5) }}</td>
+              <td>{{ self::display_some(item.am6) }}</td>
+              <td>{{ self::display_some(item.am7) }}</td>
+              <td>{{ self::display_some(item.am8) }}</td>
+              <td>{{ self::display_some(item.am9) }}</td>
+              <td>{{ self::display_some(item.am10) }}</td>
+              <td>{{ self::display_some(item.am11) }}</td>
+              <td>{{ self::display_some(item.pm12) }}</td>
+              <td>{{ self::display_some(item.pm1) }}</td>
+              <td>{{ self::display_some(item.pm2) }}</td>
+              <td>{{ self::display_some(item.pm3) }}</td>
+              <td>{{ self::display_some(item.pm4) }}</td>
+              <td>{{ self::display_some(item.pm5) }}</td>
+              <td>{{ self::display_some(item.pm6) }}</td>
+              <td>{{ self::display_some(item.pm7) }}</td>
+              <td>{{ self::display_some(item.pm8) }}</td>
+              <td>{{ self::display_some(item.pm9) }}</td>
+              <td>{{ self::display_some(item.pm10) }}</td>
+              <td>{{ self::display_some(item.pm11) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        {% else if let Some(non_normal_avg_speed) = non_normal_avg_speed %}
+          <thead><tr>
+            <th>recordnum</th>
+            <th>date</th>
+            <th>direction</th>
+            <th>lane</th>
+            <th>am12</th>
+            <th>am1</th>
+            <th>am2</th>
+            <th>am3</th>
+            <th>am4</th>
+            <th>am5</th>
+            <th>am6</th>
+            <th>am7</th>
+            <th>am8</th>
+            <th>am9</th>
+            <th>am10</th>
+            <th>am11</th>
+            <th>pm12</th>
+            <th>pm1</th>
+            <th>pm2</th>
+            <th>pm3</th>
+            <th>pm4</th>
+            <th>pm5</th>
+            <th>pm6</th>
+            <th>pm7</th>
+            <th>pm8</th>
+            <th>pm9</th>
+            <th>pm10</th>
+            <th>pm11</th>
+          </tr></thead>
+          <tbody>
+          {% for item in non_normal_avg_speed  %}
+            <tr>
+              <th>
+                <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
+                  {{ item.recordnum }}
+                </a>
+              </th>
+              <td>{{ item.date }}</td>
+              <td>{{ self::display_some(item.direction) }}</td>
+              <td>{{ self::display_some(item.lane) }}</td>
+              <td>{{ self::display_some(item.am12) }}</td>
+              <td>{{ self::display_some(item.am1) }}</td>
+              <td>{{ self::display_some(item.am2) }}</td>
+              <td>{{ self::display_some(item.am3) }}</td>
+              <td>{{ self::display_some(item.am4) }}</td>
+              <td>{{ self::display_some(item.am5) }}</td>
+              <td>{{ self::display_some(item.am6) }}</td>
+              <td>{{ self::display_some(item.am7) }}</td>
+              <td>{{ self::display_some(item.am8) }}</td>
+              <td>{{ self::display_some(item.am9) }}</td>
+              <td>{{ self::display_some(item.am10) }}</td>
+              <td>{{ self::display_some(item.am11) }}</td>
+              <td>{{ self::display_some(item.pm12) }}</td>
+              <td>{{ self::display_some(item.pm1) }}</td>
+              <td>{{ self::display_some(item.pm2) }}</td>
+              <td>{{ self::display_some(item.pm3) }}</td>
+              <td>{{ self::display_some(item.pm4) }}</td>
+              <td>{{ self::display_some(item.pm5) }}</td>
+              <td>{{ self::display_some(item.pm6) }}</td>
+              <td>{{ self::display_some(item.pm7) }}</td>
+              <td>{{ self::display_some(item.pm8) }}</td>
+              <td>{{ self::display_some(item.pm9) }}</td>
+              <td>{{ self::display_some(item.pm10) }}</td>
+              <td>{{ self::display_some(item.pm11) }}</td>
+            </tr>
+          {% endfor %}
+        {% else if let Some(fifteen_min_ped) = fifteen_min_ped  %}
+          <thead><tr>
+            <th>recordnum</th>
+            <th>date</th>
+            <th>time</th>
+            <th>total</th>
+            <th>indir</th>
+            <th>outdir</th>
+          </tr></thead>
+          <tbody>
+            {% for item in fifteen_min_ped  %}
+              <tr>
+                <th>
+                  <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
+                    {{ item.recordnum }}
+                  </a>
+                </th>
+                <td>{{ item.date }}</td>
+                <td>{{ item.time.time() }}</td>
+                <td>{{ item.total }}</td>
+                <td>{{ self::display_some(item.indir) }}</td>
+                <td>{{ self::display_some(item.outdir) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% else if let Some(fifteen_min_bike) = fifteen_min_bike  %}
+          <thead><tr>
+            <th>recordnum</th>
+            <th>date</th>
+            <th>time</th>
+            <th>total</th>
+            <th>indir</th>
+            <th>outdir</th>
+          </tr></thead>
+          <tbody>
+            {% for item in fifteen_min_bike  %}
+              <tr>
+                <th>
+                  <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
+                    {{ item.recordnum }}
+                  </a>
+                </th>
+                <td>{{ item.date }}</td>
+                <td>{{ item.time.time() }}</td>
+                <td>{{ item.total }}</td>
+                <td>{{ self::display_some(item.indir) }}</td>
+                <td>{{ self::display_some(item.outdir) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% else if let Some(fifteen_min_vehicle) = fifteen_min_vehicle  %}
+          <thead><tr>
+            <th>recordnum</th>
+            <th>date</th>
+            <th>time</th>
+            <th>count</th>
+            <th>direction</th>
+            <th>lane</th>
+          </tr></thead>
+          <tbody>
+            {% for item in fifteen_min_vehicle  %}
+              <tr>
+                <th>
+                  <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
+                    {{ item.recordnum }}
+                  </a>
+                </th>
+                <td>{{ item.date }}</td>
+                <td>{{ item.time.time() }}</td>
+                <td>{{ item.count }}</td>
+                <td>{{ self::display_some(item.direction) }}</td>
+                <td>{{ self::display_some(item.lane) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% else if let Some(fifteen_min_class) = fifteen_min_class  %}
+          <thead><tr>
+            <th>recordnum</th>
+            <th>date</th>
+            <th>time</th>
+            <th>lane</th>
+            <th>direction</th>
+            <th>c1</th>
+            <th>c2</th>
+            <th>c3</th>
+            <th>c4</th>
+            <th>c5</th>
+            <th>c6</th>
+            <th>c7</th>
+            <th>c8</th>
+            <th>c9</th>
+            <th>c10</th>
+            <th>c11</th>
+            <th>c12</th>
+            <th>c13</th>
+            <th>c15</th>
+            <th>total</th>
+          </tr></thead>
+          <tbody>
+            {% for item in fifteen_min_class %}
+              <tr>
+                <th>
+                  <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
+                    {{ item.recordnum }}
+                  </a>
+                </th>
+                <td>{{ item.date }}</td>
+                <td>{{ item.time.time() }}</td>
+                <td>{{ self::display_some(item.lane) }}</td>
+                <td>{{ self::display_some(item.direction) }}</td>
+                <td>{{ item.c1 }}</td>
+                <td>{{ item.c2 }}</td>
+                <td>{{ item.c3 }}</td>
+                <td>{{ item.c4 }}</td>
+                <td>{{ item.c5 }}</td>
+                <td>{{ item.c6 }}</td>
+                <td>{{ item.c7 }}</td>
+                <td>{{ item.c8 }}</td>
+                <td>{{ item.c9 }}</td>
+                <td>{{ item.c10 }}</td>
+                <td>{{ item.c11 }}</td>
+                <td>{{ item.c12 }}</td>
+                <td>{{ item.c13 }}</td>
+                <td>{{ self::display_some(item.c15) }}</td>
+                <td>{{ item.total }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% else if let Some(fifteen_min_speed) = fifteen_min_speed %}
+          <thead><tr>
+            <th>recordnum</th>
+            <th>date</th>
+            <th>time</th>
+            <th>direction</th>
+            <th>lane</th>
+            <th>totalcount</th>
+            <th>s1</th>
+            <th>s2</th>
+            <th>s3</th>
+            <th>s4</th>
+            <th>s5</th>
+            <th>s6</th>
+            <th>s7</th>
+            <th>s8</th>
+            <th>s9</th>
+            <th>s10</th>
+            <th>s11</th>
+            <th>s12</th>
+            <th>s13</th>
+            <th>s14</th>
+            <th>s15</th>
+          </tr></thead>
+          <tbody>
+            {% for item in fifteen_min_speed  %}
+              <tr>
+                <th>
+                  <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
+                    {{ item.recordnum }}
+                  </a>
+                </th>
+                <td>{{ item.date }}</td>
+                <td>{{ item.time }}</td>
+                <td>{{ self::display_some(item.direction) }}</td>
+                <td>{{ self::display_some(item.lane) }}</td>
+                <td>{{ item.s1 }}</td>
+                <td>{{ item.s2 }}</td>
+                <td>{{ item.s3 }}</td>
+                <td>{{ item.s4 }}</td>
+                <td>{{ item.s5 }}</td>
+                <td>{{ item.s6 }}</td>
+                <td>{{ item.s7 }}</td>
+                <td>{{ item.s8 }}</td>
+                <td>{{ item.s9 }}</td>
+                <td>{{ item.s10 }}</td>
+                <td>{{ item.s11 }}</td>
+                <td>{{ item.s12 }}</td>
+                <td>{{ item.s13 }}</td>
+                <td>{{ item.s14 }}</td>
+                <td>{{ item.total }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% endif %}
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

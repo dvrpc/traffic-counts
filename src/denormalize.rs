@@ -44,8 +44,8 @@ pub trait Denormalize {
             let key = NonNormalCountKey {
                 recordnum: count.recordnum,
                 date: count.datetime.date(),
-                direction: count.dir,
-                lane: count.lane,
+                direction: Some(count.dir),
+                lane: Some(count.lane),
             };
 
             // Add new entry if necessary, then insert data.
@@ -159,9 +159,9 @@ pub struct NonNormalVolCount {
     #[row_value(rename = "countdate")]
     pub date: NaiveDate,
     #[row_value(rename = "cntdir")]
-    pub direction: LaneDirection,
+    pub direction: Option<LaneDirection>,
     #[row_value(rename = "countlane")]
-    pub lane: u8,
+    pub lane: Option<u8>,
     pub setflag: Option<i8>,
     pub totalcount: Option<u32>,
     pub am12: Option<u32>,
@@ -200,9 +200,9 @@ pub struct NonNormalAvgSpeedCount {
     #[row_value(rename = "countdate")]
     pub date: NaiveDate,
     #[row_value(rename = "ctdir")]
-    pub direction: LaneDirection,
+    pub direction: Option<LaneDirection>,
     #[row_value(rename = "countlane")]
-    pub lane: u8,
+    pub lane: Option<u8>,
     pub am12: Option<f32>,
     pub am1: Option<f32>,
     pub am2: Option<f32>,
@@ -258,16 +258,16 @@ pub fn create_non_normal_speedavg_count(
 
         let key = NonNormalCountKey {
             recordnum: metadata.recordnum,
-            date: count.datetime.date(),
-            direction,
-            lane: count.lane,
+            date: count.date,
+            direction: Some(direction),
+            lane: Some(count.lane),
         };
 
         // Add new entry if necessary, then insert data.
         non_normal_raw_speed_map
             .entry(key)
             .and_modify(|c| {
-                match count.datetime.time().hour() {
+                match count.time.hour() {
                     0 => c.am12.push(count.speed),
                     1 => c.am1.push(count.speed),
                     2 => c.am2.push(count.speed),
@@ -296,7 +296,7 @@ pub fn create_non_normal_speedavg_count(
                 };
             })
             .or_insert(NonNormalRawSpeedValue::first(
-                count.datetime.time().hour(),
+                count.time.hour(),
                 count.speed,
             ));
     }
@@ -582,8 +582,8 @@ mod tests {
         );
         assert!(non_normal_count[0].am9.is_none());
         assert!(non_normal_count[0].am10.is_some());
-        assert_eq!(non_normal_count[0].direction, LaneDirection::East);
-        assert_eq!(non_normal_count[0].lane, 1);
+        assert_eq!(non_normal_count[0].direction, Some(LaneDirection::East));
+        assert_eq!(non_normal_count[0].lane, Some(1));
 
         assert_eq!(
             non_normal_count[1].date,
@@ -591,8 +591,8 @@ mod tests {
         );
         assert!(non_normal_count[1].am9.is_none());
         assert!(non_normal_count[1].am10.is_some());
-        assert_eq!(non_normal_count[1].direction, LaneDirection::West);
-        assert_eq!(non_normal_count[1].lane, 2);
+        assert_eq!(non_normal_count[1].direction, Some(LaneDirection::West));
+        assert_eq!(non_normal_count[1].lane, Some(2));
 
         assert!(non_normal_count[4].am10.is_some());
         assert!(non_normal_count[4].am11.is_none());
@@ -602,8 +602,8 @@ mod tests {
         );
         assert!(non_normal_count[5].am10.is_some());
         assert!(non_normal_count[5].am11.is_none());
-        assert_eq!(non_normal_count[5].direction, LaneDirection::West);
-        assert_eq!(non_normal_count[5].lane, 2);
+        assert_eq!(non_normal_count[5].direction, Some(LaneDirection::West));
+        assert_eq!(non_normal_count[5].lane, Some(2));
 
         // Test total counts.
         assert_eq!(
@@ -642,8 +642,8 @@ mod tests {
         );
         assert!(non_normal_count[0].am10.is_none());
         assert!(non_normal_count[0].am11.is_some());
-        assert_eq!(non_normal_count[0].direction, LaneDirection::East);
-        assert_eq!(non_normal_count[0].lane, 1);
+        assert_eq!(non_normal_count[0].direction, Some(LaneDirection::East));
+        assert_eq!(non_normal_count[0].lane, Some(1));
 
         assert_eq!(
             non_normal_count[1].date,
@@ -651,8 +651,8 @@ mod tests {
         );
         assert!(non_normal_count[1].am10.is_none());
         assert!(non_normal_count[1].am11.is_some());
-        assert_eq!(non_normal_count[1].direction, LaneDirection::East);
-        assert_eq!(non_normal_count[1].lane, 2);
+        assert_eq!(non_normal_count[1].direction, Some(LaneDirection::East));
+        assert_eq!(non_normal_count[1].lane, Some(2));
 
         assert_eq!(
             non_normal_count[8].date,
@@ -660,8 +660,8 @@ mod tests {
         );
         assert!(non_normal_count[8].am10.is_some());
         assert!(non_normal_count[8].am11.is_none());
-        assert_eq!(non_normal_count[8].direction, LaneDirection::East);
-        assert_eq!(non_normal_count[8].lane, 1);
+        assert_eq!(non_normal_count[8].direction, Some(LaneDirection::East));
+        assert_eq!(non_normal_count[8].lane, Some(1));
 
         assert_eq!(
             non_normal_count[9].date,
@@ -669,8 +669,8 @@ mod tests {
         );
         assert!(non_normal_count[9].am10.is_some());
         assert!(non_normal_count[9].am11.is_none());
-        assert_eq!(non_normal_count[9].direction, LaneDirection::East);
-        assert_eq!(non_normal_count[9].lane, 2);
+        assert_eq!(non_normal_count[9].direction, Some(LaneDirection::East));
+        assert_eq!(non_normal_count[9].lane, Some(2));
 
         // Test total counts.
         assert_eq!(

@@ -3,7 +3,10 @@ use std::str::FromStr;
 
 use chrono::NaiveDateTime;
 use log::Level;
-use oracle::{sql_type::FromSql, Error as OracleError, RowValue, SqlValue};
+use oracle::{
+    sql_type::{FromSql, OracleType, ToSql, ToSqlNull},
+    Connection, Error as OracleError, RowValue, SqlValue,
+};
 
 use crate::{db::ImportLogEntry, CountError, CountKind, LaneDirection, RoadDirection};
 
@@ -37,6 +40,21 @@ impl FromSql for LaneDirection {
             Err(CountError::BadDirection(_)) => Err(OracleError::NullValue),
             Err(e) => Err(OracleError::ParseError(Box::new(e))),
         }
+    }
+}
+
+impl ToSql for LaneDirection {
+    fn oratype(&self, _conn: &Connection) -> oracle::Result<OracleType> {
+        Ok(OracleType::NVarchar2(format!("{self}").len() as u32))
+    }
+    fn to_sql(&self, val: &mut SqlValue<'_>) -> oracle::Result<()> {
+        format!("{self}").to_sql(val)
+    }
+}
+
+impl ToSqlNull for LaneDirection {
+    fn oratype_for_null(_conn: &Connection) -> oracle::Result<OracleType> {
+        Ok(OracleType::NVarchar2(0))
     }
 }
 

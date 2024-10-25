@@ -118,12 +118,8 @@ button {
   text-align: left;
 }
 
-.center {
-  text-align: center;
-}
-.small {
-  font-size: .8rem;
-}
+.center { text-align: center; }
+.small { font-size: .8rem; }
 
 /* 
   table scrolling & row/col freezing mostly from 
@@ -140,6 +136,8 @@ button {
 
   /* don't wrap anything, add padding */
   & td, th { white-space: nowrap; padding: 5px; }
+
+  & td { text-align: right };
 
   /* make header row and first column sticky & have different bg color */
   & thead, th {  position: sticky;  background-color: var(--blue-gray1); }

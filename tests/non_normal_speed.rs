@@ -25,8 +25,8 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     );
     assert!(non_normal_count[0].am9.is_none());
     assert!(non_normal_count[0].am10.is_some());
-    assert_eq!(non_normal_count[0].direction, LaneDirection::East);
-    assert_eq!(non_normal_count[0].lane, 1);
+    assert_eq!(non_normal_count[0].direction, Some(LaneDirection::East));
+    assert_eq!(non_normal_count[0].lane, Some(1));
 
     assert_eq!(
         non_normal_count[1].date,
@@ -34,8 +34,8 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     );
     assert!(non_normal_count[1].am9.is_none());
     assert!(non_normal_count[1].am10.is_some());
-    assert_eq!(non_normal_count[1].direction, LaneDirection::West);
-    assert_eq!(non_normal_count[1].lane, 2);
+    assert_eq!(non_normal_count[1].direction, Some(LaneDirection::West));
+    assert_eq!(non_normal_count[1].lane, Some(2));
 
     assert_eq!(
         non_normal_count[5].date,
@@ -43,8 +43,8 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
     );
     assert!(non_normal_count[5].am10.is_some());
     assert!(non_normal_count[5].am11.is_none());
-    assert_eq!(non_normal_count[5].direction, LaneDirection::West);
-    assert_eq!(non_normal_count[5].lane, 2);
+    assert_eq!(non_normal_count[5].direction, Some(LaneDirection::West));
+    assert_eq!(non_normal_count[5].lane, Some(2));
 
     // spotcheck averages
     assert_eq!(format!("{:.2}", non_normal_count[0].am11.unwrap()), "30.36");
@@ -72,8 +72,8 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     );
     assert!(non_normal_count[0].am10.is_none());
     assert!(non_normal_count[0].am11.is_some());
-    assert_eq!(non_normal_count[0].direction, LaneDirection::East);
-    assert_eq!(non_normal_count[0].lane, 1);
+    assert_eq!(non_normal_count[0].direction, Some(LaneDirection::East));
+    assert_eq!(non_normal_count[0].lane, Some(1));
 
     assert_eq!(
         non_normal_count[1].date,
@@ -81,8 +81,8 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     );
     assert!(non_normal_count[1].am10.is_none());
     assert!(non_normal_count[1].am11.is_some());
-    assert_eq!(non_normal_count[1].direction, LaneDirection::East);
-    assert_eq!(non_normal_count[1].lane, 2);
+    assert_eq!(non_normal_count[1].direction, Some(LaneDirection::East));
+    assert_eq!(non_normal_count[1].lane, Some(2));
 
     assert_eq!(
         non_normal_count[8].date,
@@ -90,8 +90,8 @@ fn create_non_normal_avgspeed_count_165367_is_correct() {
     );
     assert!(non_normal_count[8].am10.is_some());
     assert!(non_normal_count[8].am11.is_none());
-    assert_eq!(non_normal_count[8].direction, LaneDirection::East);
-    assert_eq!(non_normal_count[8].lane, 1);
+    assert_eq!(non_normal_count[8].direction, Some(LaneDirection::East));
+    assert_eq!(non_normal_count[8].lane, Some(1));
 
     // spotcheck averages
     assert_eq!(format!("{:.2}", non_normal_count[0].pm4.unwrap()), "38.34");

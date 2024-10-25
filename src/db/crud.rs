@@ -74,11 +74,11 @@ impl Crud for TimeBinnedVehicleClassCount {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.recordnum,
-            &self.datetime.date(),
-            &self.datetime,
+            &self.date,
+            &self.time,
             &self.lane,
             &self.total,
-            &format!("{}", self.direction),
+            &self.direction,
             &self.c1,
             &self.c2,
             &self.c3,
@@ -115,11 +115,11 @@ impl Crud for TimeBinnedSpeedRangeCount {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.recordnum,
-            &self.datetime.date(),
-            &self.datetime,
+            &self.date,
+            &self.time,
             &self.lane,
             &self.total,
-            &format!("{}", self.direction),
+            &self.direction,
             &self.s1,
             &self.s2,
             &self.s3,
@@ -159,7 +159,7 @@ impl Crud for NonNormalAvgSpeedCount {
         stmt.execute(&[
             &self.recordnum,
             &self.date,
-            &format!("{}", self.direction),
+            &self.direction,
             &self.lane,
             &self.am12,
             &self.am1,
@@ -195,12 +195,12 @@ impl Crud for NonNormalVolCount {
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
-            (recordnum, countdate, setflag, totalcount, cntdir, countlane, \
+            (recordnum, countdate, totalcount, cntdir, countlane, \
             am12, am1, am2, am3, am4, am5, am6, am7, am8, am9, am10, am11, pm12, \
             pm1, pm2, pm3, pm4, pm5, pm6, pm7, pm8, pm9, pm10, pm11)
             VALUES \
             (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
-            :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30)",
+            :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29)",
             &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
@@ -210,9 +210,9 @@ impl Crud for NonNormalVolCount {
         stmt.execute(&[
             &self.recordnum,
             &self.date,
-            &"", // setflag
             &self.totalcount,
-            &format!("{}", self.direction),
+            // &self.direction.map(|v| format!("{v}")),
+            &self.direction,
             &self.lane,
             &self.am12,
             &self.am1,
@@ -258,10 +258,10 @@ impl Crud for FifteenMinuteVehicle {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.recordnum,
-            &self.datetime.date(),
-            &self.datetime,
+            &self.date,
+            &self.time,
             &self.count,
-            &format!("{}", self.direction),
+            &self.direction,
             &self.lane,
         ])
     }
@@ -284,8 +284,8 @@ impl Crud for FifteenMinuteBicycle {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.recordnum,
-            &self.datetime.date(),
-            &self.datetime,
+            &self.date,
+            &self.time,
             &self.total,
             &self.indir,
             &self.outdir,
@@ -310,8 +310,8 @@ impl Crud for FifteenMinutePedestrian {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.recordnum,
-            &self.datetime.date(),
-            &self.datetime,
+            &self.date,
+            &self.time,
             &self.total,
             &self.indir,
             &self.outdir,

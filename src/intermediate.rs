@@ -20,7 +20,8 @@ use crate::{denormalize::HourlyCount, LaneDirection, VehicleClass, Weather};
 /// The key for records of the TC_SPECOUNT and TC_CLACOUNT tables.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BinnedCountKey {
-    pub datetime: NaiveDateTime,
+    pub date: NaiveDate,
+    pub time: NaiveDateTime,
     pub lane: u8,
 }
 
@@ -212,8 +213,12 @@ impl SpeedRangeCount {
 pub struct NonNormalCountKey {
     pub recordnum: u32,
     pub date: NaiveDate,
-    pub direction: LaneDirection,
-    pub lane: u8,
+    // This is an Option because while new records will always have a LaneDirection, old ones
+    // did not necessarily have one.
+    pub direction: Option<LaneDirection>,
+    // This is an Option because while new records will always have a lane, old ones
+    // did not necessarily have one.
+    pub lane: Option<u8>,
 }
 
 /// The rest of the fields in the TC_VOLCOUNT table.

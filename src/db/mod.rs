@@ -22,7 +22,7 @@ use oracle::{
 };
 use serde::Serialize;
 
-use crate::{CountError, Metadata};
+use crate::{CountError, CountKind, Metadata};
 
 /// The maximum number of empty metadata records allowed to be created.
 pub const RECORD_CREATION_LIMIT: u32 = 50;
@@ -178,8 +178,8 @@ pub fn insert_empty_metadata(conn: &Connection, number: u32) -> Result<Vec<u32>,
 }
 
 /// Get the type of count for a given record number.
-pub fn get_count_type(conn: &Connection, recordnum: u32) -> Result<Option<String>, CountError> {
-    match conn.query_row_as::<Option<String>>(
+pub fn get_count_kind(conn: &Connection, recordnum: u32) -> Result<Option<CountKind>, CountError> {
+    match conn.query_row_as::<Option<CountKind>>(
         "select type from tc_header where recordnum = :1",
         &[&recordnum],
     ) {

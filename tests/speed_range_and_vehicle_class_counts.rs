@@ -99,8 +99,8 @@ fn empty_periods_created_correctly_166905() {
         TimeInterval::FifteenMin,
     );
 
-    speed_range_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
-    vehicle_class_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
+    speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
+    vehicle_class_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
 
     // total number of periods
     assert_eq!(speed_range_count.len(), 386);
@@ -120,18 +120,33 @@ fn empty_periods_created_correctly_166905() {
     let expected_first_dt =
         NaiveDateTime::parse_from_str("2023-11-06 10:45", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(
-        speed_range_count.first().unwrap().datetime,
+        NaiveDateTime::new(
+            speed_range_count.first().unwrap().date,
+            speed_range_count.first().unwrap().time.time()
+        ),
         expected_first_dt
     );
     assert_eq!(
-        vehicle_class_count.first().unwrap().datetime,
+        NaiveDateTime::new(
+            vehicle_class_count.first().unwrap().date,
+            vehicle_class_count.first().unwrap().time.time()
+        ),
         expected_first_dt
     );
     let expected_last_dt =
         NaiveDateTime::parse_from_str("2023-11-08 10:45", "%Y-%m-%d %H:%M").unwrap();
-    assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
     assert_eq!(
-        vehicle_class_count.last().unwrap().datetime,
+        NaiveDateTime::new(
+            speed_range_count.last().unwrap().date,
+            speed_range_count.last().unwrap().time.time()
+        ),
+        expected_last_dt
+    );
+    assert_eq!(
+        NaiveDateTime::new(
+            vehicle_class_count.last().unwrap().date,
+            vehicle_class_count.last().unwrap().time.time()
+        ),
         expected_last_dt
     );
 
@@ -152,8 +167,8 @@ fn counts_created_correctly_165367() {
         TimeInterval::FifteenMin,
     );
 
-    speed_range_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
-    vehicle_class_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
+    speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
+    vehicle_class_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
 
     // total number of periods
     assert_eq!(speed_range_count.len(), 756);
@@ -169,31 +184,46 @@ fn counts_created_correctly_165367() {
         .iter()
         .filter(|c| c.total == 0)
         .collect::<Vec<_>>();
-    empty_periods.sort_unstable_by_key(|count| (count.datetime, count.lane));
+    empty_periods.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
     assert_eq!(empty_periods.len(), 15);
     assert_eq!(empty_periods[0].total, 0);
     assert_eq!(
-        empty_periods[0].datetime,
+        NaiveDateTime::new(empty_periods[0].date, empty_periods[0].time.time()),
         NaiveDateTime::parse_from_str("2023-11-07 1:00", "%Y-%m-%d %H:%M").unwrap()
     );
-    assert_eq!(empty_periods[0].lane, 1);
+    assert_eq!(empty_periods[0].lane, Some(1));
 
     // first and last periods
     let expected_first_dt =
         NaiveDateTime::parse_from_str("2023-11-06 11:45", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(
-        speed_range_count.first().unwrap().datetime,
+        NaiveDateTime::new(
+            speed_range_count.first().unwrap().date,
+            speed_range_count.first().unwrap().time.time()
+        ),
         expected_first_dt
     );
     assert_eq!(
-        vehicle_class_count.first().unwrap().datetime,
+        NaiveDateTime::new(
+            vehicle_class_count.first().unwrap().date,
+            vehicle_class_count.first().unwrap().time.time()
+        ),
         expected_first_dt
     );
     let expected_last_dt =
         NaiveDateTime::parse_from_str("2023-11-10 10:00", "%Y-%m-%d %H:%M").unwrap();
-    assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
     assert_eq!(
-        vehicle_class_count.last().unwrap().datetime,
+        NaiveDateTime::new(
+            speed_range_count.last().unwrap().date,
+            speed_range_count.last().unwrap().time.time()
+        ),
+        expected_last_dt
+    );
+    assert_eq!(
+        NaiveDateTime::new(
+            vehicle_class_count.last().unwrap().date,
+            vehicle_class_count.last().unwrap().time.time()
+        ),
         expected_last_dt
     );
 
@@ -215,8 +245,8 @@ fn counts_created_correctly_101() {
         TimeInterval::FifteenMin,
     );
 
-    speed_range_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
-    vehicle_class_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
+    speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
+    vehicle_class_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
 
     // total number of periods
     assert_eq!(speed_range_count.len(), 15); // 5 periods x 3 lanes
@@ -230,31 +260,46 @@ fn counts_created_correctly_101() {
     let expected_first_dt =
         NaiveDateTime::parse_from_str("2023-11-06 10:45", "%Y-%m-%d %H:%M").unwrap();
     assert_eq!(
-        speed_range_count.first().unwrap().datetime,
+        NaiveDateTime::new(
+            speed_range_count.first().unwrap().date,
+            speed_range_count.first().unwrap().time.time()
+        ),
         expected_first_dt
     );
     assert_eq!(
-        vehicle_class_count.first().unwrap().datetime,
+        NaiveDateTime::new(
+            vehicle_class_count.first().unwrap().date,
+            vehicle_class_count.first().unwrap().time.time()
+        ),
         expected_first_dt
     );
     let expected_last_dt =
         NaiveDateTime::parse_from_str("2023-11-06 11:45", "%Y-%m-%d %H:%M").unwrap();
-    assert_eq!(speed_range_count.last().unwrap().datetime, expected_last_dt);
     assert_eq!(
-        vehicle_class_count.last().unwrap().datetime,
+        NaiveDateTime::new(
+            speed_range_count.last().unwrap().date,
+            speed_range_count.last().unwrap().time.time()
+        ),
+        expected_last_dt
+    );
+    assert_eq!(
+        NaiveDateTime::new(
+            vehicle_class_count.last().unwrap().date,
+            vehicle_class_count.last().unwrap().time.time()
+        ),
         expected_last_dt
     );
 
     // Verify period in middle (11:15-11:30)
     assert_eq!(vehicle_class_count[6].total, 24);
-    assert_eq!(vehicle_class_count[6].lane, 1);
-    assert_eq!(vehicle_class_count[6].direction, LaneDirection::East);
+    assert_eq!(vehicle_class_count[6].lane, Some(1));
+    assert_eq!(vehicle_class_count[6].direction, Some(LaneDirection::East));
     assert_eq!(vehicle_class_count[7].total, 18);
-    assert_eq!(vehicle_class_count[7].lane, 2);
-    assert_eq!(vehicle_class_count[7].direction, LaneDirection::East);
+    assert_eq!(vehicle_class_count[7].lane, Some(2));
+    assert_eq!(vehicle_class_count[7].direction, Some(LaneDirection::East));
     assert_eq!(vehicle_class_count[8].total, 2);
-    assert_eq!(vehicle_class_count[8].lane, 3);
-    assert_eq!(vehicle_class_count[8].direction, LaneDirection::East);
+    assert_eq!(vehicle_class_count[8].lane, Some(3));
+    assert_eq!(vehicle_class_count[8].direction, Some(LaneDirection::East));
 
     // verify last period total (lane 3)
     assert_eq!(speed_range_count.last().unwrap().total, 5);
