@@ -11,7 +11,7 @@ fn field_metadata_parse_from_path_ok() {
             technician: "rc".to_string(),
             recordnum: 166905,
             directions: Directions::new(LaneDirection::East, None, None),
-            counter_id: 40972,
+            counter_id: 40972.to_string(),
             speed_limit: Some(35),
         }
     };
@@ -24,7 +24,7 @@ fn field_metadata_parse_from_path_ok() {
             technician: "rc".to_string(),
             recordnum: 166905,
             directions: Directions::new(LaneDirection::East, Some(LaneDirection::West), None),
-            counter_id: 40972,
+            counter_id: 40972.to_string(),
             speed_limit: Some(35),
         }
     };
@@ -41,7 +41,7 @@ fn field_metadata_parse_from_path_ok() {
                 Some(LaneDirection::East),
                 Some(LaneDirection::East),
             ),
-            counter_id: 40972,
+            counter_id: 40972.to_string(),
             speed_limit: Some(35),
         }
     };
@@ -57,7 +57,7 @@ fn field_metadata_parse_from_path_ok_with_na_speed_limit() {
             technician: "rc".to_string(),
             recordnum: 166905,
             directions: Directions::new(LaneDirection::East, Some(LaneDirection::West), None),
-            counter_id: 40972,
+            counter_id: 40972.to_string(),
             speed_limit: None,
         }
     };
@@ -154,18 +154,6 @@ fn field_metadata_parse_from_path_errs_if_directions_bad() {
             ..
         })
     ));
-}
-
-#[test]
-fn field_metadata_parse_from_path_errs_if_counter_id_bad() {
-    let path = Path::new("some/path/rc-166905-ew-letters-35.txt");
-    assert!(matches!(
-        FieldMetadata::from_path(path),
-        Err(CountError::InvalidFileName {
-            problem: FileNameProblem::InvalidCounterID,
-            ..
-        })
-    ))
 }
 
 #[test]

@@ -98,7 +98,6 @@ pub enum FileNameProblem {
     InvalidTech,
     InvalidRecordNum,
     InvalidDirections,
-    InvalidCounterID,
     InvalidSpeedLimit,
 }
 
@@ -362,7 +361,8 @@ pub struct Metadata {
     pub comments: Option<String>,
     #[row_value(rename = "type")]
     pub count_kind: Option<CountKind>,
-    pub counterid: Option<u32>,
+    #[row_value(rename = "counterid")]
+    pub counter_id: Option<String>,
     pub createheaderdate: Option<NaiveDate>,
     pub datelastcounted: Option<NaiveDate>,
     pub description: Option<String>,
@@ -410,7 +410,7 @@ pub struct FieldMetadata {
     pub technician: String, // initials
     pub recordnum: u32,
     pub directions: Directions,
-    pub counter_id: u32,
+    pub counter_id: String,
     pub speed_limit: Option<u8>,
 }
 
@@ -499,15 +499,7 @@ impl FieldMetadata {
             }
         };
 
-        let counter_id = match parts[3].parse() {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(CountError::InvalidFileName {
-                    problem: FileNameProblem::InvalidCounterID,
-                    path: path.to_owned(),
-                })
-            }
-        };
+        let counter_id = parts[3].to_string();
 
         let speed_limit = if parts[4] == "na" {
             None
