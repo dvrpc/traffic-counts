@@ -1,5 +1,9 @@
 {% extends "admin/main.html" %}
 {% block main %}
+  <h2 class="center">{{ heading() }}</h2>
+  {% if let Some(message) = message %}
+    {{ message }}
+  {% endif %}
   {% if condition == ResponseCondition::GetInput %}
       {% if let Some(metadata) = metadata %}
         {% if let Some(count_kind) = metadata.count_kind %}
@@ -75,6 +79,8 @@
               <tr><td>y</td><td>{{ self::display_some(metadata.y) }}</td></tr>
               <tr><td>amending</td><td>{{ self::display_some(metadata.amending) }}</td></tr>
               <tr><td>ampeak</td><td>{{ self::display_some(metadata.ampeak) }}</td></tr>
+              <tr><td>pmending</td><td>{{ self::display_some(metadata.pmending) }}</td></tr>
+              <tr><td>pmpeak</td><td>{{ self::display_some(metadata.pmpeak) }}</td></tr>
               <tr><td>bikepeddesc</td><td>{{ self::display_some(metadata.bikepeddesc) }}</td></tr>
               <tr><td>bikepedfacility</td><td>{{ self::display_some(metadata.bikepedfacility) }}</td></tr>
               <tr><td>bikepedgroup</td><td>{{ self::display_some(metadata.bikepedgroup) }}</td></tr>
@@ -87,8 +93,6 @@
               <tr><td>mcd</td><td>{{ self::display_some(metadata.mcd) }}</td></tr>
               <tr><td>mp</td><td>{{ self::display_some(metadata.mp) }}</td></tr>
               <tr><td>offset</td><td>{{ self::display_some(metadata.offset) }}</td></tr>
-              <tr><td>pmending</td><td>{{ self::display_some(metadata.pmending) }}</td></tr>
-              <tr><td>pmpeak</td><td>{{ self::display_some(metadata.pmpeak) }}</td></tr>
               <tr><td>prj</td><td>{{ self::display_some(metadata.prj) }}</td></tr>
               <tr><td>program</td><td>{{ self::display_some(metadata.program) }}</td></tr>
               <tr><td>rdprefix</td><td>{{ self::display_some(metadata.rdprefix) }}</td></tr>

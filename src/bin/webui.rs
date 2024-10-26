@@ -30,11 +30,6 @@ const ADMIN_METADATA_INSERT_PATH: &str = "/admin/insert";
 const ADMIN_COUNT_DATA: &str = "/admin/count";
 const ADMIN_IMPORT_LOG_PATH: &str = "/admin/import-log";
 
-/// A trait to set the heading for the main section of the page by template.
-pub trait Heading {
-    fn heading() -> String;
-}
-
 #[derive(Clone)]
 struct AppState {
     conn_pool: Pool,
@@ -78,6 +73,16 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+/// A trait to set the nav item button text & the heading for the main section of each template.
+///
+/// When implemented on a Template, it is callable with `heading()`.
+pub trait Heading {
+    const NAV_ITEM_TEXT: &str;
+    fn heading(&self) -> String {
+        Self::NAV_ITEM_TEXT.to_string()
+    }
+}
+
 /// The condition of the response - getting input (possibly again after bad input) or success.
 #[derive(Default, PartialEq, Debug)]
 enum ResponseCondition {
@@ -97,9 +102,7 @@ struct AdminMainTemplate {
 }
 
 impl Heading for AdminMainTemplate {
-    fn heading() -> String {
-        "Welcome".to_string()
-    }
+    const NAV_ITEM_TEXT: &str = "Welcome";
 }
 
 async fn admin() -> AdminMainTemplate {
@@ -117,9 +120,7 @@ struct AdminMetadataListTemplate {
 }
 
 impl Heading for AdminMetadataListTemplate {
-    fn heading() -> String {
-        "View Count Metadata Records".to_string()
-    }
+    const NAV_ITEM_TEXT: &str = "View Count Metadata Records";
 }
 
 #[derive(Deserialize)]
@@ -165,9 +166,7 @@ struct AdminMetadataDetailTemplate {
 }
 
 impl Heading for AdminMetadataDetailTemplate {
-    fn heading() -> String {
-        "View Count Metadata".to_string()
-    }
+    const NAV_ITEM_TEXT: &str = "View Count Metadata";
 }
 
 async fn get_metadata_detail(
@@ -210,9 +209,10 @@ async fn get_metadata_detail(
 
 #[derive(Template, Debug, Default)]
 #[template(path = "counts/count_data.html")]
-struct AdminCountDataTemplate {
+struct CountDataTemplate {
     message: Option<String>,
     condition: ResponseCondition,
+    recordnum: Option<u32>,
     non_normal_volume: Option<Vec<NonNormalVolCount>>,
     non_normal_avg_speed: Option<Vec<NonNormalAvgSpeedCount>>,
     fifteen_min_ped: Option<Vec<FifteenMinutePedestrian>>,
@@ -222,12 +222,9 @@ struct AdminCountDataTemplate {
     fifteen_min_speed: Option<Vec<TimeBinnedSpeedRangeCount>>,
 }
 
-impl Heading for AdminCountDataTemplate {
-    fn heading() -> String {
-        "Count data".to_string()
-    }
+impl Heading for CountDataTemplate {
+    const NAV_ITEM_TEXT: &str = "Count Data";
 }
-
 #[derive(Debug, Deserialize)]
 enum CountDataFormat {
     Volume15Min,
@@ -250,11 +247,12 @@ struct CountDataParams {
 async fn get_count_data(
     State(state): State<AppState>,
     params: Query<CountDataParams>,
-) -> AdminCountDataTemplate {
+) -> CountDataTemplate {
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
-    let mut count_data = AdminCountDataTemplate {
+    let mut count_data = CountDataTemplate {
         message: None,
+        recordnum: None,
         condition: ResponseCondition::GetInput,
         non_normal_volume: None,
         non_normal_avg_speed: None,
@@ -265,7 +263,10 @@ async fn get_count_data(
         fifteen_min_speed: None,
     };
     let recordnum = match params.recordnum {
-        Some(v) => v,
+        Some(v) => {
+            count_data.recordnum = Some(v);
+            v
+        }
         None => {
             count_data.message = Some("Please provide a record number.".to_string());
             return count_data;
@@ -422,9 +423,7 @@ struct AdminInsertTemplate {
 }
 
 impl Heading for AdminInsertTemplate {
-    fn heading() -> String {
-        "Insert Empty Records".to_string()
-    }
+    const NAV_ITEM_TEXT: &str = "Insert Empty Records";
 }
 
 #[derive(Deserialize, Debug)]
@@ -473,9 +472,7 @@ struct AdminImportLogTemplate {
 }
 
 impl Heading for AdminImportLogTemplate {
-    fn heading() -> String {
-        "View Import Log".to_string()
-    }
+    const NAV_ITEM_TEXT: &str = "View Import Log";
 }
 
 #[derive(Deserialize, Debug)]
@@ -540,9 +537,7 @@ struct HomeTemplate {
 }
 
 impl Heading for HomeTemplate {
-    fn heading() -> String {
-        "main".to_string()
-    }
+    const NAV_ITEM_TEXT: &str = "Welcome";
 }
 
 async fn home() -> HomeTemplate {

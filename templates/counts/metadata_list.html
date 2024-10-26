@@ -1,5 +1,9 @@
 {% extends "admin/main.html" %}
 {% block main %}
+  <h2 class="center">{{ heading() }}</h2>
+  {% if let Some(message) = message %}
+    {{ message }}
+  {% endif %}
   {% if condition == ResponseCondition::GetInput %}
     <form action="{{ ADMIN_METADATA_LIST_PATH }}" method="get">
       <p class="center small">Page {{ page }} of {{ total_pages }} |
@@ -38,6 +42,8 @@
             <th>y</th>
             <th>amending</th>
             <th>ampeak</th>
+            <th>pmending</th>
+            <th>pmpeak</th>
             <th>bikepeddesc</th>
             <th>bikepedfacility</th>
             <th>bikepedgroup</th>
@@ -50,8 +56,6 @@
             <th>mcd</th>
             <th>mp</th>
             <th>offset</th>
-            <th>pmending</th>
-            <th>pmpeak</th>
             <th>prj</th>
             <th>program</th>
             <th>rdprefix</th>
@@ -90,6 +94,8 @@
               <td>{{ self::display_some(item.y) }}</td>
               <td>{{ self::display_some(item.amending) }}</td>
               <td>{{ self::display_some(item.ampeak) }}</td>
+              <td>{{ self::display_some(item.pmending) }}</td>
+              <td>{{ self::display_some(item.pmpeak) }}</td>
               <td>{{ self::display_some(item.bikepeddesc) }}</td>
               <td>{{ self::display_some(item.bikepedfacility) }}</td>
               <td>{{ self::display_some(item.bikepedgroup) }}</td>
@@ -102,8 +108,6 @@
               <td>{{ self::display_some(item.mcd) }}</td>
               <td>{{ self::display_some(item.mp) }}</td>
               <td>{{ self::display_some(item.offset) }}</td>
-              <td>{{ self::display_some(item.pmending) }}</td>
-              <td>{{ self::display_some(item.pmpeak) }}</td>
               <td>{{ self::display_some(item.prj) }}</td>
               <td>{{ self::display_some(item.program) }}</td>
               <td>{{ self::display_some(item.rdprefix) }}</td>
