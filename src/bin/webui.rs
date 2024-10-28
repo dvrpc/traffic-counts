@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::fmt;
@@ -63,10 +62,7 @@ async fn main() {
             ADMIN_METADATA_INSERT_PATH,
             get(get_insert).post(post_insert),
         )
-        .route_with_tsr(
-            ADMIN_IMPORT_LOG_PATH,
-            get(get_view_import_log).post(post_view_import_log),
-        )
+        .route_with_tsr(ADMIN_IMPORT_LOG_PATH, get(get_view_import_log))
         .route_with_tsr(ADMIN_COUNT_DATA_PATH, get(get_count_data))
         .route_with_tsr(ADMIN_AADV_PATH, get(get_aadv))
         .with_state(state)
@@ -94,13 +90,11 @@ enum ResponseCondition {
     Success,
 }
 
-/// A form, used in multiple places, for filtering by recordnum.
-#[derive(Deserialize, Debug)]
-struct RecordnumFilterForm {
-    // We really want an `Option<u32>` here, but for some reason serde cannot handle
-    // the None variant properly, so have to parse it manually.
-    #[serde(default)]
-    recordnum: String,
+/// Query params used to filter for particular recordnum or clear filter.
+#[derive(Debug, Deserialize)]
+struct RecordnumFilterParams {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    recordnum: Option<u32>,
     clear: Option<String>,
 }
 
@@ -126,7 +120,6 @@ async fn admin() -> AdminMainTemplate {
 #[template(path = "counts/metadata_list.html")]
 struct AdminMetadataListTemplate {
     message: Option<String>,
-    condition: ResponseCondition,
     metadata: Vec<Metadata>,
     total_pages: u32,
     page: u32,
@@ -148,33 +141,31 @@ async fn get_metadata_list(
 ) -> AdminMetadataListTemplate {
     let results_per_page = 100;
     let page = page.0.page.unwrap_or(1);
-    let mut message = None;
-
-    let conn = state.conn_pool.get().unwrap();
-
-    let metadata = match db::get_metadata_paginated(&conn, Some(page * results_per_page), None) {
-        Ok(v) => v,
-        // TODO: handle this later
-        Err(e) => {
-            message = Some(format!("{e}"));
-            vec![]
-        }
-    };
     let total_pages = state.num_metadata_records / results_per_page;
-    AdminMetadataListTemplate {
-        message,
-        condition: ResponseCondition::GetInput,
-        metadata,
+    let conn = state.conn_pool.get().unwrap();
+    let mut template = AdminMetadataListTemplate {
+        message: None,
+        metadata: vec![],
         total_pages,
         page,
+    };
+
+    match db::get_metadata_paginated(&conn, Some(page * results_per_page), None) {
+        Ok(v) => {
+            template.metadata = v;
+        }
+        Err(e) => {
+            template.message = Some(format!("{e}"));
+        }
     }
+    template
 }
 
 #[derive(Template, Debug, Default)]
 #[template(path = "counts/metadata_detail.html")]
 struct AdminMetadataDetailTemplate {
     message: Option<String>,
-    condition: ResponseCondition,
+    recordnum: Option<u32>,
     metadata: Option<Metadata>,
 }
 
@@ -182,42 +173,49 @@ impl Heading for AdminMetadataDetailTemplate {
     const NAV_ITEM_TEXT: &str = "View Count Metadata";
 }
 
+/// Query params used to filter for particular recordnum or clear filter.
+#[derive(Debug, Deserialize)]
+struct AdminMetadataDetailParams {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    recordnum: Option<u32>,
+}
+
 async fn get_metadata_detail(
     State(state): State<AppState>,
-    recordnum: Query<HashMap<String, u32>>,
+    params: Query<AdminMetadataDetailParams>,
 ) -> AdminMetadataDetailTemplate {
     let conn = state.conn_pool.get().unwrap();
-    let mut detail = AdminMetadataDetailTemplate {
+    let params = params.0;
+    let mut template = AdminMetadataDetailTemplate {
         message: None,
-        condition: ResponseCondition::GetInput,
+        recordnum: None,
         metadata: None,
     };
-    let recordnum = match recordnum.0.get("recordnum") {
-        Some(v) => v,
-        None => {
-            detail.message = Some("Please provide a record number.".to_string());
-            return detail;
-        }
-    };
 
-    detail.metadata = match db::get_metadata(&conn, *recordnum) {
-        Ok(v) => Some(v),
-        Err(e) => {
-            // Handle the one error that is probable (no matching recordnum in db).
-            if e.source().is_some_and(|v| {
-                matches!(
-                    v.downcast_ref::<OracleError>().unwrap().kind(),
-                    OracleErrorKind::NoDataFound
-                )
-            }) {
-                detail.message = Some(format!("Record {recordnum} not found."))
-            } else {
-                detail.message = Some(format!("{e}"))
+    if params.recordnum.is_none() {
+        template.message = Some("Please provide a record number.".to_string());
+    } else if let Some(v) = params.recordnum {
+        template.recordnum = Some(v);
+        match db::get_metadata(&conn, v) {
+            Ok(w) => {
+                template.metadata = Some(w);
             }
-            return detail;
+            Err(e) => {
+                // Handle the one error that is probable (no matching recordnum in db).
+                if e.source().is_some_and(|v| {
+                    matches!(
+                        v.downcast_ref::<OracleError>().unwrap().kind(),
+                        OracleErrorKind::NoDataFound
+                    )
+                }) {
+                    template.message = Some(format!("Record {v} not found."))
+                } else {
+                    template.message = Some(format!("{e}"))
+                }
+            }
         }
-    };
-    detail
+    }
+    template
 }
 
 #[derive(Template, Debug, Default)]
@@ -481,6 +479,7 @@ async fn post_insert(
 #[template(path = "admin/import_log.html")]
 struct AdminImportLogTemplate {
     message: Option<String>,
+    recordnum: Option<u32>,
     log_records: Vec<ImportLogEntry>,
 }
 
@@ -488,50 +487,42 @@ impl Heading for AdminImportLogTemplate {
     const NAV_ITEM_TEXT: &str = "View Import Log";
 }
 
-async fn get_view_import_log(State(state): State<AppState>) -> AdminImportLogTemplate {
-    let conn = state.conn_pool.get().unwrap();
-    let (message, log_records) = match db::get_import_log(&conn, None) {
-        Ok(v) => (Some("".to_string()), v),
-        Err(e) => (Some(format!("Error: {e}")), vec![]),
-    };
-
-    AdminImportLogTemplate {
-        message,
-        log_records,
-    }
-}
-
-async fn post_view_import_log(
+async fn get_view_import_log(
     State(state): State<AppState>,
-    Form(input): Form<RecordnumFilterForm>,
+    params: Query<RecordnumFilterParams>,
 ) -> AdminImportLogTemplate {
     let conn = state.conn_pool.get().unwrap();
-
-    let (message, log_records) = if input.clear.is_some() {
-        match db::get_import_log(&conn, None) {
-            Ok(v) => (Some("".to_string()), v),
-            Err(e) => (Some(format!("Error: {e}")), vec![]),
-        }
-    } else if input.recordnum.is_empty() {
-        (Some("Please specify a recordnum.".to_string()), vec![])
-    } else {
-        match input.recordnum.parse() {
-            Ok(v) => match db::get_import_log(&conn, Some(v)) {
-                Ok(w) if w.is_empty() => (
-                    Some(format!("No import log records found for recordnum {v}.")),
-                    vec![],
-                ),
-                Ok(w) => (None, w),
-                Err(e) => (Some(format!("Error: {e}.")), vec![]),
-            },
-            Err(e) => (Some(format!("Error: {e}.")), vec![]),
-        }
+    let params = params.0;
+    let mut template = AdminImportLogTemplate {
+        message: None,
+        recordnum: None,
+        log_records: vec![],
     };
 
-    AdminImportLogTemplate {
-        message,
-        log_records,
+    if params.clear.is_some() || params.recordnum.is_none() {
+        match db::get_import_log(&conn, None) {
+            Ok(v) => {
+                template.log_records = v;
+            }
+            Err(e) => {
+                template.message = Some(format!("Error: {e}"));
+            }
+        }
+    } else if let Some(v) = params.recordnum {
+        template.recordnum = Some(v);
+        match db::get_import_log(&conn, Some(v)) {
+            Ok(w) if w.is_empty() => {
+                template.message = Some(format!("No import log records found for recordnum {v}."));
+            }
+            Ok(w) => {
+                template.log_records = w;
+            }
+            Err(e) => {
+                template.message = Some(format!("Error: {e}"));
+            }
+        }
     }
+    template
 }
 
 #[derive(Template, Debug, Default)]
@@ -546,14 +537,10 @@ impl Heading for AadvTemplate {
     const NAV_ITEM_TEXT: &str = "View Current and Historical AADV";
 }
 
-#[derive(Debug, Deserialize)]
-struct AadvParams {
-    #[serde(default, deserialize_with = "empty_string_as_none")]
-    recordnum: Option<u32>,
-    clear: Option<String>,
-}
-
-async fn get_aadv(State(state): State<AppState>, params: Query<AadvParams>) -> AadvTemplate {
+async fn get_aadv(
+    State(state): State<AppState>,
+    params: Query<RecordnumFilterParams>,
+) -> AadvTemplate {
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
     let mut template = AadvTemplate {

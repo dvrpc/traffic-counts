@@ -1,117 +1,120 @@
 {% extends "admin/main.html" %}
 {% block main %}
-  <h2 class="center">{{ heading() }}</h2>
+  <h2 class="center">{{ heading() }}
+    {%- if let Some(metadata) = metadata -%} 
+      : {{ metadata.recordnum }}
+    {% endif %}
+  </h2>
+
   {% if let Some(message) = message %}
     {{ message }}
   {% endif %}
-  {% if condition == ResponseCondition::GetInput %}
-      {% if let Some(metadata) = metadata %}
-        {% if let Some(count_kind) = metadata.count_kind %}
-          {% if count_kind == &CountKind::Class || count_kind == &CountKind::Volume || count_kind == &CountKind::FifteenMinVolume %}
-            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=VolumeDayByHour">
-              Volume by Hour of Day
-            </a>
-          {% endif %}
 
-          {% if count_kind == &CountKind::FifteenMinVolume 
-            || count_kind == &CountKind::Bicycle1 
-            || count_kind == &CountKind::Bicycle2 
-            || count_kind == &CountKind::Bicycle3 
-            || count_kind == &CountKind::Bicycle4 
-            || count_kind == &CountKind::Bicycle5 
-            || count_kind == &CountKind::Bicycle6 
-            || count_kind == &CountKind::Pedestrian 
-            || count_kind == &CountKind::Pedestrian2 
-          %}
-            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Volume15Min">
-              Fifteen-minute Volume
-            </a>
-            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=VolumeHourly">
-              Hourly Volume
-            </a>
-          {% endif %}
-
-          {% if count_kind == &CountKind::Class %}
-            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Class15Min">
-              Fifteen-minute Class
-            </a>
-            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=ClassHourly">
-              Hourly Class
-            </a>
-      
-          {% endif %}
-
-          {% if count_kind == &CountKind::Class || count_kind == &CountKind::Speed %}
-            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Speed15Min">
-              Fifteen-minute Speed
-            </a>
-            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=SpeedHourly">
-              Hourly Speed
-            </a>
-            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=SpeedDayByHour">
-              Avg Speed by Hour of Day
-            </a>
-          {% endif %}
-
-          <a href="{{ ADMIN_AADV_PATH }}?recordnum={{ metadata.recordnum }}">AADV</a>
-        {% endif %}
-      <br/>
-      <div id="scroll-table-container">
-        <table id="scroll-table">
-          <thead><tr>
-            <th>Field</th>
-            <th>Value</th>
-          </tr></thead>
-          <tbody>
-            <tr>
-            <tr><td>recordnum</td><td>{{ metadata.recordnum }}</tr>
-              <tr><td>count_type</td><td>{{ self::display_some(metadata.count_kind) }}</td></tr>
-              <tr><td>datelastcounted</td><td>{{ self::display_some(metadata.datelastcounted) }}</td></tr>
-              <tr><td>technician</td><td>{{ self::display_some(metadata.technician) }}</td></tr>
-              <tr><td>counter_id</td><td>{{ self::display_some(metadata.counter_id) }}</td></tr>
-              <tr><td>cntdir</td><td>{{ self::display_some(metadata.cntdir) }}</td></tr>
-              <tr><td>trafdir</td><td>{{ self::display_some(metadata.trafdir) }}</td></tr>
-              <tr><td>indir</td><td>{{ self::display_some(metadata.indir) }}</td></tr>
-              <tr><td>outdir</td><td>{{ self::display_some(metadata.outdir) }}</td></tr>
-              <tr><td>fromlmt</td><td>{{ self::display_some(metadata.fromlmt) }}</td></tr>
-              <tr><td>tolmt</td><td>{{ self::display_some(metadata.tolmt) }}</td></tr>
-              <tr><td>latitude</td><td>{{ self::display_some(metadata.latitude) }}</td></tr>
-              <tr><td>longitude</td><td>{{ self::display_some(metadata.longitude) }}</td></tr>
-              <tr><td>x</td><td>{{ self::display_some(metadata.x) }}</td></tr>
-              <tr><td>y</td><td>{{ self::display_some(metadata.y) }}</td></tr>
-              <tr><td>amending</td><td>{{ self::display_some(metadata.amending) }}</td></tr>
-              <tr><td>ampeak</td><td>{{ self::display_some(metadata.ampeak) }}</td></tr>
-              <tr><td>pmending</td><td>{{ self::display_some(metadata.pmending) }}</td></tr>
-              <tr><td>pmpeak</td><td>{{ self::display_some(metadata.pmpeak) }}</td></tr>
-              <tr><td>bikepeddesc</td><td>{{ self::display_some(metadata.bikepeddesc) }}</td></tr>
-              <tr><td>bikepedfacility</td><td>{{ self::display_some(metadata.bikepedfacility) }}</td></tr>
-              <tr><td>bikepedgroup</td><td>{{ self::display_some(metadata.bikepedgroup) }}</td></tr>
-              <tr><td>comments</td><td>{{ self::display_some(metadata.comments) }}</td></tr>
-              <tr><td>createheaderdate</td><td>{{ self::display_some(metadata.createheaderdate) }}</td></tr>
-              <tr><td>description</td><td>{{ self::display_some(metadata.description) }}</td></tr>
-              <tr><td>fc</td><td>{{ self::display_some(metadata.fc) }}</td></tr>
-              <tr><td>importdatadate</td><td>{{ self::display_some(metadata.importdatadate) }}</td></tr>
-              <tr><td>isurban</td><td>{{ self::display_some(metadata.isurban) }}</td></tr>
-              <tr><td>mcd</td><td>{{ self::display_some(metadata.mcd) }}</td></tr>
-              <tr><td>mp</td><td>{{ self::display_some(metadata.mp) }}</td></tr>
-              <tr><td>offset</td><td>{{ self::display_some(metadata.offset) }}</td></tr>
-              <tr><td>prj</td><td>{{ self::display_some(metadata.prj) }}</td></tr>
-              <tr><td>program</td><td>{{ self::display_some(metadata.program) }}</td></tr>
-              <tr><td>rdprefix</td><td>{{ self::display_some(metadata.rdprefix) }}</td></tr>
-              <tr><td>rdsuffix</td><td>{{ self::display_some(metadata.rdsuffix) }}</td></tr>
-              <tr><td>road</td><td>{{ self::display_some(metadata.road) }}</td></tr>
-              <tr><td>route</td><td>{{ self::display_some(metadata.route) }}</td></tr>
-              <tr><td>seg</td><td>{{ self::display_some(metadata.seg) }}</td></tr>
-              <tr><td>sidewalk</td><td>{{ self::display_some(metadata.sidewalk) }}</td></tr>
-              <tr><td>speed limit</td><td>{{ self::display_some(metadata.speedlimit) }}</td></tr>
-              <tr><td>source</td><td>{{ self::display_some(metadata.source) }}</td></tr>
-              <tr><td>sr</td><td>{{ self::display_some(metadata.sr) }}</td></tr>
-              <tr><td>sri</td><td>{{ self::display_some(metadata.sri) }}</td></tr>
-              <tr><td>stationid</td><td>{{ self::display_some(metadata.stationid) }}</td></tr>
-          </tbody>
-        </table>
-      </div>
+  {% if let Some(metadata) = metadata %}
+    {% if let Some(count_kind) = metadata.count_kind %}
+      {% if count_kind == &CountKind::Class || count_kind == &CountKind::Volume || count_kind == &CountKind::FifteenMinVolume %}
+        <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=VolumeDayByHour">
+          Volume by Hour of Day
+        </a>
       {% endif %}
-    </form>
+
+      {% if count_kind == &CountKind::FifteenMinVolume 
+        || count_kind == &CountKind::Bicycle1 
+        || count_kind == &CountKind::Bicycle2 
+        || count_kind == &CountKind::Bicycle3 
+        || count_kind == &CountKind::Bicycle4 
+        || count_kind == &CountKind::Bicycle5 
+        || count_kind == &CountKind::Bicycle6 
+        || count_kind == &CountKind::Pedestrian 
+        || count_kind == &CountKind::Pedestrian2 
+      %}
+        <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Volume15Min">
+          Fifteen-minute Volume
+        </a>
+        <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=VolumeHourly">
+          Hourly Volume
+        </a>
+      {% endif %}
+
+      {% if count_kind == &CountKind::Class %}
+        <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Class15Min">
+          Fifteen-minute Class
+        </a>
+        <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=ClassHourly">
+          Hourly Class
+        </a>
+      {% endif %}
+
+      {% if count_kind == &CountKind::Class || count_kind == &CountKind::Speed %}
+        <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Speed15Min">
+          Fifteen-minute Speed
+        </a>
+        <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=SpeedHourly">
+          Hourly Speed
+        </a>
+        <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=SpeedDayByHour">
+          Avg Speed by Hour of Day
+        </a>
+      {% endif %}
+
+      <a href="{{ ADMIN_AADV_PATH }}?recordnum={{ metadata.recordnum }}">AADV</a>
+    {% endif %}
+
+    <br/>
+    <div id="scroll-table-container">
+      <table id="scroll-table">
+        <thead><tr>
+          <th>Field</th>
+          <th>Value</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+          <tr><td>recordnum</td><td>{{ metadata.recordnum }}</tr>
+          <tr><td>count_type</td><td>{{ self::display_some(metadata.count_kind) }}</td></tr>
+          <tr><td>datelastcounted</td><td>{{ self::display_some(metadata.datelastcounted) }}</td></tr>
+          <tr><td>technician</td><td>{{ self::display_some(metadata.technician) }}</td></tr>
+          <tr><td>counter_id</td><td>{{ self::display_some(metadata.counter_id) }}</td></tr>
+          <tr><td>cntdir</td><td>{{ self::display_some(metadata.cntdir) }}</td></tr>
+          <tr><td>trafdir</td><td>{{ self::display_some(metadata.trafdir) }}</td></tr>
+          <tr><td>indir</td><td>{{ self::display_some(metadata.indir) }}</td></tr>
+          <tr><td>outdir</td><td>{{ self::display_some(metadata.outdir) }}</td></tr>
+          <tr><td>fromlmt</td><td>{{ self::display_some(metadata.fromlmt) }}</td></tr>
+          <tr><td>tolmt</td><td>{{ self::display_some(metadata.tolmt) }}</td></tr>
+          <tr><td>latitude</td><td>{{ self::display_some(metadata.latitude) }}</td></tr>
+          <tr><td>longitude</td><td>{{ self::display_some(metadata.longitude) }}</td></tr>
+          <tr><td>x</td><td>{{ self::display_some(metadata.x) }}</td></tr>
+          <tr><td>y</td><td>{{ self::display_some(metadata.y) }}</td></tr>
+          <tr><td>amending</td><td>{{ self::display_some(metadata.amending) }}</td></tr>
+          <tr><td>ampeak</td><td>{{ self::display_some(metadata.ampeak) }}</td></tr>
+          <tr><td>pmending</td><td>{{ self::display_some(metadata.pmending) }}</td></tr>
+          <tr><td>pmpeak</td><td>{{ self::display_some(metadata.pmpeak) }}</td></tr>
+          <tr><td>bikepeddesc</td><td>{{ self::display_some(metadata.bikepeddesc) }}</td></tr>
+          <tr><td>bikepedfacility</td><td>{{ self::display_some(metadata.bikepedfacility) }}</td></tr>
+          <tr><td>bikepedgroup</td><td>{{ self::display_some(metadata.bikepedgroup) }}</td></tr>
+          <tr><td>comments</td><td>{{ self::display_some(metadata.comments) }}</td></tr>
+          <tr><td>createheaderdate</td><td>{{ self::display_some(metadata.createheaderdate) }}</td></tr>
+          <tr><td>description</td><td>{{ self::display_some(metadata.description) }}</td></tr>
+          <tr><td>fc</td><td>{{ self::display_some(metadata.fc) }}</td></tr>
+          <tr><td>importdatadate</td><td>{{ self::display_some(metadata.importdatadate) }}</td></tr>
+          <tr><td>isurban</td><td>{{ self::display_some(metadata.isurban) }}</td></tr>
+          <tr><td>mcd</td><td>{{ self::display_some(metadata.mcd) }}</td></tr>
+          <tr><td>mp</td><td>{{ self::display_some(metadata.mp) }}</td></tr>
+          <tr><td>offset</td><td>{{ self::display_some(metadata.offset) }}</td></tr>
+          <tr><td>prj</td><td>{{ self::display_some(metadata.prj) }}</td></tr>
+          <tr><td>program</td><td>{{ self::display_some(metadata.program) }}</td></tr>
+          <tr><td>rdprefix</td><td>{{ self::display_some(metadata.rdprefix) }}</td></tr>
+          <tr><td>rdsuffix</td><td>{{ self::display_some(metadata.rdsuffix) }}</td></tr>
+          <tr><td>road</td><td>{{ self::display_some(metadata.road) }}</td></tr>
+          <tr><td>route</td><td>{{ self::display_some(metadata.route) }}</td></tr>
+          <tr><td>seg</td><td>{{ self::display_some(metadata.seg) }}</td></tr>
+          <tr><td>sidewalk</td><td>{{ self::display_some(metadata.sidewalk) }}</td></tr>
+          <tr><td>speed limit</td><td>{{ self::display_some(metadata.speedlimit) }}</td></tr>
+          <tr><td>source</td><td>{{ self::display_some(metadata.source) }}</td></tr>
+          <tr><td>sr</td><td>{{ self::display_some(metadata.sr) }}</td></tr>
+          <tr><td>sri</td><td>{{ self::display_some(metadata.sri) }}</td></tr>
+          <tr><td>stationid</td><td>{{ self::display_some(metadata.stationid) }}</td></tr>
+        </tbody>
+      </table>
+    </div>
   {% endif %}
 {% endblock %}

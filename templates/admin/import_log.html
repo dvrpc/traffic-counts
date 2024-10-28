@@ -1,7 +1,11 @@
 {% extends "admin/main.html" %}
 
 {% block main %}
-  <h2 class="center">{{ heading() }}</h2>
+  <h2 class="center">{{ heading() }}
+    {%- if let Some(v) = recordnum -%} 
+      : <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ v }}">{{ v }}</a>
+    {% endif %}
+  </h2>
   {% if let Some(message) = message %}
     {{ message }}
   {% endif %}
