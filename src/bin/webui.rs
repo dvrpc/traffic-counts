@@ -30,6 +30,7 @@ const ADMIN_METADATA_INSERT_PATH: &str = "/admin/insert";
 const ADMIN_COUNT_DATA_PATH: &str = "/admin/count";
 const ADMIN_IMPORT_LOG_PATH: &str = "/admin/import-log";
 const ADMIN_AADV_PATH: &str = "/admin/aadv";
+const RECORD_CREATION_LIMIT: u32 = db::RECORD_CREATION_LIMIT;
 
 #[derive(Clone)]
 struct AppState {

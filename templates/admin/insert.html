@@ -8,7 +8,7 @@
   {% if condition == ResponseCondition::GetInput %}
     <form action="{{ ADMIN_METADATA_INSERT_PATH }}" method="post">
       <label>
-        How many empty records would you like to create?<br>
+        How many empty records would you like to create? ({{ RECORD_CREATION_LIMIT }} maximum)<br>
         <input type="text" name="number_to_create" required />
       </label>
       <input type="submit" name="confirm" value="Submit">
