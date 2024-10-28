@@ -8,7 +8,7 @@
       {% if let Some(metadata) = metadata %}
         {% if let Some(count_kind) = metadata.count_kind %}
           {% if count_kind == &CountKind::Class || count_kind == &CountKind::Volume || count_kind == &CountKind::FifteenMinVolume %}
-            <a href="{{ ADMIN_COUNT_DATA }}?recordnum={{metadata.recordnum }}&format=VolumeDayByHour">
+            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=VolumeDayByHour">
               Volume by Hour of Day
             </a>
           {% endif %}
@@ -23,35 +23,37 @@
             || count_kind == &CountKind::Pedestrian 
             || count_kind == &CountKind::Pedestrian2 
           %}
-            <a href="{{ ADMIN_COUNT_DATA }}?recordnum={{metadata.recordnum }}&format=Volume15Min">
+            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Volume15Min">
               Fifteen-minute Volume
             </a>
-            <a href="{{ ADMIN_COUNT_DATA }}?recordnum={{metadata.recordnum }}&format=VolumeHourly">
+            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=VolumeHourly">
               Hourly Volume
             </a>
           {% endif %}
 
           {% if count_kind == &CountKind::Class %}
-            <a href="{{ ADMIN_COUNT_DATA }}?recordnum={{metadata.recordnum }}&format=Class15Min">
+            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Class15Min">
               Fifteen-minute Class
             </a>
-            <a href="{{ ADMIN_COUNT_DATA }}?recordnum={{metadata.recordnum }}&format=ClassHourly">
+            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=ClassHourly">
               Hourly Class
             </a>
       
           {% endif %}
 
           {% if count_kind == &CountKind::Class || count_kind == &CountKind::Speed %}
-            <a href="{{ ADMIN_COUNT_DATA }}?recordnum={{metadata.recordnum }}&format=Speed15Min">
+            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=Speed15Min">
               Fifteen-minute Speed
             </a>
-            <a href="{{ ADMIN_COUNT_DATA }}?recordnum={{metadata.recordnum }}&format=SpeedHourly">
+            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=SpeedHourly">
               Hourly Speed
             </a>
-            <a href="{{ ADMIN_COUNT_DATA }}?recordnum={{metadata.recordnum }}&format=SpeedDayByHour">
+            <a href="{{ ADMIN_COUNT_DATA_PATH }}?recordnum={{metadata.recordnum }}&format=SpeedDayByHour">
               Avg Speed by Hour of Day
             </a>
           {% endif %}
+
+          <a href="{{ ADMIN_AADV_PATH }}?recordnum={{ metadata.recordnum }}">AADV</a>
         {% endif %}
       <br/>
       <div id="scroll-table-container">

@@ -4,12 +4,21 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use chrono::{Datelike, Days, Local, NaiveDate, NaiveDateTime, Timelike};
-use oracle::Connection;
+use oracle::{Connection, RowValue};
 
 use crate::{
     CountError, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, LaneDirection,
     TimeBinnedVehicleClassCount,
 };
+
+/// A full Average Annual Daily Volume entry in the database.
+#[derive(Debug, RowValue)]
+pub struct AadvEntry {
+    pub recordnum: u32,
+    pub aadv: f32,
+    pub direction: Option<LaneDirection>,
+    pub date_calculated: NaiveDate,
+}
 
 /// A trait for calculating and inserting annual average daily volume.
 pub trait Aadv {
@@ -652,6 +661,27 @@ pub fn excluded_days(conn: &Connection) -> Result<Vec<NaiveDate>, oracle::Error>
         days.push(result)
     }
     Ok(days)
+}
+
+/// Get AADV for all records or specific one.
+pub fn get_aadv(conn: &Connection, recordnum: Option<u32>) -> Result<Vec<AadvEntry>, CountError> {
+    let results = match recordnum {
+        Some(v) => conn.query_as::<AadvEntry>(
+            "select recordnum, aadv, direction, date_calculated from aadv where recordnum = :1 order by date_calculated DESC",
+            &[&v],
+        )?,
+        None => conn.query_as::<AadvEntry>(
+            "select recordnum, aadv, direction, date_calculated from aadv order by date_calculated DESC",
+            &[],
+        )?,
+    };
+
+    let mut data = vec![];
+    for result in results {
+        let result = result?;
+        data.push(result);
+    }
+    Ok(data)
 }
 
 #[cfg(test)]

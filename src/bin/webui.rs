@@ -17,6 +17,7 @@ use serde::{de, Deserialize, Deserializer};
 use tower_http::services::ServeDir;
 
 use traffic_counts::{
+    aadv::{self, AadvEntry},
     db::{self, crud::Crud, ImportLogEntry},
     denormalize::{NonNormalAvgSpeedCount, NonNormalVolCount},
     CountKind, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, Metadata,
@@ -27,8 +28,9 @@ const ADMIN_PATH: &str = "/admin";
 const ADMIN_METADATA_LIST_PATH: &str = "/admin/metadata-list";
 const ADMIN_METADATA_DETAIL_PATH: &str = "/admin/metadata-detail";
 const ADMIN_METADATA_INSERT_PATH: &str = "/admin/insert";
-const ADMIN_COUNT_DATA: &str = "/admin/count";
+const ADMIN_COUNT_DATA_PATH: &str = "/admin/count";
 const ADMIN_IMPORT_LOG_PATH: &str = "/admin/import-log";
+const ADMIN_AADV_PATH: &str = "/admin/aadv";
 
 #[derive(Clone)]
 struct AppState {
@@ -65,7 +67,8 @@ async fn main() {
             ADMIN_IMPORT_LOG_PATH,
             get(get_view_import_log).post(post_view_import_log),
         )
-        .route_with_tsr(ADMIN_COUNT_DATA, get(get_count_data))
+        .route_with_tsr(ADMIN_COUNT_DATA_PATH, get(get_count_data))
+        .route_with_tsr(ADMIN_AADV_PATH, get(get_aadv))
         .with_state(state)
         .nest_service("/static", ServeDir::new("static"));
 
@@ -89,6 +92,16 @@ enum ResponseCondition {
     #[default]
     GetInput,
     Success,
+}
+
+/// A form, used in multiple places, for filtering by recordnum.
+#[derive(Deserialize, Debug)]
+struct RecordnumFilterForm {
+    // We really want an `Option<u32>` here, but for some reason serde cannot handle
+    // the None variant properly, so have to parse it manually.
+    #[serde(default)]
+    recordnum: String,
+    clear: Option<String>,
 }
 
 /// The front page of the admin section.
@@ -475,15 +488,6 @@ impl Heading for AdminImportLogTemplate {
     const NAV_ITEM_TEXT: &str = "View Import Log";
 }
 
-#[derive(Deserialize, Debug)]
-struct AdminImportLogForm {
-    // We really want an `Option<u32>` here, but for some reason serde cannot handle
-    // the None variant properly, so have to parse it manually.
-    #[serde(default)]
-    recordnum: String,
-    clear: Option<String>,
-}
-
 async fn get_view_import_log(State(state): State<AppState>) -> AdminImportLogTemplate {
     let conn = state.conn_pool.get().unwrap();
     let (message, log_records) = match db::get_import_log(&conn, None) {
@@ -499,7 +503,7 @@ async fn get_view_import_log(State(state): State<AppState>) -> AdminImportLogTem
 
 async fn post_view_import_log(
     State(state): State<AppState>,
-    Form(input): Form<AdminImportLogForm>,
+    Form(input): Form<RecordnumFilterForm>,
 ) -> AdminImportLogTemplate {
     let conn = state.conn_pool.get().unwrap();
 
@@ -528,6 +532,54 @@ async fn post_view_import_log(
         message,
         log_records,
     }
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "counts/aadv.html")]
+struct AadvTemplate {
+    message: Option<String>,
+    recordnum: Option<u32>,
+    aadv: Vec<AadvEntry>,
+}
+
+impl Heading for AadvTemplate {
+    const NAV_ITEM_TEXT: &str = "View Current and Historical AADV";
+}
+
+#[derive(Debug, Deserialize)]
+struct AadvParams {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    recordnum: Option<u32>,
+    clear: Option<String>,
+}
+
+async fn get_aadv(State(state): State<AppState>, params: Query<AadvParams>) -> AadvTemplate {
+    let conn = state.conn_pool.get().unwrap();
+    let params = params.0;
+    let mut template = AadvTemplate {
+        message: None,
+        recordnum: None,
+        aadv: vec![],
+    };
+
+    if params.clear.is_some() || params.recordnum.is_none() {
+        match aadv::get_aadv(&conn, None) {
+            Ok(v) => template.aadv = v,
+            Err(e) => {
+                template.message = Some(format!("Error fetching AADV from database: {e}."));
+            }
+        }
+    } else if let Some(v) = params.recordnum {
+        template.recordnum = Some(v);
+        match aadv::get_aadv(&conn, Some(v)) {
+            Ok(w) => template.aadv = w,
+            Err(e) => {
+                template.message = Some(format!("Error fetching AADV from database: {e}"));
+            }
+        }
+    }
+
+    template
 }
 
 #[derive(Template, Default, Debug)]
