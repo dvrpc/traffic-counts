@@ -19,9 +19,7 @@
   </form>
   <br/>
 
-  {% if aadv.is_empty() %}
-    <p>No records found for recordnum {{ self::display_some(recordnum) }}.</p>
-  {% else %} 
+  {% if !aadv.is_empty() %}
     <div class="scroll-table-container">
       <table class="scroll-table">
           <thead><tr>

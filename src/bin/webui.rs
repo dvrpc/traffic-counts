@@ -1,6 +1,6 @@
 use std::env;
 use std::error::Error;
-use std::fmt;
+use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use axum::{
@@ -127,7 +127,7 @@ struct AdminMetadataListTemplate {
 }
 
 impl Heading for AdminMetadataListTemplate {
-    const NAV_ITEM_TEXT: &str = "View Count Metadata Records";
+    const NAV_ITEM_TEXT: &str = "View Metadata Records";
 }
 
 #[derive(Deserialize)]
@@ -171,7 +171,7 @@ struct AdminMetadataDetailTemplate {
 }
 
 impl Heading for AdminMetadataDetailTemplate {
-    const NAV_ITEM_TEXT: &str = "View Count Metadata";
+    const NAV_ITEM_TEXT: &str = "View Metadata";
 }
 
 /// Query params used to filter for particular recordnum or clear filter.
@@ -249,6 +249,21 @@ enum CountDataFormat {
     SpeedDayByHour,
 }
 
+impl Display for CountDataFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CountDataFormat::Volume15Min => write!(f, "15-minute volume"),
+            CountDataFormat::VolumeHourly => write!(f, "hourly volume"),
+            CountDataFormat::VolumeDayByHour => write!(f, "volume by hour of day"),
+            CountDataFormat::Class15Min => write!(f, "15-minute class"),
+            CountDataFormat::ClassHourly => write!(f, "hourly class"),
+            CountDataFormat::Speed15Min => write!(f, "15-minute speed"),
+            CountDataFormat::SpeedHourly => write!(f, "hourly speed"),
+            CountDataFormat::SpeedDayByHour => write!(f, "speed by hour of day"),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct CountDataParams {
     #[serde(default, deserialize_with = "empty_string_as_none")]
@@ -262,7 +277,7 @@ async fn get_count_data(
 ) -> CountDataTemplate {
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
-    let mut count_data = CountDataTemplate {
+    let mut template = CountDataTemplate {
         message: None,
         recordnum: None,
         condition: ResponseCondition::GetInput,
@@ -276,20 +291,20 @@ async fn get_count_data(
     };
     let recordnum = match params.recordnum {
         Some(v) => {
-            count_data.recordnum = Some(v);
+            template.recordnum = Some(v);
             v
         }
         None => {
-            count_data.message = Some("Please provide a record number.".to_string());
-            return count_data;
+            template.message = Some("Please provide a record number.".to_string());
+            return template;
         }
     };
     let format = match params.format {
         Some(v) => v,
         None => {
-            count_data.message =
+            template.message =
                 Some("Please provide the format for the data to be presented in.".to_string());
-            return count_data;
+            return template;
         }
     };
 
@@ -297,56 +312,59 @@ async fn get_count_data(
     let count_kind = match db::get_count_kind(&conn, recordnum) {
         Ok(Some(v)) => v,
         Ok(None) => {
-            count_data.message = Some(
+            template.message = Some(
                 "Cannot determine kind of count, and thus unable to fetch count data.".to_string(),
             );
-            return count_data;
+            return template;
         }
         Err(_) => {
-            count_data.message = Some(
+            template.message = Some(
                 "Error fetching count kind from database, and thus unable to fetch count data."
                     .to_string(),
             );
-            return count_data;
+            return template;
         }
     };
+
+    // Msg to user if no results are empty.
+    fn no_records(format: CountDataFormat, recordnum: u32) -> Option<String> {
+        Some(format!(
+            "No {format} records found for recordnum {recordnum}."
+        ))
+    }
 
     // Get data according to format/count kind and put into appropriate variable of template.
     match format {
         CountDataFormat::Volume15Min => match count_kind {
-            CountKind::FifteenMinVolume => {
-                count_data.fifteen_min_vehicle =
-                    match FifteenMinuteVehicle::select(&conn, recordnum) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            count_data.message = Some(format!("{e}"));
-                            return count_data;
-                        }
-                    };
-            }
+            CountKind::FifteenMinVolume => match FifteenMinuteVehicle::select(&conn, recordnum) {
+                Ok(v) if v.is_empty() => {
+                    template.message = no_records(CountDataFormat::Volume15Min, recordnum)
+                }
+                Ok(v) => template.fifteen_min_vehicle = Some(v),
+                Err(e) => {
+                    template.message = Some(format!("{e}"));
+                }
+            },
             CountKind::Bicycle1
             | CountKind::Bicycle2
             | CountKind::Bicycle3
             | CountKind::Bicycle4
             | CountKind::Bicycle5
-            | CountKind::Bicycle6 => {
-                count_data.fifteen_min_bike = match FifteenMinuteBicycle::select(&conn, recordnum) {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        count_data.message = Some(format!("{e}"));
-                        return count_data;
-                    }
-                };
-            }
+            | CountKind::Bicycle6 => match FifteenMinuteBicycle::select(&conn, recordnum) {
+                Ok(v) if v.is_empty() => {
+                    template.message = no_records(CountDataFormat::Volume15Min, recordnum)
+                }
+                Ok(v) => template.fifteen_min_bike = Some(v),
+                Err(e) => template.message = Some(format!("{e}")),
+            },
             CountKind::Pedestrian | CountKind::Pedestrian2 => {
-                count_data.fifteen_min_ped = match FifteenMinutePedestrian::select(&conn, recordnum)
-                {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        count_data.message = Some(format!("{e}"));
-                        return count_data;
+                match FifteenMinutePedestrian::select(&conn, recordnum) {
+                    Ok(v) if v.is_empty() => {
+                        template.message = no_records(CountDataFormat::Volume15Min, recordnum)
                     }
-                };
+                    Ok(v) => template.fifteen_min_ped = Some(v),
+                    Err(e) => template.message = Some(format!("{e}")),
+                }
             }
             _ => (),
         },
@@ -356,15 +374,15 @@ async fn get_count_data(
                 count_kind,
                 CountKind::Class | CountKind::Volume | CountKind::FifteenMinVolume
             ) {
-                count_data.non_normal_volume = match NonNormalVolCount::select(&conn, recordnum) {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        count_data.message = Some(format!("{e}"));
-                        return count_data;
+                match NonNormalVolCount::select(&conn, recordnum) {
+                    Ok(v) if v.is_empty() => {
+                        template.message = no_records(CountDataFormat::VolumeDayByHour, recordnum)
                     }
-                };
+                    Ok(v) => template.non_normal_volume = Some(v),
+                    Err(e) => template.message = Some(format!("{e}")),
+                }
             } else {
-                count_data.message = Some(format!(
+                template.message = Some(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -372,16 +390,15 @@ async fn get_count_data(
         }
         CountDataFormat::Class15Min => {
             if count_kind == CountKind::Class {
-                count_data.fifteen_min_class =
-                    match TimeBinnedVehicleClassCount::select(&conn, recordnum) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            count_data.message = Some(format!("{e}"));
-                            return count_data;
-                        }
-                    };
+                match TimeBinnedVehicleClassCount::select(&conn, recordnum) {
+                    Ok(v) if v.is_empty() => {
+                        template.message = no_records(CountDataFormat::Class15Min, recordnum)
+                    }
+                    Ok(v) => template.fifteen_min_class = Some(v),
+                    Err(e) => template.message = Some(format!("{e}")),
+                }
             } else {
-                count_data.message = Some(format!(
+                template.message = Some(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -390,16 +407,15 @@ async fn get_count_data(
         CountDataFormat::ClassHourly => {}
         CountDataFormat::Speed15Min => {
             if count_kind == CountKind::Speed || count_kind == CountKind::Class {
-                count_data.fifteen_min_speed =
-                    match TimeBinnedSpeedRangeCount::select(&conn, recordnum) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            count_data.message = Some(format!("{e}"));
-                            return count_data;
-                        }
-                    };
+                match TimeBinnedSpeedRangeCount::select(&conn, recordnum) {
+                    Ok(v) if v.is_empty() => {
+                        template.message = no_records(CountDataFormat::Speed15Min, recordnum)
+                    }
+                    Ok(v) => template.fifteen_min_speed = Some(v),
+                    Err(e) => template.message = Some(format!("{e}")),
+                }
             } else {
-                count_data.message = Some(format!(
+                template.message = Some(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -408,23 +424,22 @@ async fn get_count_data(
         CountDataFormat::SpeedHourly => {}
         CountDataFormat::SpeedDayByHour => {
             if count_kind == CountKind::Speed || count_kind == CountKind::Class {
-                count_data.non_normal_avg_speed =
-                    match NonNormalAvgSpeedCount::select(&conn, recordnum) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            count_data.message = Some(format!("{e}"));
-                            return count_data;
-                        }
-                    };
+                match NonNormalAvgSpeedCount::select(&conn, recordnum) {
+                    Ok(v) if v.is_empty() => {
+                        template.message = no_records(CountDataFormat::SpeedDayByHour, recordnum)
+                    }
+                    Ok(v) => template.non_normal_avg_speed = Some(v),
+                    Err(e) => template.message = Some(format!("{e}")),
+                }
             } else {
-                count_data.message = Some(format!(
+                template.message = Some(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
             }
         }
     }
-    count_data
+    template
 }
 
 #[derive(Template, Debug, Default)]
@@ -435,7 +450,7 @@ struct AdminInsertTemplate {
 }
 
 impl Heading for AdminInsertTemplate {
-    const NAV_ITEM_TEXT: &str = "Insert Empty Records";
+    const NAV_ITEM_TEXT: &str = "Create New Records";
 }
 
 #[derive(Deserialize, Debug)]
@@ -552,6 +567,10 @@ async fn get_aadv(
 
     if params.clear.is_some() || params.recordnum.is_none() {
         match aadv::get_aadv(&conn, None) {
+            Ok(v) if v.is_empty() => {
+                template.aadv = v;
+                template.message = Some("No records found.".to_string());
+            }
             Ok(v) => template.aadv = v,
             Err(e) => {
                 template.message = Some(format!("Error fetching AADV from database: {e}."));
@@ -560,6 +579,10 @@ async fn get_aadv(
     } else if let Some(v) = params.recordnum {
         template.recordnum = Some(v);
         match aadv::get_aadv(&conn, Some(v)) {
+            Ok(w) if w.is_empty() => {
+                template.aadv = w;
+                template.message = Some(format!("No records found for recordnum {v}."));
+            }
             Ok(w) => template.aadv = w,
             Err(e) => {
                 template.message = Some(format!("Error fetching AADV from database: {e}"));
