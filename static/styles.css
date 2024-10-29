@@ -12,6 +12,10 @@
   --blue2: hsl(205, 40%, 48%);
   --blue-gray0: hsl(205, 15%, 30%);
   --blue-gray1: hsl(205, 15%, 60%);
+  --yellow-light: hsl(60, 100%, 55%);
+  --yellow-dark: hsl(60, 100%, 35%);
+  --red-light: hsl(0, 100%, 55%);
+  --red-dark: hsl(0, 100%, 40%);
   color-scheme: light dark;
 }
 
@@ -26,7 +30,7 @@ body {
   width: 100vw;
   display: grid;
   grid-template-rows: 75px 1fr;
-  grid-template-columns: 400px minmax(0, 1fr);
+  grid-template-columns: 370px minmax(0, 1fr);
   grid-template-areas: 
     "header header"
     "nav main";
@@ -120,17 +124,19 @@ button {
 
 .center { text-align: center; }
 .small { font-size: .8rem; }
+.warning { color: var(--yellow-light); }
+.error { color: var(--red-light); }
 
 /* 
   table scrolling & row/col freezing mostly from 
   <https://code-boxx.com/freeze-rows-columns-html-tables/> 
 */
-#scroll-table-container {
+.scroll-table-container {
   overflow-x: auto;
   max-height: calc(100vh - 225px);  /* 100vh - header - main h2 + some extra */
 }
 
-#scroll-table {
+.scroll-table {
   border-collapse: separate;
   border-spacing: 0;
 
@@ -200,8 +206,10 @@ button {
   }
   a, a:visited { color: var(--blue2) };
 
-  #scroll-table {
+  .scroll-table {
     /* change first row/column bg color */
     & thead, th {  background-color: var(--blue-gray0); }
   }
+  .warning { color: var(--yellow-dark); }
+  .error { color: var(--red-dark); }
 }

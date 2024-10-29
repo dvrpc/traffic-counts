@@ -481,7 +481,7 @@ async fn post_insert(
 struct AdminImportLogTemplate {
     message: Option<String>,
     recordnum: Option<u32>,
-    log_records: Vec<ImportLogEntry>,
+    log_entries: Vec<ImportLogEntry>,
 }
 
 impl Heading for AdminImportLogTemplate {
@@ -497,13 +497,13 @@ async fn get_view_import_log(
     let mut template = AdminImportLogTemplate {
         message: None,
         recordnum: None,
-        log_records: vec![],
+        log_entries: vec![],
     };
 
     if params.clear.is_some() || params.recordnum.is_none() {
         match db::get_import_log(&conn, None) {
             Ok(v) => {
-                template.log_records = v;
+                template.log_entries = v;
             }
             Err(e) => {
                 template.message = Some(format!("Error: {e}"));
@@ -516,7 +516,7 @@ async fn get_view_import_log(
                 template.message = Some(format!("No import log records found for recordnum {v}."));
             }
             Ok(w) => {
-                template.log_records = w;
+                template.log_entries = w;
             }
             Err(e) => {
                 template.message = Some(format!("Error: {e}"));
