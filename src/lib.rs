@@ -28,6 +28,7 @@ use std::str::FromStr;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use log::error;
 use oracle::RowValue;
+use serde::Deserialize;
 use thiserror::Error;
 
 pub mod aadv;
@@ -106,7 +107,7 @@ pub enum FileNameProblem {
 /// These are all the types that are in both tc_header and tc_counttype tables.
 /// tc_countype doesn't include Video, that's only in tc_header.
 /// tc_header doesn't include EightDay or Loop, they're only in tc_counttype.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Deserialize)]
 pub enum CountKind {
     Bicycle1,
     Bicycle2,
@@ -381,7 +382,7 @@ pub struct Metadata {
     pub pmpeak: Option<f32>,
     pub prj: Option<String>,
     pub program: Option<String>,
-    pub recordnum: u32,
+    pub recordnum: Option<u32>,
     pub rdprefix: Option<String>,
     pub rdsuffix: Option<String>,
     pub road: Option<String>,
@@ -528,7 +529,7 @@ impl FieldMetadata {
 }
 
 /// The direction of a road.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Deserialize)]
 pub enum RoadDirection {
     North,
     East,
@@ -564,9 +565,8 @@ impl Display for RoadDirection {
         write!(f, "{}", dir)
     }
 }
-
 /// The direction of a lane.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Deserialize)]
 pub enum LaneDirection {
     North,
     East,

@@ -67,3 +67,33 @@ impl FromSql for RoadDirection {
         }
     }
 }
+
+impl ToSql for RoadDirection {
+    fn oratype(&self, _conn: &Connection) -> oracle::Result<OracleType> {
+        Ok(OracleType::NVarchar2(format!("{self}").len() as u32))
+    }
+    fn to_sql(&self, val: &mut SqlValue<'_>) -> oracle::Result<()> {
+        format!("{self}").to_sql(val)
+    }
+}
+
+impl ToSqlNull for RoadDirection {
+    fn oratype_for_null(_conn: &Connection) -> oracle::Result<OracleType> {
+        Ok(OracleType::NVarchar2(0))
+    }
+}
+
+impl ToSql for CountKind {
+    fn oratype(&self, _conn: &Connection) -> oracle::Result<OracleType> {
+        Ok(OracleType::NVarchar2(format!("{self}").len() as u32))
+    }
+    fn to_sql(&self, val: &mut SqlValue<'_>) -> oracle::Result<()> {
+        format!("{self}").to_sql(val)
+    }
+}
+
+impl ToSqlNull for CountKind {
+    fn oratype_for_null(_conn: &Connection) -> oracle::Result<OracleType> {
+        Ok(OracleType::NVarchar2(0))
+    }
+}

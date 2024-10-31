@@ -1,13 +1,11 @@
-{% extends "admin/main.html" %}
+% extends "admin/main.html" %}
 {% block main %}
   <h2 class="center">{{ heading() }}
     {%- if let Some(v) = recordnum -%} 
       : <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ v }}">{{ v }}</a>
     {% endif %}
   </h2>
-  {% if let Some(message) = message %}
-    {{ message }}
-  {% endif %}
+  {{ self::burn_after_reading()|safe }}
 
   <form action="{{ ADMIN_AADV_PATH }}" method="get">
     <label>
@@ -33,7 +31,7 @@
             <tr>
               <th><a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">{{ item.recordnum }}</a></th>
               <td>{{ item.date_calculated }}</td>
-              <td>{{ self::display_some(item.direction) }}</td>
+              <td>{{ item.direction|opt }}</td>
               <td>{{ item.aadv }}</td>
             </tr>
           {% endfor %}

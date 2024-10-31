@@ -6,9 +6,7 @@
       : <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ v }}">{{ v }}</a>
     {% endif %}
   </h2>
-  {% if let Some(message) = message %}
-    {{ message }}
-  {% endif %}
+  {{ self::burn_after_reading()|safe }}
   <form action="{{ ADMIN_IMPORT_LOG_PATH }}" method="get">
     <label>
       Filter by recordnum:

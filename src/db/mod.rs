@@ -177,6 +177,89 @@ pub fn insert_empty_metadata(conn: &Connection, number: u32) -> Result<Vec<u32>,
     Ok(recordnums)
 }
 
+/// Insert one or more [`Metadata`] records using fields from existing one.
+pub fn insert_metadata_from_existing(
+    conn: &Connection,
+    number: u32,
+    metadata: Metadata,
+) -> Result<Vec<u32>, CountError> {
+    if number == 0 {
+        return Err(CountError::DbError("Cannot create 0 records".to_string()));
+    }
+    if number > RECORD_CREATION_LIMIT {
+        return Err(CountError::DbError(format!(
+            "Too many new records requested: cannot created more than {}",
+            RECORD_CREATION_LIMIT
+        )));
+    }
+    let sql = "insert into tc_header (
+        amending, ampeak, bikepeddesc, bikepedfacility, bikepedgroup, \
+        cntdir, comments, type, counterid, createheaderdate, datelastcounted, \
+        description, fc, fromlmt, importdatadate, indir, isurban, latitude, \
+        longitude, mcd, mp, offset, outdir, pmending, pmpeak, prj, program, rdprefix, \
+        rdsuffix, road, route, seg, sidewalk, speedlimit, source, sr, sri, stationid, \
+        takenby, tolmt, trafdir, x, y)
+        VALUES \
+        (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
+        :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33, :34, 
+        :35, :36, :37, :38, :39, :40, :41, :42, :43)
+        RETURNING recordnum INTO :recordnum";
+    let mut stmt = conn.statement(sql).build()?;
+    let mut recordnums = vec![];
+    for _ in 0..number {
+        stmt.execute(&[
+            &metadata.amending,
+            &metadata.ampeak,
+            &metadata.bikepeddesc,
+            &metadata.bikepedfacility,
+            &metadata.bikepedgroup,
+            &metadata.cntdir,
+            &metadata.comments,
+            &metadata.count_kind,
+            &metadata.counter_id,
+            &metadata.createheaderdate,
+            &metadata.datelastcounted,
+            &metadata.description,
+            &metadata.fc,
+            &metadata.fromlmt,
+            &metadata.importdatadate,
+            &metadata.indir,
+            &metadata.isurban,
+            &metadata.latitude,
+            &metadata.longitude,
+            &metadata.mcd,
+            &metadata.mp,
+            &metadata.offset,
+            &metadata.outdir,
+            &metadata.pmending,
+            &metadata.pmpeak,
+            &metadata.prj,
+            &metadata.program,
+            &metadata.rdprefix,
+            &metadata.rdsuffix,
+            &metadata.road,
+            &metadata.route,
+            &metadata.seg,
+            &metadata.sidewalk,
+            &metadata.speedlimit,
+            &metadata.source,
+            &metadata.sr,
+            &metadata.sri,
+            &metadata.stationid,
+            &metadata.technician,
+            &metadata.tolmt,
+            &metadata.trafdir,
+            &metadata.x,
+            &metadata.y,
+            &None::<u32>,
+        ])?;
+        let recordnum: u32 = stmt.returned_values("recordnum")?[0];
+        recordnums.push(recordnum);
+    }
+    conn.commit()?;
+    Ok(recordnums)
+}
+
 /// Get the type of count for a given record number.
 pub fn get_count_kind(conn: &Connection, recordnum: u32) -> Result<Option<CountKind>, CountError> {
     match conn.query_row_as::<Option<CountKind>>(

@@ -2,9 +2,11 @@ use std::env;
 use std::error::Error;
 use std::fmt::{self, Display};
 use std::str::FromStr;
+use std::sync::Mutex;
 
 use axum::{
     extract::{Form, Query, State},
+    response::{IntoResponse, Redirect, Response},
     routing::get,
     Router,
 };
@@ -19,18 +21,31 @@ use traffic_counts::{
     aadv::{self, AadvEntry},
     db::{self, crud::Crud, ImportLogEntry},
     denormalize::{NonNormalAvgSpeedCount, NonNormalVolCount},
-    CountKind, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, Metadata,
-    TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
+    CountKind, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, LaneDirection,
+    Metadata, RoadDirection, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
 };
 
 const ADMIN_PATH: &str = "/admin";
 const ADMIN_METADATA_LIST_PATH: &str = "/admin/metadata-list";
 const ADMIN_METADATA_DETAIL_PATH: &str = "/admin/metadata-detail";
 const ADMIN_METADATA_INSERT_PATH: &str = "/admin/insert";
+const ADMIN_METADATA_INSERT_FROM_EXISTING_PATH: &str = "/admin/insert-from-existing";
 const ADMIN_COUNT_DATA_PATH: &str = "/admin/count";
 const ADMIN_IMPORT_LOG_PATH: &str = "/admin/import-log";
 const ADMIN_AADV_PATH: &str = "/admin/aadv";
 const RECORD_CREATION_LIMIT: u32 = db::RECORD_CREATION_LIMIT;
+
+static MESSAGE: Mutex<Option<String>> = Mutex::new(None);
+
+/// Get any message out of the global MESSAGE Mutex and reset it to None.
+///
+/// This is for displaying messages to user in templates. It is reset because messages
+/// should only be shown once and not be persisted across responses.
+pub fn burn_after_reading() -> String {
+    let message = MESSAGE.lock().unwrap().clone().unwrap_or_default();
+    *MESSAGE.lock().unwrap() = None;
+    message
+}
 
 #[derive(Clone)]
 struct AppState {
@@ -61,7 +76,11 @@ async fn main() {
         .route_with_tsr(ADMIN_METADATA_DETAIL_PATH, get(get_metadata_detail))
         .route_with_tsr(
             ADMIN_METADATA_INSERT_PATH,
-            get(get_insert).post(post_insert),
+            get(get_insert).post(post_insert_empty),
+        )
+        .route_with_tsr(
+            ADMIN_METADATA_INSERT_FROM_EXISTING_PATH,
+            get(get_insert_from_existing).post(post_insert_from_existing),
         )
         .route_with_tsr(ADMIN_IMPORT_LOG_PATH, get(get_view_import_log))
         .route_with_tsr(ADMIN_COUNT_DATA_PATH, get(get_count_data))
@@ -105,9 +124,7 @@ struct RecordnumFilterParams {
 /// starting page.
 #[derive(Template, Debug, Default)]
 #[template(path = "admin/main.html")]
-struct AdminMainTemplate {
-    message: Option<String>,
-}
+struct AdminMainTemplate {}
 
 impl Heading for AdminMainTemplate {
     const NAV_ITEM_TEXT: &str = "Welcome";
@@ -120,7 +137,6 @@ async fn admin() -> AdminMainTemplate {
 #[derive(Template, Debug, Default)]
 #[template(path = "counts/metadata_list.html")]
 struct AdminMetadataListTemplate {
-    message: Option<String>,
     metadata: Vec<Metadata>,
     total_pages: u32,
     page: u32,
@@ -136,27 +152,28 @@ struct Page {
     page: Option<u32>,
 }
 
+/// Get list of all counts ([`Metadata`] records).
 async fn get_metadata_list(
     State(state): State<AppState>,
     page: Query<Page>,
 ) -> AdminMetadataListTemplate {
     let results_per_page = 100;
     let page = page.0.page.unwrap_or(1);
-    let total_pages = state.num_metadata_records / results_per_page;
+    let total_pages = state.num_metadata_records / results_per_page + 1;
     let conn = state.conn_pool.get().unwrap();
+
     let mut template = AdminMetadataListTemplate {
-        message: None,
         metadata: vec![],
         total_pages,
         page,
     };
 
-    match db::get_metadata_paginated(&conn, Some(page * results_per_page), None) {
+    match db::get_metadata_paginated(&conn, Some((page - 1) * results_per_page), None) {
         Ok(v) => {
             template.metadata = v;
         }
         Err(e) => {
-            template.message = Some(format!("{e}"));
+            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
         }
     }
     template
@@ -165,7 +182,6 @@ async fn get_metadata_list(
 #[derive(Template, Debug, Default)]
 #[template(path = "counts/metadata_detail.html")]
 struct AdminMetadataDetailTemplate {
-    message: Option<String>,
     recordnum: Option<u32>,
     metadata: Option<Metadata>,
 }
@@ -181,20 +197,21 @@ struct AdminMetadataDetailParams {
     recordnum: Option<u32>,
 }
 
+/// Get count ([`Metadata`] record).
 async fn get_metadata_detail(
     State(state): State<AppState>,
     params: Query<AdminMetadataDetailParams>,
 ) -> AdminMetadataDetailTemplate {
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
+
     let mut template = AdminMetadataDetailTemplate {
-        message: None,
         recordnum: None,
         metadata: None,
     };
 
     if params.recordnum.is_none() {
-        template.message = Some("Please provide a record number.".to_string());
+        *MESSAGE.lock().unwrap() = Some("Please provide a record number.".to_string());
     } else if let Some(v) = params.recordnum {
         template.recordnum = Some(v);
         match db::get_metadata(&conn, v) {
@@ -209,9 +226,9 @@ async fn get_metadata_detail(
                         OracleErrorKind::NoDataFound
                     )
                 }) {
-                    template.message = Some(format!("Record {v} not found."))
+                    *MESSAGE.lock().unwrap() = Some(format!("Record {v} not found."));
                 } else {
-                    template.message = Some(format!("{e}"))
+                    *MESSAGE.lock().unwrap() = Some(format!("{e}"))
                 }
             }
         }
@@ -222,7 +239,6 @@ async fn get_metadata_detail(
 #[derive(Template, Debug, Default)]
 #[template(path = "counts/count_data.html")]
 struct CountDataTemplate {
-    message: Option<String>,
     condition: ResponseCondition,
     recordnum: Option<u32>,
     non_normal_volume: Option<Vec<NonNormalVolCount>>,
@@ -271,6 +287,7 @@ struct CountDataParams {
     format: Option<CountDataFormat>,
 }
 
+/// Get count data in various kinds/formats.
 async fn get_count_data(
     State(state): State<AppState>,
     params: Query<CountDataParams>,
@@ -278,7 +295,6 @@ async fn get_count_data(
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
     let mut template = CountDataTemplate {
-        message: None,
         recordnum: None,
         condition: ResponseCondition::GetInput,
         non_normal_volume: None,
@@ -295,14 +311,14 @@ async fn get_count_data(
             v
         }
         None => {
-            template.message = Some("Please provide a record number.".to_string());
+            *MESSAGE.lock().unwrap() = Some("Please provide a record number.".to_string());
             return template;
         }
     };
     let format = match params.format {
         Some(v) => v,
         None => {
-            template.message =
+            *MESSAGE.lock().unwrap() =
                 Some("Please provide the format for the data to be presented in.".to_string());
             return template;
         }
@@ -312,16 +328,17 @@ async fn get_count_data(
     let count_kind = match db::get_count_kind(&conn, recordnum) {
         Ok(Some(v)) => v,
         Ok(None) => {
-            template.message = Some(
+            *MESSAGE.lock().unwrap() = Some(
                 "Cannot determine kind of count, and thus unable to fetch count data.".to_string(),
             );
             return template;
         }
         Err(_) => {
-            template.message = Some(
+            *MESSAGE.lock().unwrap() = Some(
                 "Error fetching count kind from database, and thus unable to fetch count data."
                     .to_string(),
             );
+
             return template;
         }
     };
@@ -338,12 +355,10 @@ async fn get_count_data(
         CountDataFormat::Volume15Min => match count_kind {
             CountKind::FifteenMinVolume => match FifteenMinuteVehicle::select(&conn, recordnum) {
                 Ok(v) if v.is_empty() => {
-                    template.message = no_records(CountDataFormat::Volume15Min, recordnum)
+                    *MESSAGE.lock().unwrap() = no_records(CountDataFormat::Volume15Min, recordnum);
                 }
                 Ok(v) => template.fifteen_min_vehicle = Some(v),
-                Err(e) => {
-                    template.message = Some(format!("{e}"));
-                }
+                Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
             },
             CountKind::Bicycle1
             | CountKind::Bicycle2
@@ -352,18 +367,19 @@ async fn get_count_data(
             | CountKind::Bicycle5
             | CountKind::Bicycle6 => match FifteenMinuteBicycle::select(&conn, recordnum) {
                 Ok(v) if v.is_empty() => {
-                    template.message = no_records(CountDataFormat::Volume15Min, recordnum)
+                    *MESSAGE.lock().unwrap() = no_records(CountDataFormat::Volume15Min, recordnum);
                 }
                 Ok(v) => template.fifteen_min_bike = Some(v),
-                Err(e) => template.message = Some(format!("{e}")),
+                Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
             },
             CountKind::Pedestrian | CountKind::Pedestrian2 => {
                 match FifteenMinutePedestrian::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        template.message = no_records(CountDataFormat::Volume15Min, recordnum)
+                        *MESSAGE.lock().unwrap() =
+                            no_records(CountDataFormat::Volume15Min, recordnum)
                     }
                     Ok(v) => template.fifteen_min_ped = Some(v),
-                    Err(e) => template.message = Some(format!("{e}")),
+                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
                 }
             }
             _ => (),
@@ -376,13 +392,14 @@ async fn get_count_data(
             ) {
                 match NonNormalVolCount::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        template.message = no_records(CountDataFormat::VolumeDayByHour, recordnum)
+                        *MESSAGE.lock().unwrap() =
+                            no_records(CountDataFormat::VolumeDayByHour, recordnum)
                     }
                     Ok(v) => template.non_normal_volume = Some(v),
-                    Err(e) => template.message = Some(format!("{e}")),
+                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
                 }
             } else {
-                template.message = Some(format!(
+                *MESSAGE.lock().unwrap() = Some(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -392,13 +409,14 @@ async fn get_count_data(
             if count_kind == CountKind::Class {
                 match TimeBinnedVehicleClassCount::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        template.message = no_records(CountDataFormat::Class15Min, recordnum)
+                        *MESSAGE.lock().unwrap() =
+                            no_records(CountDataFormat::Class15Min, recordnum)
                     }
                     Ok(v) => template.fifteen_min_class = Some(v),
-                    Err(e) => template.message = Some(format!("{e}")),
+                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
                 }
             } else {
-                template.message = Some(format!(
+                *MESSAGE.lock().unwrap() = Some(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -409,13 +427,14 @@ async fn get_count_data(
             if count_kind == CountKind::Speed || count_kind == CountKind::Class {
                 match TimeBinnedSpeedRangeCount::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        template.message = no_records(CountDataFormat::Speed15Min, recordnum)
+                        *MESSAGE.lock().unwrap() =
+                            no_records(CountDataFormat::Speed15Min, recordnum)
                     }
                     Ok(v) => template.fifteen_min_speed = Some(v),
-                    Err(e) => template.message = Some(format!("{e}")),
+                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
                 }
             } else {
-                template.message = Some(format!(
+                *MESSAGE.lock().unwrap() = Some(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -426,13 +445,14 @@ async fn get_count_data(
             if count_kind == CountKind::Speed || count_kind == CountKind::Class {
                 match NonNormalAvgSpeedCount::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        template.message = no_records(CountDataFormat::SpeedDayByHour, recordnum)
+                        *MESSAGE.lock().unwrap() =
+                            no_records(CountDataFormat::SpeedDayByHour, recordnum)
                     }
                     Ok(v) => template.non_normal_avg_speed = Some(v),
-                    Err(e) => template.message = Some(format!("{e}")),
+                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
                 }
             } else {
-                template.message = Some(format!(
+                *MESSAGE.lock().unwrap() = Some(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -445,7 +465,6 @@ async fn get_count_data(
 #[derive(Template, Debug, Default)]
 #[template(path = "admin/insert.html")]
 struct AdminInsertTemplate {
-    message: Option<String>,
     condition: ResponseCondition,
 }
 
@@ -455,46 +474,322 @@ impl Heading for AdminInsertTemplate {
 
 #[derive(Deserialize, Debug)]
 struct AdminInsertForm {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     number_to_create: Option<u32>,
+    create_empty: Option<String>,
 }
 
+/// Show forms to create new count(s) ([`Metadata`] record(s)), either empty or from existing one.
 async fn get_insert() -> AdminInsertTemplate {
     AdminInsertTemplate::default()
 }
 
-async fn post_insert(
+/// Process form to create new empty count(s) ([`Metadata`] record(s)).
+async fn post_insert_empty(
     State(state): State<AppState>,
     Form(input): Form<AdminInsertForm>,
-) -> AdminInsertTemplate {
+) -> Response {
     let conn = state.conn_pool.get().unwrap();
+    let template = AdminInsertTemplate::default();
 
-    let (message, condition) = match input.number_to_create {
-        Some(v) => match db::insert_empty_metadata(&conn, v) {
-            Ok(w) => (
-                format!("New records created {:?}", w),
-                ResponseCondition::Success,
-            ),
-            Err(e) => (format!("Error: {e}."), ResponseCondition::GetInput),
-        },
-        None => (
-            format!(
-                "Please specify a number of records to create, from 1 to {}",
-                db::RECORD_CREATION_LIMIT
-            ),
-            ResponseCondition::GetInput,
-        ),
-    };
+    // Handle user attempting to create new empty records.
+    if input.create_empty.is_some() {
+        match input.number_to_create {
+            Some(v) => {
+                match db::insert_empty_metadata(&conn, v) {
+                    Ok(w) => {
+                        // Store recordnum of first (and perhaps only) one created.
+                        let first_recordnum = w.clone()[0];
 
-    AdminInsertTemplate {
-        message: Some(message),
-        condition,
+                        // Add links to each new one created.
+                        let records = w.into_iter().map(|r| format!(r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)).collect::<Vec<String>>();
+
+                        *MESSAGE.lock().unwrap() =
+                            Some(format!("New records created: {}", records.join(", ")));
+
+                        return Redirect::to(&format!(
+                            "{ADMIN_METADATA_DETAIL_PATH}?recordnum={first_recordnum}"
+                        ))
+                        .into_response();
+                    }
+                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("Error: {e}.")),
+                }
+            }
+            None => {
+                *MESSAGE.lock().unwrap() = Some(format!(
+                    "Please specify a number of records to create, from 1 to {}.",
+                    db::RECORD_CREATION_LIMIT
+                ));
+            }
+        }
     }
+
+    template.into_response()
+}
+
+#[derive(Template, Debug, Default)]
+#[template(path = "admin/insert_from_existing.html")]
+struct AdminInsertFromExistingTemplate {
+    condition: ResponseCondition,
+    metadata: Option<Metadata>,
+}
+
+impl Heading for AdminInsertFromExistingTemplate {
+    const NAV_ITEM_TEXT: &str = "Create New Records from Existing Count";
+}
+
+#[derive(Deserialize, Debug)]
+struct AdminInsertFromExistingForm {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    create_from_existing: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    number_to_create: Option<u32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    submit_fields: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    recordnum: Option<u32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    count_kind: Option<CountKind>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    cntdir: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    trafdir: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    indir: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    outdir: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    fromlmt: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    tolmt: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    latitude: Option<f32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    longitude: Option<f32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    x: Option<f32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    y: Option<f32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    bikepeddesc: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    bikepedfacility: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    bikepedgroup: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    comments: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    description: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    fc: Option<u32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    isurban: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    mcd: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    mp: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    offset: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    prj: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    program: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    rdprefix: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    rdsuffix: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    road: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    route: Option<u32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    seg: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    sidewalk: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    source: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    sr: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    sri: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    stationid: Option<String>,
+}
+
+/// Show form to initiate creation of new count ([`Metadata`] record(s)) from existing count.
+async fn get_insert_from_existing() -> AdminInsertFromExistingTemplate {
+    AdminInsertFromExistingTemplate::default()
+}
+
+/// Get existing count ([`Metadata`] record) from database,
+/// show/process form to select fields to use.
+async fn post_insert_from_existing(
+    State(state): State<AppState>,
+    Form(input): Form<AdminInsertFromExistingForm>,
+) -> Response {
+    let conn = state.conn_pool.get().unwrap();
+    let mut template = AdminInsertFromExistingTemplate::default();
+
+    // Get metadata from the existing count user wants to create new one from.
+    if input.create_from_existing.is_some() {
+        match input.recordnum {
+            Some(v) => match db::get_metadata(&conn, v) {
+                Ok(v) => {
+                    template.metadata = Some(v);
+                    template.condition = ResponseCondition::GetInput;
+                }
+                Err(e) => {
+                    if e.source().is_some_and(|v| {
+                        matches!(
+                            v.downcast_ref::<OracleError>().unwrap().kind(),
+                            OracleErrorKind::NoDataFound
+                        )
+                    }) {
+                        *MESSAGE.lock().unwrap() = Some(format!("Record {v} not found."))
+                    } else {
+                        *MESSAGE.lock().unwrap() = Some(format!("{e}"))
+                    }
+                }
+            },
+            None => {
+                *MESSAGE.lock().unwrap() =
+                    Some("Please specify a recordnum to use as a template.".to_string());
+            }
+        }
+    }
+
+    // Process creating new count from existing one.
+    if input.submit_fields.is_some() {
+        match input.number_to_create {
+            Some(v) => {
+                // Create a Metadata instance to use to
+                // Convert direction types from strings.
+                let cntdir = if let Some(v) = &input.cntdir {
+                    match RoadDirection::from_str(v) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
+                            return template.into_response();
+                        }
+                    }
+                } else {
+                    None
+                };
+                let trafdir = if let Some(v) = &input.trafdir {
+                    match RoadDirection::from_str(v) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
+                            return template.into_response();
+                        }
+                    }
+                } else {
+                    None
+                };
+                let indir = if let Some(v) = &input.indir {
+                    match LaneDirection::from_str(v) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
+                            return template.into_response();
+                        }
+                    }
+                } else {
+                    None
+                };
+                let outdir = if let Some(v) = &input.outdir {
+                    match LaneDirection::from_str(v) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
+                            return template.into_response();
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                let metadata = Metadata {
+                    amending: None,
+                    ampeak: None,
+                    bikepeddesc: input.bikepeddesc,
+                    bikepedfacility: input.bikepedfacility,
+                    bikepedgroup: input.bikepedgroup,
+                    cntdir,
+                    comments: input.comments,
+                    count_kind: input.count_kind,
+                    counter_id: None,
+                    createheaderdate: None,
+                    datelastcounted: None,
+                    description: input.description,
+                    fc: input.fc,
+                    fromlmt: input.fromlmt,
+                    importdatadate: None,
+                    indir,
+                    isurban: input.isurban,
+                    latitude: input.latitude,
+                    longitude: input.longitude,
+                    mcd: input.mcd,
+                    mp: input.mp,
+                    offset: input.offset,
+                    outdir,
+                    pmending: None,
+                    pmpeak: None,
+                    prj: input.prj,
+                    program: input.program,
+                    recordnum: None,
+                    rdprefix: input.rdprefix,
+                    rdsuffix: input.rdsuffix,
+                    road: input.road,
+                    route: input.route,
+                    seg: input.seg,
+                    sidewalk: input.sidewalk,
+                    speedlimit: None,
+                    source: input.source,
+                    sr: input.sr,
+                    sri: input.sri,
+                    stationid: input.stationid,
+                    technician: None,
+                    tolmt: input.tolmt,
+                    trafdir,
+                    x: input.x,
+                    y: input.y,
+                };
+
+                match db::insert_metadata_from_existing(&conn, v, metadata) {
+                    Ok(w) => {
+                        // Store recordnum of first (and perhaps only) one created.
+                        let first_recordnum = w.clone()[0];
+
+                        // Add links to each new one created.
+                        let records = w.into_iter().map(|r| format!(r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)).collect::<Vec<String>>();
+
+                        *MESSAGE.lock().unwrap() =
+                            Some(format!("New records created: {}", records.join(", ")));
+
+                        return Redirect::to(&format!(
+                            "{ADMIN_METADATA_DETAIL_PATH}?recordnum={first_recordnum}"
+                        ))
+                        .into_response();
+                    }
+                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("Error: {e}.")),
+                }
+            }
+            None => {
+                *MESSAGE.lock().unwrap() = Some(format!(
+                    "Please specify a number of records to create, from 1 to {}.",
+                    db::RECORD_CREATION_LIMIT
+                ));
+            }
+        }
+    }
+
+    template.into_response()
 }
 
 #[derive(Template, Debug, Default)]
 #[template(path = "admin/import_log.html")]
 struct AdminImportLogTemplate {
-    message: Option<String>,
     recordnum: Option<u32>,
     log_entries: Vec<ImportLogEntry>,
 }
@@ -503,6 +798,7 @@ impl Heading for AdminImportLogTemplate {
     const NAV_ITEM_TEXT: &str = "View Import Log";
 }
 
+/// Show import log - for all or one count.
 async fn get_view_import_log(
     State(state): State<AppState>,
     params: Query<RecordnumFilterParams>,
@@ -510,7 +806,6 @@ async fn get_view_import_log(
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
     let mut template = AdminImportLogTemplate {
-        message: None,
         recordnum: None,
         log_entries: vec![],
     };
@@ -521,30 +816,31 @@ async fn get_view_import_log(
                 template.log_entries = v;
             }
             Err(e) => {
-                template.message = Some(format!("Error: {e}"));
+                *MESSAGE.lock().unwrap() = Some(format!("Error: {e}"));
             }
         }
     } else if let Some(v) = params.recordnum {
         template.recordnum = Some(v);
         match db::get_import_log(&conn, Some(v)) {
             Ok(w) if w.is_empty() => {
-                template.message = Some(format!("No import log records found for recordnum {v}."));
+                *MESSAGE.lock().unwrap() =
+                    Some(format!("No import log records found for recordnum {v}."));
             }
             Ok(w) => {
                 template.log_entries = w;
             }
             Err(e) => {
-                template.message = Some(format!("Error: {e}"));
+                *MESSAGE.lock().unwrap() = Some(format!("Error: {e}"));
             }
         }
     }
     template
 }
 
+/// Show AADV records - for all or one count.
 #[derive(Template, Debug, Default)]
 #[template(path = "counts/aadv.html")]
 struct AadvTemplate {
-    message: Option<String>,
     recordnum: Option<u32>,
     aadv: Vec<AadvEntry>,
 }
@@ -560,7 +856,6 @@ async fn get_aadv(
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
     let mut template = AadvTemplate {
-        message: None,
         recordnum: None,
         aadv: vec![],
     };
@@ -569,11 +864,11 @@ async fn get_aadv(
         match aadv::get_aadv(&conn, None) {
             Ok(v) if v.is_empty() => {
                 template.aadv = v;
-                template.message = Some("No records found.".to_string());
+                *MESSAGE.lock().unwrap() = Some("No records found.".to_string());
             }
             Ok(v) => template.aadv = v,
             Err(e) => {
-                template.message = Some(format!("Error fetching AADV from database: {e}."));
+                *MESSAGE.lock().unwrap() = Some(format!("Error fetching AADV from database: {e}."));
             }
         }
     } else if let Some(v) = params.recordnum {
@@ -581,11 +876,11 @@ async fn get_aadv(
         match aadv::get_aadv(&conn, Some(v)) {
             Ok(w) if w.is_empty() => {
                 template.aadv = w;
-                template.message = Some(format!("No records found for recordnum {v}."));
+                *MESSAGE.lock().unwrap() = Some(format!("No records found for recordnum {v}."));
             }
             Ok(w) => template.aadv = w,
             Err(e) => {
-                template.message = Some(format!("Error fetching AADV from database: {e}"));
+                *MESSAGE.lock().unwrap() = Some(format!("Error fetching AADV from database: {e}"));
             }
         }
     }
@@ -595,9 +890,7 @@ async fn get_aadv(
 
 #[derive(Template, Default, Debug)]
 #[template(path = "home.html")]
-struct HomeTemplate {
-    message: Option<String>,
-}
+struct HomeTemplate {}
 
 impl Heading for HomeTemplate {
     const NAV_ITEM_TEXT: &str = "Welcome";
@@ -620,12 +913,13 @@ where
     }
 }
 
-pub fn display_some<T>(value: &Option<T>) -> String
-where
-    T: std::fmt::Display,
-{
-    match value {
-        Some(value) => value.to_string(),
-        None => String::new(),
+// Any filter defined in the module `filters` is accessible in your template.
+mod filters {
+    /// Display None variant of Options as empty strings.
+    pub fn opt<T: std::fmt::Display>(s: &Option<T>) -> rinja::Result<String> {
+        match s {
+            Some(s) => Ok(s.to_string()),
+            None => Ok(String::new()),
+        }
     }
 }

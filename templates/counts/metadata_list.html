@@ -1,9 +1,7 @@
 {% extends "admin/main.html" %}
 {% block main %}
   <h2 class="center">{{ heading() }}</h2>
-  {% if let Some(message) = message %}
-    {{ message }}
-  {% endif %}
+  {{ self::burn_after_reading()|safe }}
 
   <form action="{{ ADMIN_METADATA_DETAIL_PATH }}" method="get">
     <label>
@@ -73,7 +71,7 @@
         <th>route</th>
         <th>seg</th>
         <th>sidewalk</th>
-        <th>speed limit</th>
+        <th>speedlimit</th>
         <th>source</th>
         <th>sr</th>
         <th>sri</th>
@@ -83,53 +81,53 @@
       {% for item in metadata %}
         <tr>
           <th>
-            <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum }}">
-              {{ item.recordnum }}
+            <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ item.recordnum|opt }}">
+              {{ item.recordnum|opt }}
             </a>
           </th>
-          <td>{{ self::display_some(item.count_kind) }}</td>
-          <td>{{ self::display_some(item.datelastcounted) }}</td>
-          <td>{{ self::display_some(item.technician) }}</td>
-          <td>{{ self::display_some(item.counter_id) }}</td>
-          <td>{{ self::display_some(item.cntdir) }}</td>
-          <td>{{ self::display_some(item.trafdir) }}</td>
-          <td>{{ self::display_some(item.indir) }}</td>
-          <td>{{ self::display_some(item.outdir) }}</td>
-          <td>{{ self::display_some(item.fromlmt) }}</td>
-          <td>{{ self::display_some(item.tolmt) }}</td>
-          <td>{{ self::display_some(item.latitude) }}</td>
-          <td>{{ self::display_some(item.longitude) }}</td>
-          <td>{{ self::display_some(item.x) }}</td>
-          <td>{{ self::display_some(item.y) }}</td>
-          <td>{{ self::display_some(item.amending) }}</td>
-          <td>{{ self::display_some(item.ampeak) }}</td>
-          <td>{{ self::display_some(item.pmending) }}</td>
-          <td>{{ self::display_some(item.pmpeak) }}</td>
-          <td>{{ self::display_some(item.bikepeddesc) }}</td>
-          <td>{{ self::display_some(item.bikepedfacility) }}</td>
-          <td>{{ self::display_some(item.bikepedgroup) }}</td>
-          <td>{{ self::display_some(item.comments) }}</td>
-          <td>{{ self::display_some(item.createheaderdate) }}</td>
-          <td>{{ self::display_some(item.description) }}</td>
-          <td>{{ self::display_some(item.fc) }}</td>
-          <td>{{ self::display_some(item.importdatadate) }}</td>
-          <td>{{ self::display_some(item.isurban) }}</td>
-          <td>{{ self::display_some(item.mcd) }}</td>
-          <td>{{ self::display_some(item.mp) }}</td>
-          <td>{{ self::display_some(item.offset) }}</td>
-          <td>{{ self::display_some(item.prj) }}</td>
-          <td>{{ self::display_some(item.program) }}</td>
-          <td>{{ self::display_some(item.rdprefix) }}</td>
-          <td>{{ self::display_some(item.rdsuffix) }}</td>
-          <td>{{ self::display_some(item.road) }}</td>
-          <td>{{ self::display_some(item.route) }}</td>
-          <td>{{ self::display_some(item.seg) }}</td>
-          <td>{{ self::display_some(item.sidewalk) }}</td>
-          <td>{{ self::display_some(item.speedlimit) }}</td>
-          <td>{{ self::display_some(item.source) }}</td>
-          <td>{{ self::display_some(item.sr) }}</td>
-          <td>{{ self::display_some(item.sri) }}</td>
-          <td>{{ self::display_some(item.stationid) }}</td>
+          <td>{{ item.count_kind|opt }}</td>
+          <td>{{ item.datelastcounted|opt }}</td>
+          <td>{{ item.technician|opt }}</td>
+          <td>{{ item.counter_id|opt }}</td>
+          <td>{{ item.cntdir|opt }}</td>
+          <td>{{ item.trafdir|opt }}</td>
+          <td>{{ item.indir|opt }}</td>
+          <td>{{ item.outdir|opt }}</td>
+          <td>{{ item.fromlmt|opt }}</td>
+          <td>{{ item.tolmt|opt }}</td>
+          <td>{{ item.latitude|opt }}</td>
+          <td>{{ item.longitude|opt }}</td>
+          <td>{{ item.x|opt }}</td>
+          <td>{{ item.y|opt }}</td>
+          <td>{{ item.amending|opt }}</td>
+          <td>{{ item.ampeak|opt }}</td>
+          <td>{{ item.pmending|opt }}</td>
+          <td>{{ item.pmpeak|opt }}</td>
+          <td>{{ item.bikepeddesc|opt }}</td>
+          <td>{{ item.bikepedfacility|opt }}</td>
+          <td>{{ item.bikepedgroup|opt }}</td>
+          <td>{{ item.comments|opt }}</td>
+          <td>{{ item.createheaderdate|opt }}</td>
+          <td>{{ item.description|opt }}</td>
+          <td>{{ item.fc|opt }}</td>
+          <td>{{ item.importdatadate|opt }}</td>
+          <td>{{ item.isurban|opt }}</td>
+          <td>{{ item.mcd|opt }}</td>
+          <td>{{ item.mp|opt }}</td>
+          <td>{{ item.offset|opt }}</td>
+          <td>{{ item.prj|opt }}</td>
+          <td>{{ item.program|opt }}</td>
+          <td>{{ item.rdprefix|opt }}</td>
+          <td>{{ item.rdsuffix|opt }}</td>
+          <td>{{ item.road|opt }}</td>
+          <td>{{ item.route|opt }}</td>
+          <td>{{ item.seg|opt }}</td>
+          <td>{{ item.sidewalk|opt }}</td>
+          <td>{{ item.speedlimit|opt }}</td>
+          <td>{{ item.source|opt }}</td>
+          <td>{{ item.sr|opt }}</td>
+          <td>{{ item.sri|opt }}</td>
+          <td>{{ item.stationid|opt }}</td>
         </tr>
       {% endfor %}
       </tbody>

@@ -20,6 +20,7 @@ thiserror = "1.0.56"
 # specific to webui
 axum = { version = "0.7.7", features = ["form"] }
 axum-extra = "0.9.4"
+rinja = "0.3.4"
 rinja_axum = "0.3.4"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }

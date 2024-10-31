@@ -1,13 +1,11 @@
 {% extends "admin/main.html" %}
 {% block main %}
   <h2 class="center">{{ heading() }}: 
-    <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ self::display_some(recordnum) }}">
-      {{ self::display_some(recordnum) }}
+    <a href="{{ ADMIN_METADATA_DETAIL_PATH }}?recordnum={{ recordnum|opt }}">
+      {{ recordnum|opt }}
    </a>
   </h2>
-  {% if let Some(message) = message %}
-    {{ message }}
-  {% endif %}
+  {{ self::burn_after_reading()|safe }}
 
   {% if condition == ResponseCondition::GetInput %}
     <div class="scroll-table-container">
@@ -48,33 +46,33 @@
             <tr>
               </th>
               <th>{{ item.date }}</th>
-              <td>{{ self::display_some(item.direction) }}</td>
-              <td>{{ self::display_some(item.lane) }}</td>
-              <td>{{ self::display_some(item.totalcount) }}</td>
-              <td>{{ self::display_some(item.am12) }}</td>
-              <td>{{ self::display_some(item.am1) }}</td>
-              <td>{{ self::display_some(item.am2) }}</td>
-              <td>{{ self::display_some(item.am3) }}</td>
-              <td>{{ self::display_some(item.am4) }}</td>
-              <td>{{ self::display_some(item.am5) }}</td>
-              <td>{{ self::display_some(item.am6) }}</td>
-              <td>{{ self::display_some(item.am7) }}</td>
-              <td>{{ self::display_some(item.am8) }}</td>
-              <td>{{ self::display_some(item.am9) }}</td>
-              <td>{{ self::display_some(item.am10) }}</td>
-              <td>{{ self::display_some(item.am11) }}</td>
-              <td>{{ self::display_some(item.pm12) }}</td>
-              <td>{{ self::display_some(item.pm1) }}</td>
-              <td>{{ self::display_some(item.pm2) }}</td>
-              <td>{{ self::display_some(item.pm3) }}</td>
-              <td>{{ self::display_some(item.pm4) }}</td>
-              <td>{{ self::display_some(item.pm5) }}</td>
-              <td>{{ self::display_some(item.pm6) }}</td>
-              <td>{{ self::display_some(item.pm7) }}</td>
-              <td>{{ self::display_some(item.pm8) }}</td>
-              <td>{{ self::display_some(item.pm9) }}</td>
-              <td>{{ self::display_some(item.pm10) }}</td>
-              <td>{{ self::display_some(item.pm11) }}</td>
+              <td>{{ item.direction|opt }}</td>
+              <td>{{ item.lane|opt }}</td>
+              <td>{{ item.totalcount|opt }}</td>
+              <td>{{ item.am12|opt }}</td>
+              <td>{{ item.am1|opt }}</td>
+              <td>{{ item.am2|opt }}</td>
+              <td>{{ item.am3|opt }}</td>
+              <td>{{ item.am4|opt }}</td>
+              <td>{{ item.am5|opt }}</td>
+              <td>{{ item.am6|opt }}</td>
+              <td>{{ item.am7|opt }}</td>
+              <td>{{ item.am8|opt }}</td>
+              <td>{{ item.am9|opt }}</td>
+              <td>{{ item.am10|opt }}</td>
+              <td>{{ item.am11|opt }}</td>
+              <td>{{ item.pm12|opt }}</td>
+              <td>{{ item.pm1|opt }}</td>
+              <td>{{ item.pm2|opt }}</td>
+              <td>{{ item.pm3|opt }}</td>
+              <td>{{ item.pm4|opt }}</td>
+              <td>{{ item.pm5|opt }}</td>
+              <td>{{ item.pm6|opt }}</td>
+              <td>{{ item.pm7|opt }}</td>
+              <td>{{ item.pm8|opt }}</td>
+              <td>{{ item.pm9|opt }}</td>
+              <td>{{ item.pm10|opt }}</td>
+              <td>{{ item.pm11|opt }}</td>
             </tr>
           {% endfor %}
           </tbody>
@@ -112,32 +110,32 @@
           {% for item in non_normal_avg_speed  %}
             <tr>
               <th>{{ item.date }}</th>
-              <td>{{ self::display_some(item.direction) }}</td>
-              <td>{{ self::display_some(item.lane) }}</td>
-              <td>{{ self::display_some(item.am12) }}</td>
-              <td>{{ self::display_some(item.am1) }}</td>
-              <td>{{ self::display_some(item.am2) }}</td>
-              <td>{{ self::display_some(item.am3) }}</td>
-              <td>{{ self::display_some(item.am4) }}</td>
-              <td>{{ self::display_some(item.am5) }}</td>
-              <td>{{ self::display_some(item.am6) }}</td>
-              <td>{{ self::display_some(item.am7) }}</td>
-              <td>{{ self::display_some(item.am8) }}</td>
-              <td>{{ self::display_some(item.am9) }}</td>
-              <td>{{ self::display_some(item.am10) }}</td>
-              <td>{{ self::display_some(item.am11) }}</td>
-              <td>{{ self::display_some(item.pm12) }}</td>
-              <td>{{ self::display_some(item.pm1) }}</td>
-              <td>{{ self::display_some(item.pm2) }}</td>
-              <td>{{ self::display_some(item.pm3) }}</td>
-              <td>{{ self::display_some(item.pm4) }}</td>
-              <td>{{ self::display_some(item.pm5) }}</td>
-              <td>{{ self::display_some(item.pm6) }}</td>
-              <td>{{ self::display_some(item.pm7) }}</td>
-              <td>{{ self::display_some(item.pm8) }}</td>
-              <td>{{ self::display_some(item.pm9) }}</td>
-              <td>{{ self::display_some(item.pm10) }}</td>
-              <td>{{ self::display_some(item.pm11) }}</td>
+              <td>{{ item.direction|opt }}</td>
+              <td>{{ item.lane|opt }}</td>
+              <td>{{ item.am12|opt }}</td>
+              <td>{{ item.am1|opt }}</td>
+              <td>{{ item.am2|opt }}</td>
+              <td>{{ item.am3|opt }}</td>
+              <td>{{ item.am4|opt }}</td>
+              <td>{{ item.am5|opt }}</td>
+              <td>{{ item.am6|opt }}</td>
+              <td>{{ item.am7|opt }}</td>
+              <td>{{ item.am8|opt }}</td>
+              <td>{{ item.am9|opt }}</td>
+              <td>{{ item.am10|opt }}</td>
+              <td>{{ item.am11|opt }}</td>
+              <td>{{ item.pm12|opt }}</td>
+              <td>{{ item.pm1|opt }}</td>
+              <td>{{ item.pm2|opt }}</td>
+              <td>{{ item.pm3|opt }}</td>
+              <td>{{ item.pm4|opt }}</td>
+              <td>{{ item.pm5|opt }}</td>
+              <td>{{ item.pm6|opt }}</td>
+              <td>{{ item.pm7|opt }}</td>
+              <td>{{ item.pm8|opt }}</td>
+              <td>{{ item.pm9|opt }}</td>
+              <td>{{ item.pm10|opt }}</td>
+              <td>{{ item.pm11|opt }}</td>
             </tr>
           {% endfor %}
         {% else if let Some(fifteen_min_ped) = fifteen_min_ped  %}
@@ -154,8 +152,8 @@
                 <th>{{ item.date }}</th>
                 <td>{{ item.time.time() }}</td>
                 <td>{{ item.total }}</td>
-                <td>{{ self::display_some(item.indir) }}</td>
-                <td>{{ self::display_some(item.outdir) }}</td>
+                <td>{{ item.indir|opt }}</td>
+                <td>{{ item.outdir|opt }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -173,8 +171,8 @@
                 <th>{{ item.date }}</th>
                 <td>{{ item.time.time() }}</td>
                 <td>{{ item.total }}</td>
-                <td>{{ self::display_some(item.indir) }}</td>
-                <td>{{ self::display_some(item.outdir) }}</td>
+                <td>{{ item.indir|opt }}</td>
+                <td>{{ item.outdir|opt }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -192,8 +190,8 @@
                 <th>{{ item.date }}</th>
                 <td>{{ item.time.time() }}</td>
                 <td>{{ item.count }}</td>
-                <td>{{ self::display_some(item.direction) }}</td>
-                <td>{{ self::display_some(item.lane) }}</td>
+                <td>{{ item.direction|opt }}</td>
+                <td>{{ item.lane|opt }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -224,8 +222,8 @@
               <tr>
                 <th>{{ item.date }}</th>
                 <td>{{ item.time.time() }}</td>
-                <td>{{ self::display_some(item.lane) }}</td>
-                <td>{{ self::display_some(item.direction) }}</td>
+                <td>{{ item.lane|opt }}</td>
+                <td>{{ item.direction|opt }}</td>
                 <td>{{ item.c1 }}</td>
                 <td>{{ item.c2 }}</td>
                 <td>{{ item.c3 }}</td>
@@ -239,7 +237,7 @@
                 <td>{{ item.c11 }}</td>
                 <td>{{ item.c12 }}</td>
                 <td>{{ item.c13 }}</td>
-                <td>{{ self::display_some(item.c15) }}</td>
+                <td>{{ item.c15|opt }}</td>
                 <td>{{ item.total }}</td>
               </tr>
             {% endfor %}
@@ -272,8 +270,8 @@
               <tr>
                 <th>{{ item.date }}</th>
                 <td>{{ item.time }}</td>
-                <td>{{ self::display_some(item.direction) }}</td>
-                <td>{{ self::display_some(item.lane) }}</td>
+                <td>{{ item.direction|opt }}</td>
+                <td>{{ item.lane|opt }}</td>
                 <td>{{ item.s1 }}</td>
                 <td>{{ item.s2 }}</td>
                 <td>{{ item.s3 }}</td>

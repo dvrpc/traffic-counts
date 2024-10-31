@@ -1,0 +1,231 @@
+{% extends "admin/main.html" %}
+{% block main %}
+  <script language="javascript" type="text/javascript">
+    function toggleCheckboxes(source) {
+        var checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        for (var i = 0; i < checkboxes.length; i++) {
+            if (checkboxes[i] != source)
+                checkboxes[i].checked = source.checked;
+        }
+    }
+  </script>
+
+  <h2 class="center">{{ heading() }}
+    {%- if let Some(metadata) = metadata -%} 
+      : {{ metadata.recordnum|opt }}
+    {% endif %}
+  </h2>
+
+  {{ self::burn_after_reading()|safe }}
+
+  {% if let None = metadata %}
+    <form action="{{ ADMIN_METADATA_INSERT_FROM_EXISTING_PATH }}" method="post">
+      <h3>Create new records from existing count metadata</h3>
+        <label>
+          Which count to use as template?<br/>
+          (You may also <a href="{{ ADMIN_METADATA_LIST_PATH }}">browse records</a> to use 
+          as a template.)<br/>
+          <input type="text" name="recordnum" />
+        </label>
+        <input type="submit" name="create_from_existing" value="Submit" />
+    </form>
+
+  {% else if let Some(metadata) = metadata %}
+    <br/>
+    Select the checkboxes for the field values you'd like to use in the new record.<br/>
+    Note that you can use Tab/Shift-Tab to navigate between the checkboxes and Space to 
+    select/deselect them.
+    <div class="scroll-table-container">
+    <form action="{{ ADMIN_METADATA_INSERT_FROM_EXISTING_PATH }}" method="post">
+      <table class="scroll-table">
+        <thead><tr>
+          <th><input type="checkbox" onclick="toggleCheckboxes(this);"></th>
+          <th>Field</th>
+          <th>Value</th>
+        </tr></thead>
+        <tbody>
+            <tr>
+              <td><label>
+                <input 
+                  type="checkbox" 
+                  id="count_type" 
+                  name="count_kind" 
+                  value="{{ metadata.count_kind|opt }}" autofocus />
+              </label></td>
+              <td><label for="count_type">count_type</label></td>
+              <td>{{ metadata.count_kind|opt }}</td>
+            </tr>
+            <tr>
+              <td><label>
+                <input type="checkbox" id="cntdir" name="cntdir" value="{{ metadata.cntdir|opt }}">
+                </label></td>
+              <td><label for="cntdir">cntdir</label></td>
+              <td>{{ metadata.cntdir|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="trafdir" name="trafdir" value="{{ metadata.trafdir|opt }}"></label></td>
+              <td><label for="trafdir">trafdir</label></td>
+              <td>{{ metadata.trafdir|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="indir" name="indir" value="{{ metadata.indir|opt }}"></label></td>
+              <td><label for="indir">indir</label></td>
+              <td>{{ metadata.indir|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="outdir" name="outdir" value="{{ metadata.outdir|opt }}"></label></td>
+              <td><label for="outdir">outdir</label></td>
+              <td>{{ metadata.outdir|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="fromlmt" name="fromlmt" value="{{ metadata.fromlmt|opt }}"></label></td>
+              <td><label for="fromlmt">fromlmt</label></td>
+              <td>{{ metadata.fromlmt|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="tolmt" name="tolmt" value="{{ metadata.tolmt|opt }}"></label></td>
+              <td><label for="tolmt">tolmt</label></td>
+              <td>{{ metadata.tolmt|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="latitude" name="latitude" value="{{ metadata.latitude|opt }}"></label></td>
+              <td><label for="latitude">latitude</label></td>
+              <td>{{ metadata.latitude|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="longitude" name="longitude" value="{{ metadata.longitude|opt }}"></label></td>
+              <td><label for="longitude">longitude</label></td>
+              <td>{{ metadata.longitude|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="x" name="x" value="{{ metadata.x|opt }}"></label></td>
+              <td><label for="x">x</td></label>
+              <td>{{ metadata.x|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="y" name="y" value="{{ metadata.y|opt }}"></label></td>
+              <td><label for="y">y</td></label>
+              <td>{{ metadata.y|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="bikepedesc" name="bikepeddesc" value="{{ metadata.bikepeddesc|opt }}"></label></td>
+              <td><label for="bikepedesc">bikepeddesc</label></td>
+              <td>{{ metadata.bikepeddesc|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="bikepedfacility" name="bikepedfacility" value="{{ metadata.bikepedfacility|opt }}"></label></td>
+              <td><label for="bikepedfacility">bikepedfacility</label></td>
+              <td>{{ metadata.bikepedfacility|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="bikepedgroup" name="bikepedgroup" value="{{ metadata.bikepedgroup|opt }}"></label></td>
+              <td><label for="bikepedgroup">bikepedgroup</label></td>
+              <td>{{ metadata.bikepedgroup|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="comments" name="comments" value="{{ metadata.comments|opt }}"></label></td>
+              <td><label for="comments">comments</label></td>
+              <td>{{ metadata.comments|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="description" name="description" value="{{ metadata.description|opt }}"></label></td>
+              <td><label for="description">description</label></td>
+              <td>{{ metadata.description|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="fc" name="fc" value="{{ metadata.fc|opt }}"></label></td>
+              <td><label for="fc">fc</td></label>
+              <td>{{ metadata.fc|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="isurban" name="isurban" value="{{ metadata.isurban|opt }}"></label></td>
+              <td><label for="isurban">isurban</label></td>
+              <td>{{ metadata.isurban|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="mcd" name="mcd" value="{{ metadata.mcd|opt }}"></label></td>
+              <td><label for="mcd">mcd</label></td>
+              <td>{{ metadata.mcd|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="mp" name="mp" value="{{ metadata.mp|opt }}"></label></td>
+              <td><label for="mp">mp</td></label>
+              <td>{{ metadata.mp|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="offset" name="offset" value="{{ metadata.offset|opt }}"></label></td>
+              <td><label for="offset">offset</label></td>
+              <td>{{ metadata.offset|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="prj" name="prj" value="{{ metadata.prj|opt }}"></label></td>
+              <td><label for="prj">prj</label></td>
+              <td>{{ metadata.prj|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="program" name="program" value="{{ metadata.program|opt }}"></label></td>
+              <td><label for="program">program</label></td>
+              <td>{{ metadata.program|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="rdprefix" name="rdprefix" value="{{ metadata.rdprefix|opt }}"></label></td>
+              <td><label for="rdprefix">rdprefix</label></td>
+              <td>{{ metadata.rdprefix|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="rdsuffix" name="rdsuffix" value="{{ metadata.rdsuffix|opt }}"></label></td>
+              <td><label for="rdsuffix">rdsuffix</label></td>
+              <td>{{ metadata.rdsuffix|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="road" name="road" value="{{ metadata.road|opt }}"></label></td>
+              <td><label for="road">road</label></td>
+              <td>{{ metadata.road|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="route" name="route" value="{{ metadata.route|opt }}"></label></td>
+              <td><label for="route">route</label></td>
+              <td>{{ metadata.route|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="seg" name="seg" value="{{ metadata.seg|opt }}"></label></td>
+              <td><label for="seg">seg</label></td>
+              <td>{{ metadata.seg|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="sidewalk" name="sidewalk" value="{{ metadata.sidewalk|opt }}"></label></td>
+              <td><label for="sidewalk">sidewalk</label></td>
+              <td>{{ metadata.sidewalk|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="source" name="source" value="{{ metadata.source|opt }}"></label></td>
+              <td><label for="source">source</label></td>
+              <td>{{ metadata.source|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="sr" name="sr" value="{{ metadata.sr|opt }}"></label></td>
+              <td><label for="sr">sr</td></label>
+              <td>{{ metadata.sr|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="sri" name="sri" value="{{ metadata.sri|opt }}"></label></td>
+              <td><label for="sri">sri</label></td>
+              <td>{{ metadata.sri|opt }}</td>
+            </tr>
+            <tr>
+              <td><label><input type="checkbox" id="stationid" name="stationid" value="{{ metadata.stationid|opt }}"></label></td>
+              <td><label for="stationid">stationid</label></td>
+              <td>{{ metadata.stationid|opt }}</td>
+            </tr>
+        </tbody>
+      </table>
+
+      <label>
+        Number to create: ({{ RECORD_CREATION_LIMIT }} maximum)<br/>
+        <input type="text" name="number_to_create" />
+      </label>
+      <input type="submit" name="submit_fields" value="Submit" />
+      </form>
+    </div>
+  {% endif %}
+{% endblock %}

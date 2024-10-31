@@ -127,6 +127,9 @@ button {
 .warning { color: var(--yellow-light); }
 .error { color: var(--red-light); }
 
+/* Make labels block to make them full width inside a <td> */
+label { display: block; }
+
 /* 
   table scrolling & row/col freezing mostly from 
   <https://code-boxx.com/freeze-rows-columns-html-tables/> 

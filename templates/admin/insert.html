@@ -2,16 +2,29 @@
 
 {% block main %}
   <h2 class="center">{{ heading() }}</h2>
-  {% if let Some(message) = message %}
-    {{ message }}
-  {% endif %}
+  {{ self::burn_after_reading()|safe }}
+
   {% if condition == ResponseCondition::GetInput %}
     <form action="{{ ADMIN_METADATA_INSERT_PATH }}" method="post">
-      <label>
-        How many empty records would you like to create? ({{ RECORD_CREATION_LIMIT }} maximum)<br>
-        <input type="text" name="number_to_create" required />
-      </label>
-      <input type="submit" name="confirm" value="Submit">
+      <h3>Create empty records</h3>
+        <label>
+          How many empty records would you like to create? ({{ RECORD_CREATION_LIMIT }} maximum)<br/>
+          <input type="text" name="number_to_create" />
+        </label>
+        <input type="submit" name="create_empty" value="Submit" />
+    </form>
+
+    <form action="{{ ADMIN_METADATA_INSERT_FROM_EXISTING_PATH }}" method="post">
+      <h3>Create new records from existing count metadata</h3>
+        <label>
+          Which count to use as template?<br/>
+          (You may also <a href="{{ ADMIN_METADATA_LIST_PATH }}">browse records</a> to use 
+          as a template.)<br/>
+          <input type="text" name="recordnum" />
+        </label>
+        <input type="submit" name="create_from_existing" value="Submit" />
     </form>
   {% endif %}
 {% endblock %}
+
+
