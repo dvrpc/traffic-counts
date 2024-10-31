@@ -139,6 +139,10 @@ label { display: block; }
   max-height: calc(100vh - 225px);  /* 100vh - header - main h2 + some extra */
 }
 
+.metadata-list {
+  max-height: calc(100vh - 275px);
+}
+
 .scroll-table {
   border-collapse: separate;
   border-spacing: 0;
