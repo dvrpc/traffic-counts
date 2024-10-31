@@ -84,7 +84,7 @@ async fn main() {
             ADMIN_METADATA_INSERT_FROM_EXISTING_PATH,
             get(get_insert_from_existing).post(post_insert_from_existing),
         )
-        .route_with_tsr(ADMIN_IMPORT_LOG_PATH, get(get_view_import_log))
+        .route_with_tsr(ADMIN_IMPORT_LOG_PATH, get(get_import_log))
         .route_with_tsr(ADMIN_COUNT_DATA_PATH, get(get_count_data))
         .route_with_tsr(ADMIN_AADV_PATH, get(get_aadv))
         .with_state(state)
@@ -235,12 +235,9 @@ async fn get_metadata_detail(
                 }
 
                 // Return to metadata list if coming from the search form there.
-                if *&headers[REFERER]
-                    .to_str()
-                    .unwrap()
-                    .contains(ADMIN_METADATA_LIST_PATH)
+                if headers.get(REFERER).is_some_and(|v| v.to_str().unwrap().contains(ADMIN_METADATA_LIST_PATH))
                 {
-                    return Redirect::to(&format!("{ADMIN_METADATA_LIST_PATH}")).into_response();
+                    return Redirect::to(ADMIN_METADATA_LIST_PATH).into_response();
                 }
             }
         }
@@ -811,7 +808,7 @@ impl Heading for AdminImportLogTemplate {
 }
 
 /// Show import log - for all or one count.
-async fn get_view_import_log(
+async fn get_import_log(
     State(state): State<AppState>,
     params: Query<RecordnumFilterParams>,
 ) -> AdminImportLogTemplate {
@@ -822,30 +819,36 @@ async fn get_view_import_log(
         log_entries: vec![],
     };
 
-    if params.clear.is_some() || params.recordnum.is_none() {
-        match db::get_import_log(&conn, None) {
-            Ok(v) => {
-                template.log_entries = v;
-            }
-            Err(e) => {
-                *MESSAGE.lock().unwrap() = Some(format!("Error: {e}"));
-            }
+    // Default to getting all entries, because even if user requests entries for a specific
+    // recordnum, we want to show all of them if nothing is found.
+    match db::get_import_log(&conn, None) {
+        Ok(v) if v.is_empty() => {
+            template.log_entries = v;
+            *MESSAGE.lock().unwrap() = Some("No import log entries found.".to_string());
         }
-    } else if let Some(v) = params.recordnum {
-        template.recordnum = Some(v);
-        match db::get_import_log(&conn, Some(v)) {
-            Ok(w) if w.is_empty() => {
-                *MESSAGE.lock().unwrap() =
-                    Some(format!("No import log records found for recordnum {v}."));
-            }
-            Ok(w) => {
-                template.log_entries = w;
-            }
-            Err(e) => {
-                *MESSAGE.lock().unwrap() = Some(format!("Error: {e}"));
-            }
+        Ok(v) => template.log_entries = v,
+        Err(e) => {
+            *MESSAGE.lock().unwrap() = Some(format!(
+                "Error fetching import log entries from database: {e}"
+            ))
         }
     }
+
+    // Retain entries for specific recordnum only.
+    if let Some(v) = params.recordnum {
+        if template
+            .log_entries
+            .iter()
+            .any(|entry| entry.recordnum == v)
+        {
+            template.recordnum = Some(v);
+            template.log_entries.retain(|entry| entry.recordnum == v);
+        } else {
+            *MESSAGE.lock().unwrap() =
+                Some(format!("No import log entries found for recordnum {v}."));
+        }
+    }
+
     template
 }
 
@@ -872,28 +875,27 @@ async fn get_aadv(
         aadv: vec![],
     };
 
-    if params.clear.is_some() || params.recordnum.is_none() {
-        match aadv::get_aadv(&conn, None) {
-            Ok(v) if v.is_empty() => {
-                template.aadv = v;
-                *MESSAGE.lock().unwrap() = Some("No records found.".to_string());
-            }
-            Ok(v) => template.aadv = v,
-            Err(e) => {
-                *MESSAGE.lock().unwrap() = Some(format!("Error fetching AADV from database: {e}."));
-            }
+    // Default to getting all entries, because even if user requests entries for a specific
+    // recordnum, we want to show all of them if nothing is found.
+    match aadv::get_aadv(&conn, None) {
+        Ok(v) if v.is_empty() => {
+            template.aadv = v;
+            *MESSAGE.lock().unwrap() = Some("No AADV entries found.".to_string());
         }
-    } else if let Some(v) = params.recordnum {
-        template.recordnum = Some(v);
-        match aadv::get_aadv(&conn, Some(v)) {
-            Ok(w) if w.is_empty() => {
-                template.aadv = w;
-                *MESSAGE.lock().unwrap() = Some(format!("No records found for recordnum {v}."));
-            }
-            Ok(w) => template.aadv = w,
-            Err(e) => {
-                *MESSAGE.lock().unwrap() = Some(format!("Error fetching AADV from database: {e}"));
-            }
+        Ok(v) => template.aadv = v,
+        Err(e) => {
+            *MESSAGE.lock().unwrap() =
+                Some(format!("Error fetching AADV entries from database: {e}."));
+        }
+    }
+
+    // Retain entries for specific recordnum only.
+    if let Some(v) = params.recordnum {
+        if template.aadv.iter().any(|entry| entry.recordnum == v) {
+            template.recordnum = Some(v);
+            template.aadv.retain(|entry| entry.recordnum == v);
+        } else {
+            *MESSAGE.lock().unwrap() = Some(format!("No AADV entries found for recordnum {v}."));
         }
     }
 
