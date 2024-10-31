@@ -6,12 +6,14 @@ use std::sync::Mutex;
 
 use axum::{
     extract::{Form, Query, State},
+    http::HeaderMap,
     response::{IntoResponse, Redirect, Response},
     routing::get,
     Router,
 };
 use axum_extra::routing::RouterExt;
 use chrono::Timelike;
+use http::header::REFERER;
 use oracle::{pool::Pool, Error as OracleError, ErrorKind as OracleErrorKind};
 use rinja_axum::Template;
 use serde::{de, Deserialize, Deserializer};
@@ -199,9 +201,10 @@ struct AdminMetadataDetailParams {
 
 /// Get count ([`Metadata`] record).
 async fn get_metadata_detail(
+    headers: HeaderMap,
     State(state): State<AppState>,
     params: Query<AdminMetadataDetailParams>,
-) -> AdminMetadataDetailTemplate {
+) -> Response {
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
 
@@ -230,10 +233,19 @@ async fn get_metadata_detail(
                 } else {
                     *MESSAGE.lock().unwrap() = Some(format!("{e}"))
                 }
+
+                // Return to metadata list if coming from the search form there.
+                if *&headers[REFERER]
+                    .to_str()
+                    .unwrap()
+                    .contains(ADMIN_METADATA_LIST_PATH)
+                {
+                    return Redirect::to(&format!("{ADMIN_METADATA_LIST_PATH}")).into_response();
+                }
             }
         }
     }
-    template
+    template.into_response()
 }
 
 #[derive(Template, Debug, Default)]
