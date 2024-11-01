@@ -41,7 +41,14 @@ static MESSAGE: Mutex<Option<String>> = Mutex::new(None);
 
 /// Set value in global MESSAGE mutex.
 fn message(value: impl Into<String>) {
-    *MESSAGE.lock().unwrap() = Some(value.into());
+    match MESSAGE.lock() {
+        Ok(mut m) => *m = Some(value.into()),
+        Err(e) => {
+            MESSAGE.clear_poison();
+            let mut e = e.into_inner();
+            *e = Some(value.into());
+        }
+    }
 }
 
 /// Retrieve, reset, and return value from global MESSAGE Mutex.
@@ -49,8 +56,22 @@ fn message(value: impl Into<String>) {
 /// This is for displaying messages to user in templates. It is reset because messages
 /// should only be shown once and not be persisted across responses.
 pub fn burn_after_reading() -> String {
-    let message = MESSAGE.lock().unwrap().clone().unwrap_or_default();
-    *MESSAGE.lock().unwrap() = None;
+    let message = match MESSAGE.lock() {
+        Ok(v) => v.clone().unwrap_or_default(),
+        Err(e) => {
+            MESSAGE.clear_poison();
+            let e = e.into_inner();
+            (e.clone().unwrap_or_default()).to_string()
+        }
+    };
+    match MESSAGE.lock() {
+        Ok(mut m) => *m = None,
+        Err(e) => {
+            MESSAGE.clear_poison();
+            let mut e = e.into_inner();
+            *e = None;
+        }
+    }
     message
 }
 
