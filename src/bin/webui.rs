@@ -471,11 +471,9 @@ impl Heading for AdminInsertTemplate {
     const NAV_ITEM_TEXT: &str = "Create New Records";
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize)]
 struct AdminInsertForm {
-    #[serde(default, deserialize_with = "empty_string_as_none")]
-    number_to_create: Option<u32>,
-    create_empty: Option<String>,
+    number_to_create: Option<String>,
 }
 
 /// Show forms to create new count(s) ([`Metadata`] record(s)), either empty or from existing one.
@@ -491,17 +489,23 @@ async fn post_insert_empty(
     let conn = state.conn_pool.get().unwrap();
     let template = AdminInsertTemplate::default();
 
-    // Handle user attempting to create new empty records.
-    if input.create_empty.is_some() {
-        match input.number_to_create {
-            Some(v) => {
-                match db::insert_empty_metadata(&conn, v) {
+    match input.number_to_create {
+        Some(v) => {
+            // Parse string from user.
+            match v.parse::<u32>() {
+                // If valid u32, try to get the metadata for that recordnum.
+                Ok(v) => match db::insert_empty_metadata(&conn, v) {
                     Ok(w) => {
                         // Store recordnum of first (and perhaps only) one created.
                         let first_recordnum = w.clone()[0];
 
                         // Add links to each new one created.
-                        let records = w.into_iter().map(|r| format!(r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)).collect::<Vec<String>>();
+                        let records = w
+                        .into_iter()
+                        .map(|r| format!(
+                            r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)
+                        )
+                        .collect::<Vec<String>>();
 
                         *MESSAGE.lock().unwrap() =
                             Some(format!("New records created: {}", records.join(", ")));
@@ -512,16 +516,19 @@ async fn post_insert_empty(
                         .into_response();
                     }
                     Err(e) => *MESSAGE.lock().unwrap() = Some(format!("Error: {e}.")),
+                },
+                Err(_) => {
+                    *MESSAGE.lock().unwrap() = Some("Please insert a valid number.".to_string());
                 }
             }
-            None => {
-                *MESSAGE.lock().unwrap() = Some(format!(
-                    "Please specify a number of records to create, from 1 to {}.",
-                    db::RECORD_CREATION_LIMIT
-                ));
-            }
         }
-    }
+        None => {
+            *MESSAGE.lock().unwrap() = Some(format!(
+                "Please specify a number of records to create, from 1 to {}.",
+                db::RECORD_CREATION_LIMIT
+            ));
+        }
+    };
 
     template.into_response()
 }
