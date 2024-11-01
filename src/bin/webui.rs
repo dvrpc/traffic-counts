@@ -133,9 +133,7 @@ pub trait Heading {
 /// Query params used to filter for particular recordnum or clear filter.
 #[derive(Debug, Deserialize)]
 struct RecordnumFilterParams {
-    #[serde(default, deserialize_with = "empty_string_as_none")]
-    recordnum: Option<u32>,
-    clear: Option<String>,
+    recordnum: Option<String>,
 }
 
 /// The front page of the admin section.
@@ -208,19 +206,13 @@ impl Heading for AdminMetadataDetailTemplate {
     const NAV_ITEM_TEXT: &str = "View Metadata";
 }
 
-/// Query params used to filter for particular recordnum or clear filter.
-#[derive(Debug, Deserialize)]
-struct AdminMetadataDetailParams {
-    #[serde(default, deserialize_with = "empty_string_as_none")]
-    recordnum: Option<u32>,
-}
-
 /// Get count ([`Metadata`] record).
 async fn get_metadata_detail(
     headers: HeaderMap,
     State(state): State<AppState>,
-    params: Query<AdminMetadataDetailParams>,
+    params: Query<RecordnumFilterParams>,
 ) -> Response {
+
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
 
@@ -228,35 +220,56 @@ async fn get_metadata_detail(
         recordnum: None,
         metadata: None,
     };
-
-    if params.recordnum.is_none() {
-        message("Please provide a record number.");
-    } else if let Some(v) = params.recordnum {
-        template.recordnum = Some(v);
-        match db::get_metadata(&conn, v) {
-            Ok(w) => {
-                template.metadata = Some(w);
-            }
-            Err(e) => {
-                // Handle the one error that is probable (no matching recordnum in db).
-                if e.source().is_some_and(|v| {
-                    matches!(
-                        v.downcast_ref::<OracleError>().unwrap().kind(),
-                        OracleErrorKind::NoDataFound
-                    )
-                }) {
-                    message(format!("Record {v} not found."));
-                } else {
-                    message(format!("{e}"));
-                }
-
-                // Return to metadata list if coming from the search form there.
+    
+    let recordnum = match params.recordnum {
+        Some(v) => match v.parse::<u32>() {
+            Ok(v) => v,
+            Err(_) => {
+                message("Please provide a valid number.");
                 if headers
                     .get(REFERER)
                     .is_some_and(|v| v.to_str().unwrap().contains(ADMIN_METADATA_LIST_PATH))
                 {
                     return Redirect::to(ADMIN_METADATA_LIST_PATH).into_response();
+                } else {
+                    return template.into_response();
                 }
+            }
+        }
+        None => {
+            message("Please provide a valid number.");
+            if headers
+                .get(REFERER)
+                .is_some_and(|v| v.to_str().unwrap().contains(ADMIN_METADATA_LIST_PATH))
+            {
+                return Redirect::to(ADMIN_METADATA_LIST_PATH).into_response();
+            } else {
+                return template.into_response();
+            }
+        }
+    };
+
+
+    template.recordnum = Some(recordnum);
+    match db::get_metadata(&conn, recordnum) {
+        Ok(v) => template.metadata = Some(v),
+        Err(e) => {
+            // Handle the one error that is probable (no matching recordnum in db).
+            if e.source().is_some_and(|v| {
+                matches!(
+                    v.downcast_ref::<OracleError>().unwrap().kind(),
+                    OracleErrorKind::NoDataFound
+                )
+            }) {
+                message(format!("Record {recordnum} not found."));
+            } else {
+                message(format!("{e}"));
+            }
+            if headers
+                .get(REFERER)
+                .is_some_and(|v| v.to_str().unwrap().contains(ADMIN_METADATA_LIST_PATH))
+            {
+                return Redirect::to(ADMIN_METADATA_LIST_PATH).into_response();
             }
         }
     }
@@ -530,7 +543,7 @@ async fn post_insert_empty(
                     Err(e) => message(format!("Error: {e}.")),
                 },
                 Err(_) => {
-                    message("Please insert a valid number.");
+                    message("Please provide a valid number.");
                 }
             }
         }
@@ -557,14 +570,12 @@ impl Heading for AdminInsertFromExistingTemplate {
 
 #[derive(Deserialize, Debug)]
 struct AdminInsertFromExistingForm {
+    recordnum: Option<String>,
+    number_to_create: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     create_from_existing: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
-    number_to_create: Option<u32>,
-    #[serde(default, deserialize_with = "empty_string_as_none")]
     submit_fields: Option<String>,
-    #[serde(default, deserialize_with = "empty_string_as_none")]
-    recordnum: Option<u32>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     count_kind: Option<CountKind>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
@@ -650,22 +661,23 @@ async fn post_insert_from_existing(
     // Get metadata from the existing count user wants to create new one from.
     if input.create_from_existing.is_some() {
         match input.recordnum {
-            Some(v) => match db::get_metadata(&conn, v) {
-                Ok(v) => {
-                    template.metadata = Some(v);
-                }
-                Err(e) => {
-                    if e.source().is_some_and(|v| {
-                        matches!(
-                            v.downcast_ref::<OracleError>().unwrap().kind(),
-                            OracleErrorKind::NoDataFound
-                        )
-                    }) {
-                        message(format!("Record {v} not found."))
-                    } else {
-                        message(format!("{e}"))
+            Some(v) => match v.parse::<u32>() {
+                Ok(v) => match db::get_metadata(&conn, v) {
+                    Ok(v) => template.metadata = Some(v),
+                    Err(e) => {
+                        if e.source().is_some_and(|v| {
+                            matches!(
+                                v.downcast_ref::<OracleError>().unwrap().kind(),
+                                OracleErrorKind::NoDataFound
+                            )
+                        }) {
+                            message(format!("Record {v} not found."))
+                        } else {
+                            message(format!("{e}"))
+                        }
                     }
-                }
+                },
+                Err(_) => message("Please provide a valid number."),
             },
             None => message("Please specify a recordnum to use as a template."),
         }
@@ -673,129 +685,140 @@ async fn post_insert_from_existing(
 
     // Process creating new count from existing one.
     if input.submit_fields.is_some() {
-        match input.number_to_create {
-            Some(v) => {
-                // Create a Metadata instance to use to
-                // Convert direction types from strings.
-                let cntdir = if let Some(v) = &input.cntdir {
-                    match RoadDirection::from_str(v) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            message(format!("{e}"));
-                            return template.into_response();
-                        }
-                    }
-                } else {
-                    None
-                };
-                let trafdir = if let Some(v) = &input.trafdir {
-                    match RoadDirection::from_str(v) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            message(format!("{e}"));
-                            return template.into_response();
-                        }
-                    }
-                } else {
-                    None
-                };
-                let indir = if let Some(v) = &input.indir {
-                    match LaneDirection::from_str(v) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            message(format!("{e}"));
-                            return template.into_response();
-                        }
-                    }
-                } else {
-                    None
-                };
-                let outdir = if let Some(v) = &input.outdir {
-                    match LaneDirection::from_str(v) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            message(format!("{e}"));
-                            return template.into_response();
-                        }
-                    }
-                } else {
-                    None
-                };
-
-                let metadata = Metadata {
-                    amending: None,
-                    ampeak: None,
-                    bikepeddesc: input.bikepeddesc,
-                    bikepedfacility: input.bikepedfacility,
-                    bikepedgroup: input.bikepedgroup,
-                    cntdir,
-                    comments: input.comments,
-                    count_kind: input.count_kind,
-                    counter_id: None,
-                    createheaderdate: None,
-                    datelastcounted: None,
-                    description: input.description,
-                    fc: input.fc,
-                    fromlmt: input.fromlmt,
-                    importdatadate: None,
-                    indir,
-                    isurban: input.isurban,
-                    latitude: input.latitude,
-                    longitude: input.longitude,
-                    mcd: input.mcd,
-                    mp: input.mp,
-                    offset: input.offset,
-                    outdir,
-                    pmending: None,
-                    pmpeak: None,
-                    prj: input.prj,
-                    program: input.program,
-                    recordnum: None,
-                    rdprefix: input.rdprefix,
-                    rdsuffix: input.rdsuffix,
-                    road: input.road,
-                    route: input.route,
-                    seg: input.seg,
-                    sidewalk: input.sidewalk,
-                    speedlimit: None,
-                    source: input.source,
-                    sr: input.sr,
-                    sri: input.sri,
-                    stationid: input.stationid,
-                    technician: None,
-                    tolmt: input.tolmt,
-                    trafdir,
-                    x: input.x,
-                    y: input.y,
-                };
-
-                match db::insert_metadata_from_existing(&conn, v, metadata) {
-                    Ok(w) => {
-                        // Store recordnum of first (and perhaps only) one created.
-                        let first_recordnum = w.clone()[0];
-
-                        // Add links to each new one created.
-                        let records = w.into_iter().map(|r| format!(r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)).collect::<Vec<String>>();
-
-                        message(format!("New records created: {}", records.join(", ")));
-
-                        return Redirect::to(&format!(
-                            "{ADMIN_METADATA_DETAIL_PATH}?recordnum={first_recordnum}"
-                        ))
-                        .into_response();
-                    }
-                    Err(e) => message(format!("Error: {e}.")),
+        let number_to_create = match input.number_to_create {
+            Some(v) => match v.parse::<u32>() {
+                Ok(v) => v,
+                Err(_) => {
+                    message("Please provide a valid number.");
+                    return template.into_response();
                 }
-            }
+            },
             None => {
                 message(format!(
                     "Please specify a number of records to create, from 1 to {}.",
                     db::RECORD_CREATION_LIMIT
                 ));
+                return template.into_response();
             }
+        };
+
+        // Create a Metadata instance to use to
+        // Convert direction types from strings.
+        let cntdir = if let Some(v) = &input.cntdir {
+            match RoadDirection::from_str(v) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    message(format!("{e}"));
+                    return template.into_response();
+                }
+            }
+        } else {
+            None
+        };
+        let trafdir = if let Some(v) = &input.trafdir {
+            match RoadDirection::from_str(v) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    message(format!("{e}"));
+                    return template.into_response();
+                }
+            }
+        } else {
+            None
+        };
+        let indir = if let Some(v) = &input.indir {
+            match LaneDirection::from_str(v) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    message(format!("{e}"));
+                    return template.into_response();
+                }
+            }
+        } else {
+            None
+        };
+        let outdir = if let Some(v) = &input.outdir {
+            match LaneDirection::from_str(v) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    message(format!("{e}"));
+                    return template.into_response();
+                }
+            }
+        } else {
+            None
+        };
+
+        let metadata = Metadata {
+            amending: None,
+            ampeak: None,
+            bikepeddesc: input.bikepeddesc,
+            bikepedfacility: input.bikepedfacility,
+            bikepedgroup: input.bikepedgroup,
+            cntdir,
+            comments: input.comments,
+            count_kind: input.count_kind,
+            counter_id: None,
+            createheaderdate: None,
+            datelastcounted: None,
+            description: input.description,
+            fc: input.fc,
+            fromlmt: input.fromlmt,
+            importdatadate: None,
+            indir,
+            isurban: input.isurban,
+            latitude: input.latitude,
+            longitude: input.longitude,
+            mcd: input.mcd,
+            mp: input.mp,
+            offset: input.offset,
+            outdir,
+            pmending: None,
+            pmpeak: None,
+            prj: input.prj,
+            program: input.program,
+            recordnum: None,
+            rdprefix: input.rdprefix,
+            rdsuffix: input.rdsuffix,
+            road: input.road,
+            route: input.route,
+            seg: input.seg,
+            sidewalk: input.sidewalk,
+            speedlimit: None,
+            source: input.source,
+            sr: input.sr,
+            sri: input.sri,
+            stationid: input.stationid,
+            technician: None,
+            tolmt: input.tolmt,
+            trafdir,
+            x: input.x,
+            y: input.y,
+        };
+
+        match db::insert_metadata_from_existing(&conn, number_to_create, metadata) {
+            Ok(v) => {
+                // Store recordnum of first (and perhaps only) one created.
+                let first_recordnum = v.clone()[0];
+
+                // Add links to each new one created.
+                let records = v
+                    .into_iter()
+                    .map(|r| {
+                        format!(r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)
+                    })
+                    .collect::<Vec<String>>();
+
+                message(format!("New records created: {}", records.join(", ")));
+
+                return Redirect::to(&format!(
+                    "{ADMIN_METADATA_DETAIL_PATH}?recordnum={first_recordnum}"
+                ))
+                .into_response();
+            }
+            Err(e) => message(format!("Error: {e}.")),
         }
     }
-
     template.into_response()
 }
 
@@ -835,8 +858,20 @@ async fn get_import_log(
         )),
     }
 
+    // Get any user-provided recordnum.
+    let recordnum = match params.recordnum {
+        Some(v) => match v.parse::<u32>() {
+            Ok(v) => Some(v),
+            Err(_) => {
+                message("Please provide a valid number.");
+                return template;
+            }
+        }
+        None => None,
+    };
+
     // Retain entries for specific recordnum only.
-    if let Some(v) = params.recordnum {
+    if let Some(v) = recordnum {
         if template
             .log_entries
             .iter()
@@ -856,7 +891,7 @@ async fn get_import_log(
 #[derive(Template, Debug, Default)]
 #[template(path = "counts/aadv.html")]
 struct AadvTemplate {
-    recordnum: Option<u32>,
+    recordnum: Option<String>,
     aadv: Vec<AadvEntry>,
 }
 
@@ -875,6 +910,7 @@ async fn get_aadv(
         aadv: vec![],
     };
 
+
     // Default to getting all entries, because even if user requests entries for a specific
     // recordnum, we want to show all of them if nothing is found.
     match aadv::get_aadv(&conn, None) {
@@ -888,10 +924,22 @@ async fn get_aadv(
         }
     }
 
+    // Get any user-provided recordnum.
+    let recordnum = match params.recordnum {
+        Some(v) => match v.parse::<u32>() {
+            Ok(v) => Some(v),
+            Err(_) => {
+                message("Please provide a valid number.");
+                return template;
+            }
+        }
+        None => None,
+    };
+
     // Retain entries for specific recordnum only.
-    if let Some(v) = params.recordnum {
+    if let Some(v) = recordnum {
         if template.aadv.iter().any(|entry| entry.recordnum == v) {
-            template.recordnum = Some(v);
+            template.recordnum = Some(v.to_string());
             template.aadv.retain(|entry| entry.recordnum == v);
         } else {
             message(format!("No AADV entries found for recordnum {v}."));
