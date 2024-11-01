@@ -39,7 +39,12 @@ const RECORD_CREATION_LIMIT: u32 = db::RECORD_CREATION_LIMIT;
 
 static MESSAGE: Mutex<Option<String>> = Mutex::new(None);
 
-/// Get any message out of the global MESSAGE Mutex and reset it to None.
+/// Set value in global MESSAGE mutex.
+fn message(value: impl Into<String>) {
+    *MESSAGE.lock().unwrap() = Some(value.into());
+}
+
+/// Retrieve, reset, and return value from global MESSAGE Mutex.
 ///
 /// This is for displaying messages to user in templates. It is reset because messages
 /// should only be shown once and not be persisted across responses.
@@ -166,9 +171,7 @@ async fn get_metadata_list(
         Ok(v) => {
             template.metadata = v;
         }
-        Err(e) => {
-            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
-        }
+        Err(e) => message(format!("{e}")),
     }
     template
 }
@@ -206,7 +209,7 @@ async fn get_metadata_detail(
     };
 
     if params.recordnum.is_none() {
-        *MESSAGE.lock().unwrap() = Some("Please provide a record number.".to_string());
+        message("Please provide a record number.");
     } else if let Some(v) = params.recordnum {
         template.recordnum = Some(v);
         match db::get_metadata(&conn, v) {
@@ -221,9 +224,9 @@ async fn get_metadata_detail(
                         OracleErrorKind::NoDataFound
                     )
                 }) {
-                    *MESSAGE.lock().unwrap() = Some(format!("Record {v} not found."));
+                    message(format!("Record {v} not found."));
                 } else {
-                    *MESSAGE.lock().unwrap() = Some(format!("{e}"))
+                    message(format!("{e}"));
                 }
 
                 // Return to metadata list if coming from the search form there.
@@ -312,15 +315,14 @@ async fn get_count_data(
             v
         }
         None => {
-            *MESSAGE.lock().unwrap() = Some("Please provide a record number.".to_string());
+            message("Please provide a record number.");
             return template;
         }
     };
     let format = match params.format {
         Some(v) => v,
         None => {
-            *MESSAGE.lock().unwrap() =
-                Some("Please provide the format for the data to be presented in.".to_string());
+            message("Please provide the format for the data to be presented in.");
             return template;
         }
     };
@@ -329,15 +331,12 @@ async fn get_count_data(
     let count_kind = match db::get_count_kind(&conn, recordnum) {
         Ok(Some(v)) => v,
         Ok(None) => {
-            *MESSAGE.lock().unwrap() = Some(
-                "Cannot determine kind of count, and thus unable to fetch count data.".to_string(),
-            );
+            message("Cannot determine kind of count, and thus unable to fetch count data.");
             return template;
         }
         Err(_) => {
-            *MESSAGE.lock().unwrap() = Some(
-                "Error fetching count kind from database, and thus unable to fetch count data."
-                    .to_string(),
+            message(
+                "Error fetching count kind from database, and thus unable to fetch count data.",
             );
 
             return template;
@@ -345,10 +344,8 @@ async fn get_count_data(
     };
 
     // Msg to user if no results are empty.
-    fn no_records(format: CountDataFormat, recordnum: u32) -> Option<String> {
-        Some(format!(
-            "No {format} records found for recordnum {recordnum}."
-        ))
+    fn no_records(format: CountDataFormat, recordnum: u32) -> String {
+        format!("No {format} records found for recordnum {recordnum}.")
     }
 
     // Get data according to format/count kind and put into appropriate variable of template.
@@ -356,10 +353,10 @@ async fn get_count_data(
         CountDataFormat::Volume15Min => match count_kind {
             CountKind::FifteenMinVolume => match FifteenMinuteVehicle::select(&conn, recordnum) {
                 Ok(v) if v.is_empty() => {
-                    *MESSAGE.lock().unwrap() = no_records(CountDataFormat::Volume15Min, recordnum);
+                    message(no_records(CountDataFormat::Volume15Min, recordnum));
                 }
                 Ok(v) => template.fifteen_min_vehicle = Some(v),
-                Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
+                Err(e) => message(format!("{e}")),
             },
             CountKind::Bicycle1
             | CountKind::Bicycle2
@@ -368,19 +365,18 @@ async fn get_count_data(
             | CountKind::Bicycle5
             | CountKind::Bicycle6 => match FifteenMinuteBicycle::select(&conn, recordnum) {
                 Ok(v) if v.is_empty() => {
-                    *MESSAGE.lock().unwrap() = no_records(CountDataFormat::Volume15Min, recordnum);
+                    message(no_records(CountDataFormat::Volume15Min, recordnum));
                 }
                 Ok(v) => template.fifteen_min_bike = Some(v),
-                Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
+                Err(e) => message(format!("{e}")),
             },
             CountKind::Pedestrian | CountKind::Pedestrian2 => {
                 match FifteenMinutePedestrian::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        *MESSAGE.lock().unwrap() =
-                            no_records(CountDataFormat::Volume15Min, recordnum)
+                        message(no_records(CountDataFormat::Volume15Min, recordnum))
                     }
                     Ok(v) => template.fifteen_min_ped = Some(v),
-                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
+                    Err(e) => message(format!("{e}")),
                 }
             }
             _ => (),
@@ -393,14 +389,13 @@ async fn get_count_data(
             ) {
                 match NonNormalVolCount::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        *MESSAGE.lock().unwrap() =
-                            no_records(CountDataFormat::VolumeDayByHour, recordnum)
+                        message(no_records(CountDataFormat::VolumeDayByHour, recordnum))
                     }
                     Ok(v) => template.non_normal_volume = Some(v),
-                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
+                    Err(e) => message(format!("{e}")),
                 }
             } else {
-                *MESSAGE.lock().unwrap() = Some(format!(
+                message(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -410,14 +405,13 @@ async fn get_count_data(
             if count_kind == CountKind::Class {
                 match TimeBinnedVehicleClassCount::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        *MESSAGE.lock().unwrap() =
-                            no_records(CountDataFormat::Class15Min, recordnum)
+                        message(no_records(CountDataFormat::Class15Min, recordnum))
                     }
                     Ok(v) => template.fifteen_min_class = Some(v),
-                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
+                    Err(e) => message(format!("{e}")),
                 }
             } else {
-                *MESSAGE.lock().unwrap() = Some(format!(
+                message(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -428,14 +422,13 @@ async fn get_count_data(
             if count_kind == CountKind::Speed || count_kind == CountKind::Class {
                 match TimeBinnedSpeedRangeCount::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        *MESSAGE.lock().unwrap() =
-                            no_records(CountDataFormat::Speed15Min, recordnum)
+                        message(no_records(CountDataFormat::Speed15Min, recordnum))
                     }
                     Ok(v) => template.fifteen_min_speed = Some(v),
-                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
+                    Err(e) => message(format!("{e}")),
                 }
             } else {
-                *MESSAGE.lock().unwrap() = Some(format!(
+                message(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -446,14 +439,13 @@ async fn get_count_data(
             if count_kind == CountKind::Speed || count_kind == CountKind::Class {
                 match NonNormalAvgSpeedCount::select(&conn, recordnum) {
                     Ok(v) if v.is_empty() => {
-                        *MESSAGE.lock().unwrap() =
-                            no_records(CountDataFormat::SpeedDayByHour, recordnum)
+                        message(no_records(CountDataFormat::SpeedDayByHour, recordnum))
                     }
                     Ok(v) => template.non_normal_avg_speed = Some(v),
-                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("{e}")),
+                    Err(e) => message(format!("{e}")),
                 }
             } else {
-                *MESSAGE.lock().unwrap() = Some(format!(
+                message(format!(
                     "{:?} format is not available for {:?} counts.",
                     format, count_kind
                 ));
@@ -507,23 +499,22 @@ async fn post_insert_empty(
                         )
                         .collect::<Vec<String>>();
 
-                        *MESSAGE.lock().unwrap() =
-                            Some(format!("New records created: {}", records.join(", ")));
+                        message(format!("New records created: {}", records.join(", ")));
 
                         return Redirect::to(&format!(
                             "{ADMIN_METADATA_DETAIL_PATH}?recordnum={first_recordnum}"
                         ))
                         .into_response();
                     }
-                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("Error: {e}.")),
+                    Err(e) => message(format!("Error: {e}.")),
                 },
                 Err(_) => {
-                    *MESSAGE.lock().unwrap() = Some("Please insert a valid number.".to_string());
+                    message("Please insert a valid number.");
                 }
             }
         }
         None => {
-            *MESSAGE.lock().unwrap() = Some(format!(
+            message(format!(
                 "Please specify a number of records to create, from 1 to {}.",
                 db::RECORD_CREATION_LIMIT
             ));
@@ -649,16 +640,13 @@ async fn post_insert_from_existing(
                             OracleErrorKind::NoDataFound
                         )
                     }) {
-                        *MESSAGE.lock().unwrap() = Some(format!("Record {v} not found."))
+                        message(format!("Record {v} not found."))
                     } else {
-                        *MESSAGE.lock().unwrap() = Some(format!("{e}"))
+                        message(format!("{e}"))
                     }
                 }
             },
-            None => {
-                *MESSAGE.lock().unwrap() =
-                    Some("Please specify a recordnum to use as a template.".to_string());
-            }
+            None => message("Please specify a recordnum to use as a template."),
         }
     }
 
@@ -672,7 +660,7 @@ async fn post_insert_from_existing(
                     match RoadDirection::from_str(v) {
                         Ok(v) => Some(v),
                         Err(e) => {
-                            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
+                            message(format!("{e}"));
                             return template.into_response();
                         }
                     }
@@ -683,7 +671,7 @@ async fn post_insert_from_existing(
                     match RoadDirection::from_str(v) {
                         Ok(v) => Some(v),
                         Err(e) => {
-                            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
+                            message(format!("{e}"));
                             return template.into_response();
                         }
                     }
@@ -694,7 +682,7 @@ async fn post_insert_from_existing(
                     match LaneDirection::from_str(v) {
                         Ok(v) => Some(v),
                         Err(e) => {
-                            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
+                            message(format!("{e}"));
                             return template.into_response();
                         }
                     }
@@ -705,7 +693,7 @@ async fn post_insert_from_existing(
                     match LaneDirection::from_str(v) {
                         Ok(v) => Some(v),
                         Err(e) => {
-                            *MESSAGE.lock().unwrap() = Some(format!("{e}"));
+                            message(format!("{e}"));
                             return template.into_response();
                         }
                     }
@@ -768,19 +756,18 @@ async fn post_insert_from_existing(
                         // Add links to each new one created.
                         let records = w.into_iter().map(|r| format!(r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)).collect::<Vec<String>>();
 
-                        *MESSAGE.lock().unwrap() =
-                            Some(format!("New records created: {}", records.join(", ")));
+                        message(format!("New records created: {}", records.join(", ")));
 
                         return Redirect::to(&format!(
                             "{ADMIN_METADATA_DETAIL_PATH}?recordnum={first_recordnum}"
                         ))
                         .into_response();
                     }
-                    Err(e) => *MESSAGE.lock().unwrap() = Some(format!("Error: {e}.")),
+                    Err(e) => message(format!("Error: {e}.")),
                 }
             }
             None => {
-                *MESSAGE.lock().unwrap() = Some(format!(
+                message(format!(
                     "Please specify a number of records to create, from 1 to {}.",
                     db::RECORD_CREATION_LIMIT
                 ));
@@ -819,14 +806,12 @@ async fn get_import_log(
     match db::get_import_log(&conn, None) {
         Ok(v) if v.is_empty() => {
             template.log_entries = v;
-            *MESSAGE.lock().unwrap() = Some("No import log entries found.".to_string());
+            message("No import log entries found.");
         }
         Ok(v) => template.log_entries = v,
-        Err(e) => {
-            *MESSAGE.lock().unwrap() = Some(format!(
-                "Error fetching import log entries from database: {e}"
-            ))
-        }
+        Err(e) => message(format!(
+            "Error fetching import log entries from database: {e}"
+        )),
     }
 
     // Retain entries for specific recordnum only.
@@ -839,8 +824,7 @@ async fn get_import_log(
             template.recordnum = Some(v);
             template.log_entries.retain(|entry| entry.recordnum == v);
         } else {
-            *MESSAGE.lock().unwrap() =
-                Some(format!("No import log entries found for recordnum {v}."));
+            message(format!("No import log entries found for recordnum {v}."));
         }
     }
 
@@ -875,12 +859,11 @@ async fn get_aadv(
     match aadv::get_aadv(&conn, None) {
         Ok(v) if v.is_empty() => {
             template.aadv = v;
-            *MESSAGE.lock().unwrap() = Some("No AADV entries found.".to_string());
+            message("No AADV entries found.");
         }
         Ok(v) => template.aadv = v,
         Err(e) => {
-            *MESSAGE.lock().unwrap() =
-                Some(format!("Error fetching AADV entries from database: {e}."));
+            message(format!("Error fetching AADV entries from database: {e}."));
         }
     }
 
@@ -890,7 +873,7 @@ async fn get_aadv(
             template.recordnum = Some(v);
             template.aadv.retain(|entry| entry.recordnum == v);
         } else {
-            *MESSAGE.lock().unwrap() = Some(format!("No AADV entries found for recordnum {v}."));
+            message(format!("No AADV entries found for recordnum {v}."));
         }
     }
 
