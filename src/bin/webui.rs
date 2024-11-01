@@ -104,14 +104,6 @@ pub trait Heading {
     }
 }
 
-/// The condition of the response - getting input (possibly again after bad input) or success.
-#[derive(Default, PartialEq, Debug)]
-enum ResponseCondition {
-    #[default]
-    GetInput,
-    Success,
-}
-
 /// Query params used to filter for particular recordnum or clear filter.
 #[derive(Debug, Deserialize)]
 struct RecordnumFilterParams {
@@ -235,7 +227,9 @@ async fn get_metadata_detail(
                 }
 
                 // Return to metadata list if coming from the search form there.
-                if headers.get(REFERER).is_some_and(|v| v.to_str().unwrap().contains(ADMIN_METADATA_LIST_PATH))
+                if headers
+                    .get(REFERER)
+                    .is_some_and(|v| v.to_str().unwrap().contains(ADMIN_METADATA_LIST_PATH))
                 {
                     return Redirect::to(ADMIN_METADATA_LIST_PATH).into_response();
                 }
@@ -248,7 +242,6 @@ async fn get_metadata_detail(
 #[derive(Template, Debug, Default)]
 #[template(path = "counts/count_data.html")]
 struct CountDataTemplate {
-    condition: ResponseCondition,
     recordnum: Option<u32>,
     non_normal_volume: Option<Vec<NonNormalVolCount>>,
     non_normal_avg_speed: Option<Vec<NonNormalAvgSpeedCount>>,
@@ -305,7 +298,6 @@ async fn get_count_data(
     let params = params.0;
     let mut template = CountDataTemplate {
         recordnum: None,
-        condition: ResponseCondition::GetInput,
         non_normal_volume: None,
         non_normal_avg_speed: None,
         fifteen_min_ped: None,
@@ -473,9 +465,7 @@ async fn get_count_data(
 
 #[derive(Template, Debug, Default)]
 #[template(path = "admin/insert.html")]
-struct AdminInsertTemplate {
-    condition: ResponseCondition,
-}
+struct AdminInsertTemplate {}
 
 impl Heading for AdminInsertTemplate {
     const NAV_ITEM_TEXT: &str = "Create New Records";
@@ -539,7 +529,6 @@ async fn post_insert_empty(
 #[derive(Template, Debug, Default)]
 #[template(path = "admin/insert_from_existing.html")]
 struct AdminInsertFromExistingTemplate {
-    condition: ResponseCondition,
     metadata: Option<Metadata>,
 }
 
@@ -645,7 +634,6 @@ async fn post_insert_from_existing(
             Some(v) => match db::get_metadata(&conn, v) {
                 Ok(v) => {
                     template.metadata = Some(v);
-                    template.condition = ResponseCondition::GetInput;
                 }
                 Err(e) => {
                     if e.source().is_some_and(|v| {
