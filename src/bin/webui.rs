@@ -31,7 +31,6 @@ const ADMIN_PATH: &str = "/admin";
 const ADMIN_METADATA_LIST_PATH: &str = "/admin/metadata-list";
 const ADMIN_METADATA_DETAIL_PATH: &str = "/admin/metadata-detail";
 const ADMIN_METADATA_INSERT_PATH: &str = "/admin/insert";
-const ADMIN_METADATA_INSERT_FROM_EXISTING_PATH: &str = "/admin/insert-from-existing";
 const ADMIN_COUNT_DATA_PATH: &str = "/admin/count";
 const ADMIN_IMPORT_LOG_PATH: &str = "/admin/import-log";
 const ADMIN_AADV_PATH: &str = "/admin/aadv";
@@ -104,11 +103,7 @@ async fn main() {
         .route_with_tsr(ADMIN_METADATA_DETAIL_PATH, get(get_metadata_detail))
         .route_with_tsr(
             ADMIN_METADATA_INSERT_PATH,
-            get(get_insert).post(post_insert_empty),
-        )
-        .route_with_tsr(
-            ADMIN_METADATA_INSERT_FROM_EXISTING_PATH,
-            get(get_insert_from_existing).post(post_insert_from_existing),
+            get(get_insert).post(post_insert),
         )
         .route_with_tsr(ADMIN_IMPORT_LOG_PATH, get(get_import_log))
         .route_with_tsr(ADMIN_COUNT_DATA_PATH, get(get_count_data))
@@ -212,7 +207,6 @@ async fn get_metadata_detail(
     State(state): State<AppState>,
     params: Query<RecordnumFilterParams>,
 ) -> Response {
-
     let conn = state.conn_pool.get().unwrap();
     let params = params.0;
 
@@ -220,7 +214,7 @@ async fn get_metadata_detail(
         recordnum: None,
         metadata: None,
     };
-    
+
     let recordnum = match params.recordnum {
         Some(v) => match v.parse::<u32>() {
             Ok(v) => v,
@@ -235,7 +229,7 @@ async fn get_metadata_detail(
                     return template.into_response();
                 }
             }
-        }
+        },
         None => {
             message("Please provide a valid number.");
             if headers
@@ -248,7 +242,6 @@ async fn get_metadata_detail(
             }
         }
     };
-
 
     template.recordnum = Some(recordnum);
     match db::get_metadata(&conn, recordnum) {
@@ -489,17 +482,18 @@ async fn get_count_data(
     template
 }
 
-#[derive(Template, Debug, Default)]
+#[derive(Template, Debug, Default, Deserialize)]
 #[template(path = "admin/insert.html")]
-struct AdminInsertTemplate {}
+struct AdminInsertTemplate {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    number_to_create: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    recordnum: Option<String>,
+    metadata: Option<Metadata>,
+}
 
 impl Heading for AdminInsertTemplate {
     const NAV_ITEM_TEXT: &str = "Create New Records";
-}
-
-#[derive(Debug, Deserialize)]
-struct AdminInsertForm {
-    number_to_create: Option<String>,
 }
 
 /// Show forms to create new count(s) ([`Metadata`] record(s)), either empty or from existing one.
@@ -507,73 +501,11 @@ async fn get_insert() -> AdminInsertTemplate {
     AdminInsertTemplate::default()
 }
 
-/// Process form to create new empty count(s) ([`Metadata`] record(s)).
-async fn post_insert_empty(
-    State(state): State<AppState>,
-    Form(input): Form<AdminInsertForm>,
-) -> Response {
-    let conn = state.conn_pool.get().unwrap();
-    let template = AdminInsertTemplate::default();
-
-    match input.number_to_create {
-        Some(v) => {
-            // Parse string from user.
-            match v.parse::<u32>() {
-                // If valid u32, try to get the metadata for that recordnum.
-                Ok(v) => match db::insert_empty_metadata(&conn, v) {
-                    Ok(w) => {
-                        // Store recordnum of first (and perhaps only) one created.
-                        let first_recordnum = w.clone()[0];
-
-                        // Add links to each new one created.
-                        let records = w
-                        .into_iter()
-                        .map(|r| format!(
-                            r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)
-                        )
-                        .collect::<Vec<String>>();
-
-                        message(format!("New records created: {}", records.join(", ")));
-
-                        return Redirect::to(&format!(
-                            "{ADMIN_METADATA_DETAIL_PATH}?recordnum={first_recordnum}"
-                        ))
-                        .into_response();
-                    }
-                    Err(e) => message(format!("Error: {e}.")),
-                },
-                Err(_) => {
-                    message("Please provide a valid number.");
-                }
-            }
-        }
-        None => {
-            message(format!(
-                "Please specify a number of records to create, from 1 to {}.",
-                db::RECORD_CREATION_LIMIT
-            ));
-        }
-    };
-
-    template.into_response()
-}
-
-#[derive(Template, Debug, Default)]
-#[template(path = "admin/insert_from_existing.html")]
-struct AdminInsertFromExistingTemplate {
-    metadata: Option<Metadata>,
-}
-
-impl Heading for AdminInsertFromExistingTemplate {
-    const NAV_ITEM_TEXT: &str = "Create New Records from Existing Count";
-}
-
-#[derive(Deserialize, Debug)]
-struct AdminInsertFromExistingForm {
-    recordnum: Option<String>,
+#[derive(Debug, Deserialize)]
+struct AdminInsertForm {
     number_to_create: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
-    create_from_existing: Option<String>,
+    recordnum: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     submit_fields: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
@@ -644,165 +576,45 @@ struct AdminInsertFromExistingForm {
     stationid: Option<String>,
 }
 
-/// Show form to initiate creation of new count ([`Metadata`] record(s)) from existing count.
-async fn get_insert_from_existing() -> AdminInsertFromExistingTemplate {
-    AdminInsertFromExistingTemplate::default()
-}
-
-/// Get existing count ([`Metadata`] record) from database,
-/// show/process form to select fields to use.
-async fn post_insert_from_existing(
+/// Process forms (from both steps) to create new count(s) ([`Metadata`] record(s)).
+async fn post_insert(
     State(state): State<AppState>,
-    Form(input): Form<AdminInsertFromExistingForm>,
+    Form(input): Form<AdminInsertForm>,
 ) -> Response {
     let conn = state.conn_pool.get().unwrap();
-    let mut template = AdminInsertFromExistingTemplate::default();
+    let mut template = AdminInsertTemplate::default();
 
-    // Get metadata from the existing count user wants to create new one from.
-    if input.create_from_existing.is_some() {
-        match input.recordnum {
-            Some(v) => match v.parse::<u32>() {
-                Ok(v) => match db::get_metadata(&conn, v) {
-                    Ok(v) => template.metadata = Some(v),
-                    Err(e) => {
-                        if e.source().is_some_and(|v| {
-                            matches!(
-                                v.downcast_ref::<OracleError>().unwrap().kind(),
-                                OracleErrorKind::NoDataFound
-                            )
-                        }) {
-                            message(format!("Record {v} not found."))
-                        } else {
-                            message(format!("{e}"))
-                        }
-                    }
-                },
-                Err(_) => message("Please provide a valid number."),
-            },
-            None => message("Please specify a recordnum to use as a template."),
-        }
-    }
-
-    // Process creating new count from existing one.
-    if input.submit_fields.is_some() {
-        let number_to_create = match input.number_to_create {
-            Some(v) => match v.parse::<u32>() {
-                Ok(v) => v,
-                Err(_) => {
-                    message("Please provide a valid number.");
-                    return template.into_response();
-                }
-            },
-            None => {
-                message(format!(
-                    "Please specify a number of records to create, from 1 to {}.",
-                    db::RECORD_CREATION_LIMIT
-                ));
+    // Get number of counts user wants to create.
+    let number_to_create = match input.number_to_create {
+        Some(v) => match v.parse::<u32>() {
+            Ok(v) if v > 0 && v < 50 => {
+                template.number_to_create = Some(v.to_string());
+                v
+            }
+            Ok(_) | Err(_) => {
+                message("Please provide a valid number of records to create.");
                 return template.into_response();
             }
-        };
+        },
+        None => {
+            message(format!(
+                "Please specify a number of records to create, from 1 to {}.",
+                db::RECORD_CREATION_LIMIT
+            ));
+            return template.into_response();
+        }
+    };
 
-        // Create a Metadata instance to use to
-        // Convert direction types from strings.
-        let cntdir = if let Some(v) = &input.cntdir {
-            match RoadDirection::from_str(v) {
-                Ok(v) => Some(v),
-                Err(e) => {
-                    message(format!("{e}"));
-                    return template.into_response();
-                }
-            }
-        } else {
-            None
-        };
-        let trafdir = if let Some(v) = &input.trafdir {
-            match RoadDirection::from_str(v) {
-                Ok(v) => Some(v),
-                Err(e) => {
-                    message(format!("{e}"));
-                    return template.into_response();
-                }
-            }
-        } else {
-            None
-        };
-        let indir = if let Some(v) = &input.indir {
-            match LaneDirection::from_str(v) {
-                Ok(v) => Some(v),
-                Err(e) => {
-                    message(format!("{e}"));
-                    return template.into_response();
-                }
-            }
-        } else {
-            None
-        };
-        let outdir = if let Some(v) = &input.outdir {
-            match LaneDirection::from_str(v) {
-                Ok(v) => Some(v),
-                Err(e) => {
-                    message(format!("{e}"));
-                    return template.into_response();
-                }
-            }
-        } else {
-            None
-        };
-
-        let metadata = Metadata {
-            amending: None,
-            ampeak: None,
-            bikepeddesc: input.bikepeddesc,
-            bikepedfacility: input.bikepedfacility,
-            bikepedgroup: input.bikepedgroup,
-            cntdir,
-            comments: input.comments,
-            count_kind: input.count_kind,
-            counter_id: None,
-            createheaderdate: None,
-            datelastcounted: None,
-            description: input.description,
-            fc: input.fc,
-            fromlmt: input.fromlmt,
-            importdatadate: None,
-            indir,
-            isurban: input.isurban,
-            latitude: input.latitude,
-            longitude: input.longitude,
-            mcd: input.mcd,
-            mp: input.mp,
-            offset: input.offset,
-            outdir,
-            pmending: None,
-            pmpeak: None,
-            prj: input.prj,
-            program: input.program,
-            recordnum: None,
-            rdprefix: input.rdprefix,
-            rdsuffix: input.rdsuffix,
-            road: input.road,
-            route: input.route,
-            seg: input.seg,
-            sidewalk: input.sidewalk,
-            speedlimit: None,
-            source: input.source,
-            sr: input.sr,
-            sri: input.sri,
-            stationid: input.stationid,
-            technician: None,
-            tolmt: input.tolmt,
-            trafdir,
-            x: input.x,
-            y: input.y,
-        };
-
-        match db::insert_metadata_from_existing(&conn, number_to_create, metadata) {
-            Ok(v) => {
+    // Determine what to do next based on whether or not user provide existing count to use.
+    match input.recordnum {
+        // Finish - handle creation of empty record(s).
+        None => match db::insert_empty_metadata(&conn, number_to_create) {
+            Ok(w) => {
                 // Store recordnum of first (and perhaps only) one created.
-                let first_recordnum = v.clone()[0];
+                let first_recordnum = w.clone()[0];
 
                 // Add links to each new one created.
-                let records = v
+                let records = w
                     .into_iter()
                     .map(|r| {
                         format!(r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)
@@ -817,6 +629,158 @@ async fn post_insert_from_existing(
                 .into_response();
             }
             Err(e) => message(format!("Error: {e}.")),
+        },
+        // Send user to form to select which fields to use, or process that form.
+        Some(v) => {
+            // First, get the recordnum - either from initial user-provided number or
+            // from hidden input value.
+            let recordnum = match v.parse::<u32>() {
+                Ok(v) => {
+                    template.recordnum = Some(v.to_string());
+                    v
+                }
+                Err(_) => {
+                    message("Please provide a valid number for the recordnum.");
+                    return template.into_response();
+                }
+            };
+
+            match input.submit_fields {
+                // Display form for user to chose and submit fields to use.
+                None => match db::get_metadata(&conn, recordnum) {
+                    Ok(metadata) => template.metadata = Some(metadata),
+                    Err(e) => {
+                        if e.source().is_some_and(|v| {
+                            matches!(
+                                v.downcast_ref::<OracleError>().unwrap().kind(),
+                                OracleErrorKind::NoDataFound
+                            )
+                        }) {
+                            message(format!("Record {recordnum} not found."))
+                        } else {
+                            message(format!("{e}"))
+                        }
+                    }
+                },
+                // User has chosen/submitted fields - create new records from existing one.
+                Some(_) => {
+                    // Convert direction types from strings.
+                    let cntdir = if let Some(v) = &input.cntdir {
+                        match RoadDirection::from_str(v) {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                message(format!("{e}"));
+                                return template.into_response();
+                            }
+                        }
+                    } else {
+                        None
+                    };
+                    let trafdir = if let Some(v) = &input.trafdir {
+                        match RoadDirection::from_str(v) {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                message(format!("{e}"));
+                                return template.into_response();
+                            }
+                        }
+                    } else {
+                        None
+                    };
+                    let indir = if let Some(v) = &input.indir {
+                        match LaneDirection::from_str(v) {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                message(format!("{e}"));
+                                return template.into_response();
+                            }
+                        }
+                    } else {
+                        None
+                    };
+                    let outdir = if let Some(v) = &input.outdir {
+                        match LaneDirection::from_str(v) {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                message(format!("{e}"));
+                                return template.into_response();
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    let metadata = Metadata {
+                        amending: None,
+                        ampeak: None,
+                        bikepeddesc: input.bikepeddesc,
+                        bikepedfacility: input.bikepedfacility,
+                        bikepedgroup: input.bikepedgroup,
+                        cntdir,
+                        comments: input.comments,
+                        count_kind: input.count_kind,
+                        counter_id: None,
+                        createheaderdate: None,
+                        datelastcounted: None,
+                        description: input.description,
+                        fc: input.fc,
+                        fromlmt: input.fromlmt,
+                        importdatadate: None,
+                        indir,
+                        isurban: input.isurban,
+                        latitude: input.latitude,
+                        longitude: input.longitude,
+                        mcd: input.mcd,
+                        mp: input.mp,
+                        offset: input.offset,
+                        outdir,
+                        pmending: None,
+                        pmpeak: None,
+                        prj: input.prj,
+                        program: input.program,
+                        recordnum: None,
+                        rdprefix: input.rdprefix,
+                        rdsuffix: input.rdsuffix,
+                        road: input.road,
+                        route: input.route,
+                        seg: input.seg,
+                        sidewalk: input.sidewalk,
+                        speedlimit: None,
+                        source: input.source,
+                        sr: input.sr,
+                        sri: input.sri,
+                        stationid: input.stationid,
+                        technician: None,
+                        tolmt: input.tolmt,
+                        trafdir,
+                        x: input.x,
+                        y: input.y,
+                    };
+
+                    match db::insert_metadata_from_existing(&conn, number_to_create, metadata) {
+                        Ok(v) => {
+                            // Store recordnum of first (and perhaps only) one created.
+                            let first_recordnum = v.clone()[0];
+
+                            // Add links to each new one created.
+                            let records = v
+                                .into_iter()
+                                .map(|r| {
+                                    format!(r#"<a href="{ADMIN_METADATA_DETAIL_PATH}?recordnum={r}">{r}</a>"#)
+                                })
+                                .collect::<Vec<String>>();
+
+                            message(format!("New records created: {}", records.join(", ")));
+
+                            return Redirect::to(&format!(
+                                "{ADMIN_METADATA_DETAIL_PATH}?recordnum={first_recordnum}"
+                            ))
+                            .into_response();
+                        }
+                        Err(e) => message(format!("Error: {e}.")),
+                    }
+                }
+            }
         }
     }
     template.into_response()
@@ -866,7 +830,7 @@ async fn get_import_log(
                 message("Please provide a valid number.");
                 return template;
             }
-        }
+        },
         None => None,
     };
 
@@ -910,7 +874,6 @@ async fn get_aadv(
         aadv: vec![],
     };
 
-
     // Default to getting all entries, because even if user requests entries for a specific
     // recordnum, we want to show all of them if nothing is found.
     match aadv::get_aadv(&conn, None) {
@@ -932,7 +895,7 @@ async fn get_aadv(
                 message("Please provide a valid number.");
                 return template;
             }
-        }
+        },
         None => None,
     };
 

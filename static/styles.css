@@ -126,6 +126,7 @@ button {
 .small { font-size: .8rem; }
 .warning { color: var(--yellow-light); }
 .error { color: var(--red-light); }
+.red { color: var(--red-light); }
 
 /* Make labels block to make them full width inside a <td> */
 label { display: block; }
@@ -219,4 +220,5 @@ label { display: block; }
   }
   .warning { color: var(--yellow-dark); }
   .error { color: var(--red-dark); }
+  .red { color: var(--red-dark); }
 }

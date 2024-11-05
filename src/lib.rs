@@ -351,7 +351,7 @@ impl FifteenMinuteVehicle {
 }
 
 /// The full metadata of a count, which corresponds to the "tc_header" table in the database.
-#[derive(Debug, Clone, PartialEq, RowValue)]
+#[derive(Debug, Clone, PartialEq, RowValue, Deserialize)]
 pub struct Metadata {
     pub amending: Option<String>,
     pub ampeak: Option<f32>,
