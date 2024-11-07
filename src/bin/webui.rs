@@ -12,7 +12,7 @@ use axum::{
     Router,
 };
 use axum_extra::routing::RouterExt;
-use chrono::Timelike;
+use chrono::{NaiveDate, Timelike};
 use http::header::REFERER;
 use oracle::{pool::Pool, Error as OracleError, ErrorKind as OracleErrorKind};
 use rinja_axum::Template;
@@ -31,6 +31,7 @@ const ADMIN_PATH: &str = "/admin";
 const ADMIN_METADATA_LIST_PATH: &str = "/admin/metadata-list";
 const ADMIN_METADATA_DETAIL_PATH: &str = "/admin/metadata-detail";
 const ADMIN_METADATA_INSERT_PATH: &str = "/admin/insert";
+const ADMIN_METADATA_EDIT_PATH: &str = "/admin/edit";
 const ADMIN_COUNT_DATA_PATH: &str = "/admin/count";
 const ADMIN_IMPORT_LOG_PATH: &str = "/admin/import-log";
 const ADMIN_AADV_PATH: &str = "/admin/aadv";
@@ -105,6 +106,7 @@ async fn main() {
             ADMIN_METADATA_INSERT_PATH,
             get(get_insert).post(post_insert),
         )
+        .route_with_tsr(ADMIN_METADATA_EDIT_PATH, get(get_edit).post(post_edit))
         .route_with_tsr(ADMIN_IMPORT_LOG_PATH, get(get_import_log))
         .route_with_tsr(ADMIN_COUNT_DATA_PATH, get(get_count_data))
         .route_with_tsr(ADMIN_AADV_PATH, get(get_aadv))
@@ -128,6 +130,7 @@ pub trait Heading {
 /// Query params used to filter for particular recordnum or clear filter.
 #[derive(Debug, Deserialize)]
 struct RecordnumFilterParams {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     recordnum: Option<String>,
 }
 
@@ -786,6 +789,229 @@ async fn post_insert(
     template.into_response()
 }
 
+#[derive(Template, Debug, Default, Deserialize)]
+#[template(path = "admin/edit.html")]
+struct AdminEditTemplate {
+    metadata: Option<Metadata>,
+}
+
+impl Heading for AdminEditTemplate {
+    const NAV_ITEM_TEXT: &str = "Edit Count Metadata";
+}
+
+/// Show forms to edit fields of count [`Metadata`].
+async fn get_edit(
+    State(state): State<AppState>,
+    params: Query<RecordnumFilterParams>,
+) -> AdminEditTemplate {
+    let conn = state.conn_pool.get().unwrap();
+    let mut template = AdminEditTemplate::default();
+
+    if let Some(v) = &params.recordnum {
+        match v.parse::<u32>() {
+            Ok(recordnum) => match db::get_metadata(&conn, recordnum) {
+                Ok(metadata) => template.metadata = Some(metadata),
+                Err(e) => {
+                    if e.source().is_some_and(|e| {
+                        matches!(
+                            e.downcast_ref::<OracleError>().unwrap().kind(),
+                            OracleErrorKind::NoDataFound
+                        )
+                    }) {
+                        message(format!("Record {recordnum} not found."))
+                    } else {
+                        message(format!("{e}"))
+                    }
+                }
+            },
+            Err(_) => message("Please provide a valid number."),
+        }
+    }
+    template
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminEditForm {
+    recordnum: u32,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    bikepeddesc: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    bikepedfacility: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    bikepedgroup: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    cntdir: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    count_kind: Option<CountKind>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    comments: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    counter_id: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    datelastcounted: Option<NaiveDate>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    description: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    fc: Option<u32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    fromlmt: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    indir: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    isurban: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    latitude: Option<f32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    longitude: Option<f32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    mcd: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    mp: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    offset: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    outdir: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    prj: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    program: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    rdprefix: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    rdsuffix: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    road: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    route: Option<u32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    seg: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    sidewalk: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    source: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    speedlimit: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    sr: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    sri: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    stationid: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    technician: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    tolmt: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    trafdir: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    x: Option<f32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    y: Option<f32>,
+}
+
+/// Process form to edit count [`Metadata`].
+async fn post_edit(
+    State(state): State<AppState>,
+    Form(input): Form<AdminEditForm>,
+) -> AdminEditTemplate {
+    dbg!("here1 in post_edit");
+    let conn = state.conn_pool.get().unwrap();
+    let mut template = AdminEditTemplate::default();
+
+    // Get the metadata from db.
+    let mut metadata = match db::get_metadata(&conn, input.recordnum) {
+        Ok(v) => v,
+        Err(e) => {
+            if e.source().is_some_and(|e| {
+                matches!(
+                    e.downcast_ref::<OracleError>().unwrap().kind(),
+                    OracleErrorKind::NoDataFound
+                )
+            }) {
+                message(format!("Record {} not found.", input.recordnum));
+            } else {
+                message(format!("{e}"));
+            }
+            return template;
+        }
+    };
+
+    // Convert direction types from strings.
+    if let Some(v) = &input.cntdir {
+        match RoadDirection::from_str(v) {
+            Ok(v) => metadata.cntdir = Some(v),
+            Err(e) => message(format!("{e}")),
+        }
+    };
+    if let Some(v) = &input.trafdir {
+        match RoadDirection::from_str(v) {
+            Ok(v) => metadata.trafdir = Some(v),
+            Err(e) => message(format!("{e}")),
+        }
+    };
+    if let Some(v) = &input.indir {
+        match LaneDirection::from_str(v) {
+            Ok(v) => metadata.indir = Some(v),
+            Err(e) => message(format!("{e}")),
+        }
+    };
+    if let Some(v) = &input.outdir {
+        match LaneDirection::from_str(v) {
+            Ok(v) => metadata.outdir = Some(v),
+            Err(e) => message(format!("{e}")),
+        }
+    };
+    if let Some(v) = &input.speedlimit {
+        match v.parse::<u8>() {
+            Ok(v) => metadata.speedlimit = Some(v),
+            Err(e) => message(format!("{e}")), 
+        }
+    };
+
+    dbg!(&input.speedlimit);
+    dbg!(&input.fromlmt);
+
+    // Update the fields.
+    metadata.bikepeddesc = input.bikepeddesc;
+    metadata.bikepedfacility = input.bikepedfacility;
+    metadata.bikepedgroup = input.bikepedgroup;
+    metadata.comments = input.comments;
+    metadata.count_kind = input.count_kind;
+    metadata.counter_id = input.counter_id;
+    metadata.datelastcounted = input.datelastcounted;
+    metadata.description = input.description;
+    metadata.fc = input.fc;
+    metadata.fromlmt = input.fromlmt;
+    metadata.isurban = input.isurban;
+    metadata.latitude = input.latitude;
+    metadata.longitude = input.longitude;
+    metadata.mcd = input.mcd;
+    metadata.mp = input.mp;
+    metadata.offset = input.offset;
+    metadata.prj = input.prj;
+    metadata.program = input.program;
+    metadata.rdprefix = input.rdprefix;
+    metadata.rdsuffix = input.rdsuffix;
+    metadata.road = input.road;
+    metadata.route = input.route;
+    metadata.seg = input.seg;
+    metadata.sidewalk = input.sidewalk;
+    metadata.source = input.source;
+    metadata.sr = input.sr;
+    metadata.sri = input.sri;
+    metadata.stationid = input.stationid;
+    metadata.technician = input.technician;
+    metadata.tolmt = input.tolmt;
+    metadata.x = input.x;
+    metadata.y = input.y;
+
+    dbg!(&metadata);
+
+    template.metadata = Some(metadata);
+
+    template
+}
+
 #[derive(Template, Debug, Default)]
 #[template(path = "admin/import_log.html")]
 struct AdminImportLogTemplate {
@@ -939,11 +1165,21 @@ where
 
 // Any filter defined in the module `filters` is accessible in your template.
 mod filters {
+    use rinja::filters::Safe;
     /// Display None variant of Options as empty strings.
     pub fn opt<T: std::fmt::Display>(s: &Option<T>) -> rinja::Result<String> {
         match s {
             Some(s) => Ok(s.to_string()),
             None => Ok(String::new()),
         }
+    }
+
+    /// Display input text.
+    pub fn input<'a, T: std::fmt::Display>(s: &Option<T>, field: &'a str) -> rinja::Result<Safe<String>> {
+        let s = match s {
+            Some(s) => s.to_string(),
+            None => String::new(),
+        };
+        Ok(Safe(format!("<input type='text' name='{field}' value='{s}' style='text-align:right' />")))
     }
 }
