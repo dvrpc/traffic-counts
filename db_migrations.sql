@@ -184,3 +184,7 @@ insert into aadv_excluded_days values (to_date('2024-04-01', 'YYYY-MM-DD'), 'Eas
 insert into aadv_excluded_days values (to_date('2024-05-23', 'YYYY-MM-DD'), 'Memorial Day', 'PennDot');
 insert into aadv_excluded_days values (to_date('2024-05-28', 'YYYY-MM-DD'), 'Memorial Day', 'PennDot');
 insert into aadv_excluded_days values (to_date('2024-07-03', 'YYYY-MM-DD'), 'Independence Day', 'PennDot');
+
+-- Constrain speed limit
+-- this has been added to both test and production database
+alter table tc_header add constraint speedlimit_tc_header check (speedlimit > 0 and speedlimit < 90);
