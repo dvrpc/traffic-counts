@@ -809,9 +809,12 @@ fn main() {
                 InputCount::FifteenMinuteBicycleOrPedestrian => (),
             }
 
-            // Calculate and insert the annual average daily volume, except for Bicycle counts,
-            // which first require an additional field in the database to be set after the import.
-            if count_type != InputCount::FifteenMinuteBicycle {
+            // Calculate and insert the annual average daily volume, except for bicycle counts,
+            // which first require an additional field in the database to be set after the import,
+            // and the bikeped type not used for import purposes.
+            if count_type != InputCount::FifteenMinuteBicycle
+                && count_type != InputCount::FifteenMinuteBicycleOrPedestrian
+            {
                 match insert_aadv2(recordnum as u32, &conn) {
                     Ok(()) => {
                         let msg = "AADV calculated and inserted";
