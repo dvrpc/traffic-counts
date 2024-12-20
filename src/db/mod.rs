@@ -303,7 +303,6 @@ pub fn insert_metadata_from_existing(
             &metadata.sr,
             &metadata.sri,
             &metadata.stationid,
-            &metadata.technician,
             &metadata.tolmt,
             &metadata.trafdir,
             &metadata.x,

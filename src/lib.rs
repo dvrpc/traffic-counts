@@ -96,7 +96,6 @@ pub enum CountError {
 pub enum FileNameProblem {
     TooManyParts,
     TooFewParts,
-    InvalidTech,
     InvalidRecordNum,
     InvalidDirections,
     InvalidSpeedLimit,
@@ -394,8 +393,6 @@ pub struct Metadata {
     pub sr: Option<String>,
     pub sri: Option<String>,
     pub stationid: Option<String>,
-    #[row_value(rename = "takenby")]
-    pub technician: Option<String>,
     pub tolmt: Option<String>,
     pub trafdir: Option<RoadDirection>,
     pub x: Option<f32>,
@@ -403,12 +400,11 @@ pub struct Metadata {
 }
 
 /// The field metadata of an input count, which is a subset of the full [`Metadata`] and includes
-/// technician, id, direction(s), count machine id, and - potentially - the speed limit.
+/// id, direction(s), count machine id, and - potentially - the speed limit.
 ///
 /// See the [import](../import/index.html) program for filename specification.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldMetadata {
-    pub technician: String, // initials
     pub recordnum: u32,
     pub directions: Directions,
     pub counter_id: String,
@@ -426,30 +422,20 @@ impl FieldMetadata {
             .split('-')
             .collect();
 
-        if parts.len() < 5 {
+        if parts.len() < 4 {
             return Err(CountError::InvalidFileName {
                 problem: FileNameProblem::TooFewParts,
                 path: path.to_owned(),
             });
         }
-        if parts.len() > 5 {
+        if parts.len() > 4 {
             return Err(CountError::InvalidFileName {
                 problem: FileNameProblem::TooManyParts,
                 path: path.to_owned(),
             });
         }
 
-        // `technician` should be letters. If parseable as int, then they aren't letters.
-        if parts[0].parse::<u32>().is_ok() {
-            return Err(CountError::InvalidFileName {
-                problem: FileNameProblem::InvalidTech,
-                path: path.to_owned(),
-            });
-        }
-
-        let technician = parts[0].to_string();
-
-        let recordnum = match parts[1].parse() {
+        let recordnum = match parts[0].parse() {
             Ok(v) => v,
             Err(_) => {
                 return Err(CountError::InvalidFileName {
@@ -459,7 +445,7 @@ impl FieldMetadata {
             }
         };
 
-        let directions: Directions = match parts[2] {
+        let directions: Directions = match parts[1] {
             "nnn" => Directions::new(
                 LaneDirection::North,
                 Some(LaneDirection::North),
@@ -500,12 +486,12 @@ impl FieldMetadata {
             }
         };
 
-        let counter_id = parts[3].to_string();
+        let counter_id = parts[2].to_string();
 
-        let speed_limit = if parts[4] == "na" {
+        let speed_limit = if parts[3] == "na" {
             None
         } else {
-            match parts[4].parse() {
+            match parts[3].parse() {
                 Ok(v) => Some(v),
                 Err(_) => {
                     return Err(CountError::InvalidFileName {
@@ -517,7 +503,6 @@ impl FieldMetadata {
         };
 
         let metadata = Self {
-            technician,
             recordnum,
             directions,
             counter_id,

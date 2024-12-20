@@ -20,26 +20,23 @@
 //! ## Filename specification
 //!
 //! The names of all exported files (see below for export process) should be in the form
-//! [tech initials]-[record num]-[direction(s)]-[physical counter id]-[speed limit].csv.
+//! [record num]-[direction(s)]-[physical counter id]-[speed limit].csv.
 //!
 //! (.txt can also be used for the file extension rater than .csv.)
 //!
 //! All components must be present, separated by a dash (-).
 //! Here are several examples:
-//!   - rc-166905-ew-40972-35.csv
-//!     - "rc" is the technician's initials.
+//!   - 166905-ew-40972-35.csv
 //!     - "166905" is the recordnum of the count.
 //!     - "ew" is the direction. In this case, two lanes going opposite directions.
 //!     - "40972" is the physical machine the count was taken on.
 //!     - "35" is the speed limit.
-//!   - kh-165367-ee-40972-35.csv
-//!     - "kh" is the technician's initials.
+//!   - 165367-ee-40972-35.csv
 //!     - "165367" is the recordnum of the count.
 //!     - "ee" is the direction. In this case, two lanes going the same direction.
 //!     - "40972" is the physical machine the count was taken on.
 //!     - "35" is the speed limit.
-//!   - kw-123456-s-101-na.csv
-//!     - "kw" is the technician's initials.
+//!   - 123456-s-101-na.csv
 //!     - "123456" is the recordnum of the count.
 //!     - "s" is the direction. In this case, only one lane, going south.
 //!     - "101" is the physical machine the count was taken on.
@@ -889,12 +886,12 @@ fn update_metadata(
     conn.execute(
         "update tc_header SET
         importdatadate = (select current_date from dual),
-        takenby = :1,
+        status = :1,
         counterid = :2,
         speedlimit = :3
         where recordnum = :4",
         &[
-            &metadata.technician,
+            &"imported",
             &metadata.counter_id,
             &metadata.speed_limit,
             &recordnum,

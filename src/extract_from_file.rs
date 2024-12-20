@@ -411,14 +411,14 @@ mod tests {
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
         let counted_vehicles = IndividualVehicle::extract(path).unwrap();
         assert_eq!(counted_vehicles.len(), 8706);
     }
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts_by_lane() {
-        let path = Path::new("test_files/vehicle/kw-101-eee-21-35.csv");
+        let path = Path::new("test_files/vehicle/101-eee-21-35.csv");
         let counted_vehicles = IndividualVehicle::extract(path).unwrap();
         assert_eq!(counted_vehicles.len(), 227);
 
@@ -442,14 +442,14 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_168193() {
-        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let path = Path::new("test_files/15minutevehicle/168193-ew-39352-na.txt");
         let fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 384)
     }
 
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_102() {
-        let path = Path::new("test_files/15minutevehicle/kw-102-www-21-35.csv");
+        let path = Path::new("test_files/15minutevehicle/102-www-21-35.csv");
         let mut fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
         fifteen_min_volcount.sort_unstable_by_key(|count| (count.date, count.time, count.lane));
         assert_eq!(fifteen_min_volcount.len(), 57);
@@ -471,7 +471,7 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_vehicle_errs_when_dirs_mismatch_in_filename_and_data_103() {
-        let path = Path::new("test_files/15minutevehicle/kw-103-sss-21-35.csv");
+        let path = Path::new("test_files/15minutevehicle/103-sss-21-35.csv");
 
         assert!(matches!(
             FifteenMinuteVehicle::extract(path),
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_bicycle_gets_correct_number_of_counts() {
-        let path = Path::new("test_files/15minutebicycle/vg-167607-ns-4175-na.csv");
+        let path = Path::new("test_files/15minutebicycle/167607-ns-4175-na.csv");
         let fifteen_min_volcount = FifteenMinuteBicycle::extract(path).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 480);
 
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_pedestrian_gets_correct_number_of_counts() {
-        let path = Path::new("test_files/15minutepedestrian/vg-167297-ns-4874-na.csv");
+        let path = Path::new("test_files/15minutepedestrian/167297-ns-4874-na.csv");
         let fifteen_min_volcount = FifteenMinutePedestrian::extract(path).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 768);
 
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_15min_veh_sample() {
-        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let path = Path::new("test_files/15minutevehicle/168193-ew-39352-na.txt");
         let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
         assert_eq!(count_type, InputCount::FifteenMinuteVehicle);
         assert_eq!(num_rows, 5);
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_ind_veh_sample() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
         let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
         assert_eq!(count_type, InputCount::IndividualVehicle);
         assert_eq!(num_rows, 4);
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_15min_bicycle_sample() {
-        let path = Path::new("test_files/15minutebicycle/vg-167607-ns-4175-na.csv");
+        let path = Path::new("test_files/15minutebicycle/167607-ns-4175-na.csv");
         let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
         assert_eq!(count_type, InputCount::FifteenMinuteBicycleOrPedestrian);
         assert_eq!(num_rows, 3);
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_15min_pedestrian_sample() {
-        let path = Path::new("test_files/15minutepedestrian/vg-167297-ns-4874-na.csv");
+        let path = Path::new("test_files/15minutepedestrian/167297-ns-4874-na.csv");
         let (count_type, num_rows) = count_type_and_num_nondata_rows(path).unwrap();
         assert_eq!(count_type, InputCount::FifteenMinuteBicycleOrPedestrian);
         assert_eq!(num_rows, 3);
@@ -601,35 +601,35 @@ mod tests {
 
     #[test]
     fn num_nondata_rows_correct() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
         let num_rows = num_nondata_rows(path).unwrap();
         assert_eq!(num_rows, 4);
     }
 
     #[test]
     fn count_type_ind_veh_from_header_correct() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
         let ct_from_header = InputCount::from_header(path).unwrap();
         assert_eq!(ct_from_header, InputCount::IndividualVehicle);
     }
 
     #[test]
     fn count_type_15min_veh_from_header_correct() {
-        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let path = Path::new("test_files/15minutevehicle/168193-ew-39352-na.txt");
         let ct_from_header = InputCount::from_header(path).unwrap();
         assert_eq!(ct_from_header, InputCount::FifteenMinuteVehicle);
     }
 
     #[test]
     fn count_type_15min_bicycle_from_header_correct() {
-        let path = Path::new("test_files/15minutebicycle/vg-167607-ns-4175-na.csv");
+        let path = Path::new("test_files/15minutebicycle/167607-ns-4175-na.csv");
         let ct_from_header = InputCount::from_header(path).unwrap();
         assert_eq!(ct_from_header, InputCount::FifteenMinuteBicycleOrPedestrian);
     }
 
     #[test]
     fn count_type_15min_pedestrian_from_header_correct() {
-        let path = Path::new("test_files/15minutepedestrian/vg-167297-ns-4874-na.csv");
+        let path = Path::new("test_files/15minutepedestrian/167297-ns-4874-na.csv");
         let ct_from_header = InputCount::from_header(path).unwrap();
         assert_eq!(ct_from_header, InputCount::FifteenMinuteBicycleOrPedestrian);
     }
@@ -654,28 +654,28 @@ mod tests {
 
     #[test]
     fn count_type_from_parent_dir_and_header_15min_veh_correct() {
-        let path = Path::new("test_files/15minutevehicle/rc-168193-ew-39352-na.txt");
+        let path = Path::new("test_files/15minutevehicle/168193-ew-39352-na.txt");
         let count_type = InputCount::from_parent_dir_and_header(path).unwrap();
         assert_eq!(count_type, InputCount::FifteenMinuteVehicle);
     }
 
     #[test]
     fn count_type_from_parent_dir_and_header_ind_veh_correct() {
-        let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+        let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
         let count_type = InputCount::from_parent_dir_and_header(path).unwrap();
         assert_eq!(count_type, InputCount::IndividualVehicle);
     }
 
     #[test]
     fn count_type_from_parent_dir_and_header_15min_bicycle_correct() {
-        let path = Path::new("test_files/15minutebicycle/vg-167607-ns-4175-na.csv");
+        let path = Path::new("test_files/15minutebicycle/167607-ns-4175-na.csv");
         let count_type = InputCount::from_parent_dir_and_header(path).unwrap();
         assert_eq!(count_type, InputCount::FifteenMinuteBicycle);
     }
 
     #[test]
     fn count_type_from_parent_dir_and_header_15min_pedestrian_correct() {
-        let path = Path::new("test_files/15minutepedestrian/vg-167297-ns-4874-na.csv");
+        let path = Path::new("test_files/15minutepedestrian/167297-ns-4874-na.csv");
         let count_type = InputCount::from_parent_dir_and_header(path).unwrap();
         assert_eq!(count_type, InputCount::FifteenMinutePedestrian);
     }

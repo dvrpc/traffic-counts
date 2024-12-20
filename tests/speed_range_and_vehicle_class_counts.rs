@@ -89,7 +89,7 @@ fn speed_binning_is_correct() {
 
 #[test]
 fn empty_periods_created_correctly_166905() {
-    let path = Path::new("test_files/vehicle/rc-166905-ew-40972-35.txt");
+    let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
     let individual_vehicles = IndividualVehicle::extract(path).unwrap();
     let field_metadata = FieldMetadata::from_path(path).unwrap();
 
@@ -157,7 +157,7 @@ fn empty_periods_created_correctly_166905() {
 
 #[test]
 fn counts_created_correctly_165367() {
-    let path = Path::new("test_files/vehicle/kh-165367-ee-38397-45.txt");
+    let path = Path::new("test_files/vehicle/165367-ee-38397-45.txt");
     let individual_vehicles = IndividualVehicle::extract(path).unwrap();
     let field_metadata = FieldMetadata::from_path(path).unwrap();
 
@@ -235,7 +235,7 @@ fn counts_created_correctly_165367() {
 #[test]
 fn counts_created_correctly_101() {
     // This file was made up, based on another, but with just over an hour of counts.
-    let path = Path::new("test_files/vehicle/kw-101-eee-21-35.csv");
+    let path = Path::new("test_files/vehicle/101-eee-21-35.csv");
     let individual_vehicles = IndividualVehicle::extract(path).unwrap();
     let field_metadata = FieldMetadata::from_path(path).unwrap();
 
