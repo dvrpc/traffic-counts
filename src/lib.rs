@@ -2,19 +2,11 @@
 //! and enables performing various kinds of operations on them, like
 //! [extracting][extract_from_file] data from files,
 //! [CRUD db operations][db::crud],
-//! [denormalizing][denormalize] count data,
-//! and [calculating/inserting][aadv] the annual average daily traffic volumes.
+//! and [denormalizing][denormalize] count data.
 //!
 //! The [import](../import/index.html) program implements extracting data from files
 //! and inserting it into our database. See its documentation for further details, including
 //! the filename specification and the types of counts it can create.
-//!
-//! Another program, currently named [upsert_factors](../upsert_factors/index.html) - though
-//! that may be changed in the future to better reflect what it does - updates factors used to
-//! calculate annual average daily volumes. Extended documentation forthcoming.
-//!
-//! Finally, a [web interface](../webui/index.html) is currently under development for viewing and
-//! administering the database.
 //!
 //! See <https://www.dvrpc.org/traffic/> for additional information about traffic counting.
 
