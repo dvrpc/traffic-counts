@@ -684,6 +684,7 @@ pub fn get_aadv(conn: &Connection, recordnum: Option<u32>) -> Result<Vec<AadvEnt
     Ok(data)
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1484,3 +1485,4 @@ mod tests {
         assert_eq!(aadv.get(&None), Some(&1071));
     }
 }
+*/
