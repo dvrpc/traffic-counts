@@ -122,7 +122,7 @@ use simplelog::{
 };
 
 use traffic_counts::{
-    aadv::Aadv,
+    aadv::insert_aadv2,
     check_data::check,
     create_speed_and_class_count,
     db::{create_pool, crud::Crud, insert_import_log_entry, ImportLogEntry},
@@ -517,28 +517,6 @@ fn main() {
                             .unwrap();
                         }
                     }
-
-                    // Calculate and insert the annual average daily volume.
-                    match TimeBinnedVehicleClassCount::insert_aadv(recordnum as u32, &conn) {
-                        Ok(()) => {
-                            let msg = "AADV calculated and inserted";
-                            info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
-                                &conn,
-                                ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
-                            )
-                            .unwrap();
-                        }
-                        Err(e) => {
-                            let msg = format!("Failed to calculate/insert AADV: {e}");
-                            error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
-                                &conn,
-                                ImportLogEntry::new(recordnum, msg, Level::Error),
-                            )
-                            .unwrap();
-                        }
-                    }
                 }
                 InputCount::FifteenMinuteVehicle => {
                     // Extract data from CSV/text file.
@@ -659,28 +637,6 @@ fn main() {
                             .unwrap();
                         }
                     }
-
-                    // Calculate and insert the annual average daily volume.
-                    match FifteenMinuteVehicle::insert_aadv(recordnum as u32, &conn) {
-                        Ok(()) => {
-                            let msg = "AADV calculated and inserted";
-                            info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
-                                &conn,
-                                ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
-                            )
-                            .unwrap();
-                        }
-                        Err(e) => {
-                            let msg = format!("Failed to calculate/insert AADV: {e}");
-                            error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
-                                &conn,
-                                ImportLogEntry::new(recordnum, msg, Level::Error),
-                            )
-                            .unwrap();
-                        }
-                    }
                 }
                 InputCount::FifteenMinuteBicycle => {
                     // Extract data from CSV/text file.
@@ -764,29 +720,8 @@ fn main() {
                             .unwrap();
                         }
                     }
-
-                    // Calculate and insert the annual average daily volume.
-                    match FifteenMinuteBicycle::insert_aadv(recordnum as u32, &conn) {
-                        Ok(()) => {
-                            let msg = "AADV calculated and inserted";
-                            info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
-                                &conn,
-                                ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
-                            )
-                            .unwrap();
-                        }
-                        Err(e) => {
-                            let msg = format!("Failed to calculate/insert AADV: {e}");
-                            error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
-                                &conn,
-                                ImportLogEntry::new(recordnum, msg, Level::Error),
-                            )
-                            .unwrap();
-                        }
-                    }
                 }
+
                 InputCount::FifteenMinutePedestrian => {
                     // Extract data from CSV/text file.
                     let fifteen_min_volcount = match FifteenMinutePedestrian::extract(path) {
@@ -869,31 +804,34 @@ fn main() {
                             .unwrap();
                         }
                     }
-
-                    // Calculate and insert the annual average daily volume.
-                    match FifteenMinutePedestrian::insert_aadv(recordnum as u32, &conn) {
-                        Ok(()) => {
-                            let msg = "AADV calculated and inserted";
-                            info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
-                                &conn,
-                                ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
-                            )
-                            .unwrap();
-                        }
-                        Err(e) => {
-                            let msg = format!("Failed to calculate/insert AADV: {e}");
-                            error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
-                                &conn,
-                                ImportLogEntry::new(recordnum, msg, Level::Error),
-                            )
-                            .unwrap();
-                        }
-                    }
                 }
                 // Nothing to do here.
                 InputCount::FifteenMinuteBicycleOrPedestrian => (),
+            }
+
+            // Calculate and insert the annual average daily volume, except for Bicycle counts,
+            // which first require an additional field in the database to be set after the import.
+            if count_type != InputCount::FifteenMinuteBicycle {
+                match insert_aadv2(recordnum as u32, &conn) {
+                    Ok(()) => {
+                        let msg = "AADV calculated and inserted";
+                        info!(target: "import", "{recordnum}: {msg}");
+                        insert_import_log_entry(
+                            &conn,
+                            ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
+                        )
+                        .unwrap();
+                    }
+                    Err(e) => {
+                        let msg = format!("Failed to calculate/insert AADV: {e}");
+                        error!(target: "import", "{recordnum}: {msg}");
+                        insert_import_log_entry(
+                            &conn,
+                            ImportLogEntry::new(recordnum, msg, Level::Error),
+                        )
+                        .unwrap();
+                    }
+                }
             }
             // Check for potential issues with data, after it has been inserted into the database,
             // and log them for review.

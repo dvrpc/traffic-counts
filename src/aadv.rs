@@ -11,6 +11,63 @@ use crate::{
     TimeBinnedVehicleClassCount,
 };
 
+/// Insert/update the set of AADVs (per direction/overall) into the database.
+///
+/// TODO: once pl/sql function has been fixed to include directionaly, update this.
+pub fn insert_aadv2(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
+    // Use pl/sql function calc_aadv to calculate AADV.
+    let aadv = match conn
+        .query_row_as::<u32>(&format!("select calc_aadv({}) from dual", recordnum), &[])
+    {
+        Ok(v) => v,
+        Err(_) => {
+            return Err(CountError::DbError(format!(
+                "Unable to calculate AADV for {recordnum}"
+            )))
+        }
+    };
+
+    let date = Local::now().date_naive();
+
+    // Delete any existing AADVs for same recordnum and date
+    if conn
+        .execute(
+            "delete from aadv where recordnum = :1 and date_calculated = TO_CHAR(:2, 'DD-MON-YY')",
+            &[&recordnum, &date],
+        )
+        .is_ok()
+    {
+        conn.commit()?;
+    };
+
+    // This is what the insert should look like once aadv is calculated with directionalty.
+    /*
+    for (direction, aadv) in aadv {
+        let direction = direction.map(|v| format!("{v}"));
+        conn.execute(
+            "insert into aadv (recordnum, aadv, direction, date_calculated) VALUES (:1, :2, :3, :4)",
+            &[&recordnum, aadv, &direction, &date],
+        )?;
+        // Add the overall (no directionality) aadv to tc_header table.
+        if direction.is_none() {
+            conn.execute(
+                "update tc_header set aadv = :1 where recordnum = :2",
+                &[aadv, &recordnum],
+            )?;
+        }
+    }
+    */
+
+    // For now, do this:
+
+    conn.execute(
+        "insert into aadv (recordnum, aadv, date_calculated) VALUES (:1, :3, :4)",
+        &[&recordnum, &aadv, &date],
+    )?;
+    conn.commit()?;
+    Ok(())
+}
+
 /// A full Average Annual Daily Volume entry in the database.
 #[derive(Debug, RowValue)]
 pub struct AadvEntry {
