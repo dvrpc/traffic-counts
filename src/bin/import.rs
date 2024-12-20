@@ -122,10 +122,9 @@ use simplelog::{
 };
 
 use traffic_counts::{
-    aadv::insert_aadv2,
     check_data::check,
     create_speed_and_class_count,
-    db::{create_pool, crud::Crud, insert_import_log_entry, ImportLogEntry},
+    db::{create_pool, crud::Crud, insert_aadv2, insert_import_log_entry, ImportLogEntry},
     denormalize::{Denormalize, *},
     extract_from_file::{Extract, InputCount},
     FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
