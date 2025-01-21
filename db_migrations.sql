@@ -1,5 +1,11 @@
 /*
-  All database changes made as part of this new import program.
+  This included all database changes made as part of this new import program, at least until
+  changes were made to the database during the creation of the APEX admin interface. These have 
+  gone undocumented. As of mid January 2025 (? unsure of exact date), whatever changes had 
+  been made in DVRPCTC_TEST were then used to created DVRPCTC_NEW, using data from DVRPCTC.
+
+  So essentially its pointless to continue to update this, but it is a record of most(?) of the
+  changes that were made.
 */
 
 -- Add column for unclassified vehicles, which we will now start tracking.
