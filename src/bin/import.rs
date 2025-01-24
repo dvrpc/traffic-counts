@@ -252,7 +252,7 @@ fn main() {
             if path.extension().is_some_and(|x| x == "log") {
                 continue;
             }
-            let count_type = match InputCount::from_parent_dir_and_header(path) {
+            let count_type = match InputCount::from_parent_dir(path) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "import", "{path:?} not processed: {e}");
@@ -801,15 +801,12 @@ fn main() {
                         }
                     }
                 }
-                // Nothing to do here.
-                InputCount::FifteenMinuteBicycleOrPedestrian => (),
             }
 
             // Calculate and insert the annual average daily volume, except for bicycle counts,
-            // which first require an additional field in the database to be set after the import,
-            // and the bikeped type not used for import purposes.
+            // which first require an additional field in the database to be set after the import.
             if count_type != InputCount::FifteenMinuteBicycle
-                && count_type != InputCount::FifteenMinuteBicycleOrPedestrian
+                && count_type != InputCount::IndividualBicycle
             {
                 match insert_aadv2(recordnum as u32, &conn) {
                     Ok(()) => {
