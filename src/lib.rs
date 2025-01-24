@@ -806,46 +806,42 @@ pub fn create_speed_and_class_count(
 
     let all_datetimes = create_time_bins(first_dt, last_dt, interval);
 
-    if all_datetimes.len() < speed_range_map.len() {
-        let mut all_keys = vec![];
-        let all_lanes = if metadata.directions.direction3.is_some() {
-            vec![1, 2, 3]
-        } else if metadata.directions.direction3.is_none()
-            && metadata.directions.direction2.is_some()
-        {
-            vec![1, 2]
-        } else {
-            vec![1]
-        };
+    let mut all_keys = vec![];
+    let all_lanes = if metadata.directions.direction3.is_some() {
+        vec![1, 2, 3]
+    } else if metadata.directions.direction3.is_none() && metadata.directions.direction2.is_some() {
+        vec![1, 2]
+    } else {
+        vec![1]
+    };
 
-        // construct all possible keys
-        for datetime in all_datetimes.clone() {
-            for lane in all_lanes.iter() {
-                all_keys.push(BinnedCountKey {
-                    date: datetime.date(),
-                    time: datetime,
-                    lane: *lane,
-                })
+    // construct all possible keys
+    for datetime in all_datetimes.clone() {
+        for lane in all_lanes.iter() {
+            all_keys.push(BinnedCountKey {
+                date: datetime.date(),
+                time: datetime,
+                lane: *lane,
+            })
+        }
+    }
+    // Add missing periods for speed range count
+    for key in all_keys {
+        let direction = match key.lane {
+            1 => metadata.directions.direction1,
+            2 => metadata.directions.direction2.unwrap(),
+            3 => metadata.directions.direction3.unwrap(),
+            _ => {
+                error!("Unable to determine lane/direction.");
+                continue;
             }
-        }
-        // Add missing periods for speed range count
-        for key in all_keys {
-            let direction = match key.lane {
-                1 => metadata.directions.direction1,
-                2 => metadata.directions.direction2.unwrap(),
-                3 => metadata.directions.direction3.unwrap(),
-                _ => {
-                    error!("Unable to determine lane/direction.");
-                    continue;
-                }
-            };
-            speed_range_map
-                .entry(key)
-                .or_insert(SpeedRangeCount::new(metadata.recordnum, direction));
-            vehicle_class_map
-                .entry(key)
-                .or_insert(VehicleClassCount::new(metadata.recordnum, direction));
-        }
+        };
+        speed_range_map
+            .entry(key)
+            .or_insert(SpeedRangeCount::new(metadata.recordnum, direction));
+        vehicle_class_map
+            .entry(key)
+            .or_insert(VehicleClassCount::new(metadata.recordnum, direction));
     }
 
     // Convert speed range count from HashMap to Vec.
