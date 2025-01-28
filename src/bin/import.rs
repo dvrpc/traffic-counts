@@ -319,9 +319,9 @@ fn main() {
 
                     // Create two counts from this: 15-minute speed count and 15-minute class count
                     let (speed_range_count, vehicle_class_count) = create_speed_and_class_count(
+                        TimeInterval::FifteenMin,
                         metadata.clone(),
                         individual_vehicles.clone(),
-                        TimeInterval::FifteenMin,
                     );
 
                     // Create records for the non-normalized TC_SPESUM table (another one with

@@ -94,9 +94,9 @@ fn empty_periods_created_correctly_166905() {
     let field_metadata = FieldMetadata::from_path(path).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
+        TimeInterval::FifteenMin,
         field_metadata,
         individual_vehicles,
-        TimeInterval::FifteenMin,
     );
 
     speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
@@ -162,9 +162,9 @@ fn counts_created_correctly_165367() {
     let field_metadata = FieldMetadata::from_path(path).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
+        TimeInterval::FifteenMin,
         field_metadata,
         individual_vehicles,
-        TimeInterval::FifteenMin,
     );
 
     speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
@@ -240,9 +240,9 @@ fn counts_created_correctly_101() {
     let field_metadata = FieldMetadata::from_path(path).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
+        TimeInterval::FifteenMin,
         field_metadata,
         individual_vehicles,
-        TimeInterval::FifteenMin,
     );
 
     speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));

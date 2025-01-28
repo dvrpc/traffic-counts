@@ -754,9 +754,9 @@ pub struct TimeBinnedSpeedRangeCount {
 
 /// Create time-binned speed and class counts from [`IndividualVehicle`]s.
 pub fn create_speed_and_class_count(
+    interval: TimeInterval,
     metadata: FieldMetadata,
     mut counts: Vec<IndividualVehicle>,
-    interval: TimeInterval,
 ) -> (
     Vec<TimeBinnedSpeedRangeCount>,
     Vec<TimeBinnedVehicleClassCount>,
