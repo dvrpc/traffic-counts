@@ -121,7 +121,7 @@ use simplelog::{
 use traffic_counts::{
     check_data::check,
     create_binned_bicycle_vol_count, create_speed_and_class_count,
-    db::{create_pool, crud::Crud, insert_aadv2, insert_import_log_entry, ImportLogEntry},
+    db::{self, crud::Crud, ImportLogEntry},
     denormalize::{Denormalize, *},
     extract_from_file::{Extract, InputCount},
     FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
@@ -218,7 +218,7 @@ fn main() {
             return;
         }
     };
-    let pool = create_pool(username, password).unwrap();
+    let pool = db::create_pool(username, password).unwrap();
     let conn = pool.get().unwrap();
 
     loop {
@@ -285,7 +285,7 @@ fn main() {
                     target: "import",
                     "{recordnum}: {msg}",
                 );
-                insert_import_log_entry(
+                db::insert_import_log_entry(
                     &conn,
                     ImportLogEntry::new(recordnum, msg.to_string(), Level::Error),
                 )
@@ -297,7 +297,7 @@ fn main() {
             // Process the file according to InputCount.
             let msg = format!("Extracting data from {path:?}, a {count_type:?} count");
             info!( target: "import", "{msg}" );
-            insert_import_log_entry(&conn, ImportLogEntry::new(recordnum, msg, Level::Info))
+            db::insert_import_log_entry(&conn, ImportLogEntry::new(recordnum, msg, Level::Info))
                 .unwrap();
             match count_type {
                 InputCount::IndividualVehicle => {
@@ -307,7 +307,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -343,7 +343,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -357,7 +357,7 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed class data insert to database ({table} table)");
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Info),
                             )
@@ -366,7 +366,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error committing class data insert to database ({table} table): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -381,7 +381,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -395,7 +395,7 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed speed range data insert to database ({table} table)");
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Info),
                             )
@@ -404,7 +404,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error committing speed range data insert to database ({table} table): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -425,7 +425,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -439,7 +439,7 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized class data insert to database ({table} table)");
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Info),
                             )
@@ -448,7 +448,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error committing denormalized class data insert to database ({table} table): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -463,7 +463,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -477,7 +477,7 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized speed data insert to database ({table} table)");
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Info),
                             )
@@ -486,7 +486,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error committing denormalized speed data insert to database ({table} table): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -498,7 +498,7 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
                             )
@@ -507,7 +507,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error updating metadata (tc_header table): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -522,7 +522,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -550,7 +550,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -567,7 +567,7 @@ fn main() {
                                 "Successfully committed data insert to database ({table} table)"
                             );
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Info),
                             )
@@ -578,7 +578,7 @@ fn main() {
                                 "Error committing data insert to database ({table} table): {e}"
                             );
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -590,7 +590,7 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
                             )
@@ -599,7 +599,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error updating metadata (tc_header table): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -614,7 +614,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -634,7 +634,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -651,7 +651,7 @@ fn main() {
                                 "Error committing data insert to database ({table} table): {e}"
                             );
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -674,7 +674,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -688,7 +688,7 @@ fn main() {
                         Ok(()) => {
                             let msg = format!("Successfully committed denormalized data insert to database ({table} table)");
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Info),
                             )
@@ -697,7 +697,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error committing denormalized data insert to database ({table} table): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -709,7 +709,7 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
                             )
@@ -719,7 +719,7 @@ fn main() {
                             let msg = format!("Error updating metadata (tc_header table): {e}");
                             error!(target: "import", "{recordnum}: {msg}"
                             );
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -734,7 +734,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -754,7 +754,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -770,7 +770,7 @@ fn main() {
                                 "Successfully committed data insert to database ({table} table)"
                             );
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Info),
                             )
@@ -781,7 +781,7 @@ fn main() {
                                 "Error committing data insert to database ({table} table): {e}"
                             );
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -793,7 +793,7 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
                             )
@@ -802,7 +802,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error updating metadata (tc_header table): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -818,7 +818,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Not processed: {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -838,7 +838,7 @@ fn main() {
                             Err(e) => {
                                 let msg = format!("Error inserting count {count:?}: {e}");
                                 error!(target: "import", "{recordnum}: {msg}");
-                                insert_import_log_entry(
+                                db::insert_import_log_entry(
                                     &conn,
                                     ImportLogEntry::new(recordnum, msg, Level::Error),
                                 )
@@ -854,7 +854,7 @@ fn main() {
                                 "Successfully committed data insert to database ({table} table)"
                             );
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Info),
                             )
@@ -865,7 +865,7 @@ fn main() {
                                 "Error committing data insert to database ({table} table): {e}"
                             );
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -877,7 +877,7 @@ fn main() {
                         Ok(()) => {
                             let msg = "Metadata updated (tc_header table)";
                             info!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
                             )
@@ -886,7 +886,7 @@ fn main() {
                         Err(e) => {
                             let msg = format!("Error updating metadata (tc_header header): {e}");
                             error!(target: "import", "{recordnum}: {msg}");
-                            insert_import_log_entry(
+                            db::insert_import_log_entry(
                                 &conn,
                                 ImportLogEntry::new(recordnum, msg, Level::Error),
                             )
@@ -896,16 +896,38 @@ fn main() {
                 }
             }
 
+            // Update the intermediate table used for calculating AADV in all cases.
+            match db::update_intermediate_aadv(recordnum as u32, &conn) {
+                Ok(_) => {
+                    let msg = "Intermediate table TC_COUNTDATE updated";
+                    info!(target: "import", "{recordnum}: {msg}");
+                    db::insert_import_log_entry(
+                        &conn,
+                        ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
+                    )
+                    .unwrap();
+                }
+                Err(e) => {
+                    let msg = format!("Failed to update intermediate table TC_COUNTDATE: {e}");
+                    error!(target: "import", "{recordnum}: {msg}");
+                    db::insert_import_log_entry(
+                        &conn,
+                        ImportLogEntry::new(recordnum, msg, Level::Error),
+                    )
+                    .unwrap();
+                }
+            }
+
             // Calculate and insert the annual average daily volume, except for bicycle counts,
             // which first require an additional field in the database to be set after the import.
             if count_type != InputCount::FifteenMinuteBicycle
                 && count_type != InputCount::IndividualBicycle
             {
-                match insert_aadv2(recordnum as u32, &conn) {
-                    Ok(()) => {
+                match db::calc_aadv(recordnum as u32, &conn) {
+                    Ok(_) => {
                         let msg = "AADV calculated and inserted";
                         info!(target: "import", "{recordnum}: {msg}");
-                        insert_import_log_entry(
+                        db::insert_import_log_entry(
                             &conn,
                             ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
                         )
@@ -914,7 +936,7 @@ fn main() {
                     Err(e) => {
                         let msg = format!("Failed to calculate/insert AADV: {e}");
                         error!(target: "import", "{recordnum}: {msg}");
-                        insert_import_log_entry(
+                        db::insert_import_log_entry(
                             &conn,
                             ImportLogEntry::new(recordnum, msg, Level::Error),
                         )
@@ -926,7 +948,7 @@ fn main() {
             // and log them for review.
             let msg = "Checking data";
             info!(target: "import", "{recordnum}: {msg}");
-            insert_import_log_entry(
+            db::insert_import_log_entry(
                 &conn,
                 ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
             )
@@ -934,8 +956,11 @@ fn main() {
             if let Err(e) = check(recordnum, &conn) {
                 let msg = format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect.");
                 error!(target: "import", "{recordnum}: {msg}");
-                insert_import_log_entry(&conn, ImportLogEntry::new(recordnum, msg, Level::Error))
-                    .unwrap();
+                db::insert_import_log_entry(
+                    &conn,
+                    ImportLogEntry::new(recordnum, msg, Level::Error),
+                )
+                .unwrap();
             }
             cleanup(cleanup_files, path);
         }

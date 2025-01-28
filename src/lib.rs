@@ -23,7 +23,6 @@ use oracle::RowValue;
 use serde::Deserialize;
 use thiserror::Error;
 
-pub mod aadv;
 pub mod check_data;
 pub mod db;
 pub mod denormalize;
