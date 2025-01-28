@@ -215,8 +215,33 @@ impl IndividualVehicle {
     }
 }
 
-/// Pre-binned, 15-minute bicycle volume counts.
-#[derive(Debug, Clone, RowValue)]
+/// An individual bicycle that has been counted, with no binning applied to it.
+///
+/// One kind of count can be derived from this type of data: [15MinuteBicycle].
+#[derive(Debug, Clone)]
+pub struct IndividualBicycle {
+    pub date: NaiveDate,
+    pub time: NaiveDateTime,
+    pub lane: u8,
+}
+
+impl GetDate for IndividualBicycle {
+    fn get_date(&self) -> NaiveDate {
+        self.date
+    }
+}
+
+impl IndividualBicycle {
+    pub fn new(date: NaiveDate, time: NaiveDateTime, lane: u8) -> Result<Self, CountError> {
+        Ok(Self { date, time, lane })
+    }
+}
+
+/// 15-minute bicycle volume counts.
+///
+/// These are either pre-binned (data already grouped like this)
+/// or created from records of [`IndividualBicycle`]s.
+#[derive(Debug, Clone, RowValue, PartialEq)]
 pub struct FifteenMinuteBicycle {
     #[row_value(rename = "dvrpcnum")]
     pub recordnum: u32,
@@ -785,7 +810,7 @@ pub fn create_speed_and_class_count(
     }
 
     /*
-      If there was some time period (whose length is `interval`) where no vehicle was counted,
+      If there was some time period (whose length is `TimeInterval`) where no vehicle was counted,
       there will be no corresponding entry in our HashMap for it. However, that's because of the
       data we are using - `IndividualVehicle`s, which are vehicles that were counted - not because
       there is missing data for that time period. So create those where necessary.
@@ -899,6 +924,141 @@ pub fn create_speed_and_class_count(
     }
 
     (speed_range_count, vehicle_class_count)
+}
+
+/// Create time-binned bicycle volume count.
+pub fn create_binned_bicycle_vol_count(
+    interval: TimeInterval,
+    metadata: FieldMetadata,
+    mut counts: Vec<IndividualBicycle>,
+) -> Vec<FifteenMinuteBicycle> {
+    if counts.is_empty() {
+        return vec![];
+    }
+
+    // Create key and value structs to put in the hashmap. Together they combine to include
+    // all the structs of `FifteenMinuteBicycle`, but we need them separate for the hashmap
+    // in order to keep updating them as we go through all the counts.
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub struct DataKey {
+        pub date: NaiveDate,
+        pub time: NaiveDateTime,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct DataValues {
+        pub recordnum: u32,
+        pub total: u16,
+        pub indir: Option<u16>,
+        pub outdir: Option<u16>,
+    }
+
+    let mut count_map: HashMap<DataKey, DataValues> = HashMap::new();
+
+    for count in counts.clone() {
+        // Create a key for the Hashmap for time intervals
+        let time_part = bin_time(count.time.time(), interval);
+        let key = DataKey {
+            date: count.date,
+            time: NaiveDateTime::new(count.date, time_part),
+        };
+
+        // Insert or update values.
+        // Each item is one bicycle counted; whether it's indir or outdir depends on lane.
+        if count.lane == 1 {
+            count_map
+                .entry(key)
+                .and_modify(|c| {
+                    c.total += 1;
+                    c.indir = if let Some(mut v) = c.indir {
+                        v += 1;
+                        Some(v)
+                    } else {
+                        Some(1)
+                    };
+                })
+                .or_insert(DataValues {
+                    recordnum: metadata.recordnum,
+                    total: 1,
+                    indir: Some(1),
+                    outdir: Some(0),
+                });
+        } else if count.lane == 2 {
+            count_map
+                .entry(key)
+                .and_modify(|c| {
+                    c.total += 1;
+                    c.outdir = if let Some(mut v) = c.outdir {
+                        v += 1;
+                        Some(v)
+                    } else {
+                        Some(1)
+                    };
+                })
+                .or_insert(DataValues {
+                    recordnum: metadata.recordnum,
+                    total: 1,
+                    indir: Some(0),
+                    outdir: Some(1),
+                });
+        }
+    }
+
+    /*
+      If there was some time period (whose length is `TimeInterval`) where no vehicle was counted,
+      there will be no corresponding entry in our HashMap for it. However, that's because of the
+      data we are using - `IndividualBicycle`s, which are bicycles that were counted - not because
+      there is missing data for that time period. So create those where necessary.
+    */
+
+    // Sort counts by date and time, get range, check if number of records is less than expected
+    // for every period to be included, insert any missing.
+    counts.sort_unstable_by_key(|c| (c.date, c.time.time()));
+
+    let first_dt = NaiveDateTime::new(
+        counts.first().unwrap().date,
+        counts.first().unwrap().time.time(),
+    );
+    let last_dt = NaiveDateTime::new(
+        counts.last().unwrap().date,
+        counts.last().unwrap().time.time(),
+    );
+
+    let all_datetimes = create_time_bins(first_dt, last_dt, interval);
+    let mut all_keys = vec![];
+
+    // Construct all possible keys.
+    for datetime in all_datetimes.clone() {
+        all_keys.push(DataKey {
+            date: datetime.date(),
+            time: datetime,
+        })
+    }
+
+    // Add missing periods.
+    for key in all_keys {
+        count_map.entry(key).or_insert(DataValues {
+            recordnum: metadata.recordnum,
+            total: 0,
+            indir: Some(0),
+            outdir: Some(0),
+        });
+    }
+
+    // Convert from HashMap to Vec.
+    let mut bicycle_vol_count = vec![];
+    for (key, value) in count_map {
+        bicycle_vol_count.push(FifteenMinuteBicycle {
+            recordnum: value.recordnum,
+            date: key.date,
+            time: key.time,
+            total: value.total,
+            indir: value.indir,
+            outdir: value.outdir,
+        });
+    }
+
+    bicycle_vol_count
 }
 
 /// Possible weather values.

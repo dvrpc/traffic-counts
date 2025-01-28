@@ -120,12 +120,13 @@ use simplelog::{
 
 use traffic_counts::{
     check_data::check,
-    create_speed_and_class_count,
+    create_binned_bicycle_vol_count, create_speed_and_class_count,
     db::{create_pool, crud::Crud, insert_aadv2, insert_import_log_entry, ImportLogEntry},
     denormalize::{Denormalize, *},
     extract_from_file::{Extract, InputCount},
     FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
-    IndividualVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount, TimeInterval,
+    IndividualBicycle, IndividualVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
+    TimeInterval,
 };
 
 const LOG: &str = "import.log";
@@ -484,6 +485,98 @@ fn main() {
                         }
                         Err(e) => {
                             let msg = format!("Error committing denormalized speed data insert to database ({table} table): {e}");
+                            error!(target: "import", "{recordnum}: {msg}");
+                            insert_import_log_entry(
+                                &conn,
+                                ImportLogEntry::new(recordnum, msg, Level::Error),
+                            )
+                            .unwrap();
+                        }
+                    }
+
+                    match update_metadata(recordnum, metadata, &conn) {
+                        Ok(()) => {
+                            let msg = "Metadata updated (tc_header table)";
+                            info!(target: "import", "{recordnum}: {msg}");
+                            insert_import_log_entry(
+                                &conn,
+                                ImportLogEntry::new(recordnum, msg.to_string(), Level::Info),
+                            )
+                            .unwrap();
+                        }
+                        Err(e) => {
+                            let msg = format!("Error updating metadata (tc_header table): {e}");
+                            error!(target: "import", "{recordnum}: {msg}");
+                            insert_import_log_entry(
+                                &conn,
+                                ImportLogEntry::new(recordnum, msg, Level::Error),
+                            )
+                            .unwrap();
+                        }
+                    }
+                }
+                InputCount::IndividualBicycle => {
+                    // Extract data from CSV/text file.
+                    let counts = match IndividualBicycle::extract(path) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            let msg = format!("Not processed: {e}");
+                            error!(target: "import", "{recordnum}: {msg}");
+                            insert_import_log_entry(
+                                &conn,
+                                ImportLogEntry::new(recordnum, msg, Level::Error),
+                            )
+                            .unwrap();
+                            cleanup(cleanup_files, path);
+                            continue;
+                        }
+                    };
+
+                    // Create aggregated 15-minute bicycle count from this.
+                    let fifteen_min_volcount = create_binned_bicycle_vol_count(
+                        TimeInterval::FifteenMin,
+                        metadata.clone(),
+                        counts,
+                    );
+
+                    // Delete existing records from db.
+                    FifteenMinuteBicycle::delete(&conn, recordnum).unwrap();
+
+                    // Create prepared statements and use them to insert counts.
+                    let mut prepared = FifteenMinuteBicycle::prepare_insert(&conn).unwrap();
+                    for count in fifteen_min_volcount {
+                        match count.insert(&mut prepared) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                let msg = format!("Error inserting count {count:?}: {e}; further processing has been abandoned");
+                                error!(target: "import", "{recordnum}: {msg}");
+                                insert_import_log_entry(
+                                    &conn,
+                                    ImportLogEntry::new(recordnum, msg, Level::Error),
+                                )
+                                .unwrap();
+                                continue 'paths_loop;
+                            }
+                        }
+                    }
+                    let table = <FifteenMinuteBicycle as Crud>::COUNT_TABLE;
+
+                    match conn.commit() {
+                        Ok(()) => {
+                            let msg = format!(
+                                "Successfully committed data insert to database ({table} table)"
+                            );
+                            info!(target: "import", "{recordnum}: {msg}");
+                            insert_import_log_entry(
+                                &conn,
+                                ImportLogEntry::new(recordnum, msg, Level::Info),
+                            )
+                            .unwrap();
+                        }
+                        Err(e) => {
+                            let msg = format!(
+                                "Error committing data insert to database ({table} table): {e}"
+                            );
                             error!(target: "import", "{recordnum}: {msg}");
                             insert_import_log_entry(
                                 &conn,

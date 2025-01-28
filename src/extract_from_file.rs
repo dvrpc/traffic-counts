@@ -10,7 +10,7 @@ use log::error;
 
 use crate::{
     CountError, FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
-    IndividualVehicle,
+    IndividualBicycle, IndividualVehicle,
 };
 
 // headers stripped of double quotes and spaces
@@ -28,7 +28,7 @@ pub enum InputCount {
     ///
     /// See [`FifteenMinuteBicycle`], the corresponding type.
     FifteenMinutePedestrian,
-    /// Pre-binned, 15-minute volume counts from StarNext/Jamar.
+    /// Pre-binned, 15-minute volume counts from StarNext/JAMAR.
     ///
     /// See [`FifteenMinuteVehicle`], the corresponding type.
     FifteenMinuteVehicle,
@@ -36,6 +36,10 @@ pub enum InputCount {
     ///
     /// See [`IndividualVehicle`], the corresponding type.
     IndividualVehicle,
+    /// Individual bicycles from StarNext/JAMAR prior to any binning.
+    ///
+    /// See ['IndividualBicycle'], the corresponding type.
+    IndividualBicycle,
 }
 
 impl InputCount {
@@ -57,6 +61,7 @@ impl InputCount {
             "15minutepedestrian" => Ok(InputCount::FifteenMinutePedestrian),
             "15minutevehicle" => Ok(InputCount::FifteenMinuteVehicle),
             "vehicle" => Ok(InputCount::IndividualVehicle),
+            "bicycle" => Ok(InputCount::IndividualBicycle),
             _ => Err(CountError::BadLocation(parent.to_string())),
         }
     }
@@ -195,6 +200,51 @@ impl Extract for IndividualVehicle {
                 row.as_ref().unwrap()[3].parse().unwrap(),
                 row.as_ref().unwrap()[4].parse().unwrap(),
                 row.as_ref().unwrap()[5].parse().unwrap(),
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("{e}");
+                    continue;
+                }
+            };
+
+            counts.push(count);
+        }
+        Ok(counts)
+    }
+}
+
+/// Extract IndividualBicycle records from a file.
+impl Extract for IndividualBicycle {
+    type Item = IndividualBicycle;
+
+    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+        let data_file = File::open(path)?;
+        let mut rdr = create_reader(&data_file);
+
+        // Iterate through data rows.
+        let mut counts = vec![];
+        for row in rdr.records().skip(num_nondata_rows(path)?) {
+            // Bicycles are given class 14. Skip if not 14.
+            if row.as_ref().unwrap()[4].parse::<u16>().unwrap() != 14 {
+                continue;
+            }
+            // Parse date.
+            let date_format = "%-m/%-d/%Y";
+            let date_col = &row.as_ref().unwrap()[1];
+            let count_date = NaiveDate::parse_from_str(date_col, date_format).unwrap();
+
+            // Parse time.
+            let time_format = "%-I:%M:%S %P";
+            let time_col = &row.as_ref().unwrap()[2];
+            let count_time = NaiveTime::parse_from_str(time_col, time_format).unwrap();
+
+            let datetime = NaiveDateTime::new(count_date, count_time);
+
+            let count = match IndividualBicycle::new(
+                count_date,
+                datetime,
+                row.as_ref().unwrap()[3].parse().unwrap(),
             ) {
                 Ok(v) => v,
                 Err(e) => {
@@ -410,7 +460,6 @@ mod tests {
         assert_eq!(fifteen_min_volcount.len(), 57);
 
         let count0 = fifteen_min_volcount.first().unwrap();
-        dbg!(count0);
         assert_eq!(count0.lane, Some(1));
         assert_eq!(count0.direction, Some(LaneDirection::West));
         assert_eq!(count0.count, 49);
