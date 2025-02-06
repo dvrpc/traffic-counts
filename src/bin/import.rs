@@ -1,6 +1,7 @@
 //! Import traffic counts to our database from files.
 //! This program watches a directory for files to be uploaded to one of the following subdirectories:
-//!   - vehicle/  - for raw, unbinned records of [individual vehicles][IndividualVehicle] containing vehicle class and speed, from STARneXt/JAMAR
+//!   - vehicle/ - for raw, unbinned records of [individual vehicles][IndividualVehicle] containing vehicle class and speed, from STARneXt/JAMAR
+//!   - bicycle/ - for raw, unbinned records of [individual bicycles][IndividualBicycle] containing bicycle counts, from STARneXt/JAMAR
 //!   - 15minutevehicle/ - for [pre-binned, 15-minute volume counts][FifteenMinuteVehicle] from STARneXt/JAMAR
 //!   - 15minutebicycle/ - for [pre-binned, 15-minute bicycle counts][FifteenMinuteBicycle] from
 //!     Eco-Counter
