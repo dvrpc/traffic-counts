@@ -10,7 +10,7 @@
 //!
 //! When a file is found, the program verifies that it contains the correct/expected kind of data,
 //! derives the appropriate counts from it, and then inserts these into our database and removes
-//! the file. (NOTE: removal of files is not yet implemented.)
+//! the file.
 //!
 //! A [log][`LOG`] of the program's work is kept in the main directory.
 //! The program is able to log most errors and continue its execution,
