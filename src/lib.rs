@@ -216,7 +216,7 @@ impl IndividualVehicle {
 
 /// An individual bicycle that has been counted, with no binning applied to it.
 ///
-/// One kind of count can be derived from this type of data: [15MinuteBicycle].
+/// One kind of count can be derived from this type of data: [FifteenMinuteBicycle].
 #[derive(Debug, Clone)]
 pub struct IndividualBicycle {
     pub date: NaiveDate,
