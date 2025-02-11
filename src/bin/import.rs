@@ -70,7 +70,7 @@
 //! To begin, open the STARneXt app from JAMAR and then open a .snj or .tf2 file. From there, it
 //! depends on what kind of count you are processing:
 //!
-//! 1. Class/speed counts (with or without bicycles)
+//! ### 1. Class/speed counts (with or without bicycles)
 //!
 //!   - if bicycles are included in the count, use the "Modified Scheme F - with bikes" scheme
 //!   - if bicycles are *not* included, use the "Modified Scheme F" scheme
@@ -100,7 +100,7 @@
 //!   motorized vehicles and bicycles -- once with the recordnum (and scheme) for the Bicycle 5
 //!   type and once with the recordnum (and scheme) for the Class type.
 //!
-//! 2. 15-minute volume counts
+//! ### 2. 15-minute volume counts
 //!
 //!   - click the **Export** button from the top menu, selecting *ASCII (CSV)*
 //!     as the format.
