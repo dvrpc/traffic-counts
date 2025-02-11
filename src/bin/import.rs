@@ -67,9 +67,13 @@
 //!
 //! ## Exporting from STARneXt
 //!
-//! The process is the same whether doing class/speed or simple volume counts.
+//! To begin, open the STARneXt app from JAMAR and then open a .snj or .tf2 file. From there, it
+//! depends on what kind of count you are processing:
 //!
-//!   - open STARneXt, open a .snj file.
+//! 1. Class/speed counts (with or without bicycles)
+//!
+//!   - if bicycles are included in the count, use the "Modified Scheme F - with bikes" scheme
+//!   - if bicycles are *not* included, use the "Modified Scheme F" scheme
 //!   - click the **Process** button from the top menu to transform tube pulses to
 //!     vehicle counts. This will take you to a "Per Vehicle Records" tab.
 //!   - click the **Export** button from the top menu, selecting *ASCII (CSV)*
@@ -92,6 +96,24 @@
 //!    - click **Done** to return from the Output Format menu
 //!    - click **Export** to save the file locally.
 //!
+//!   **NOTE**: The steps above will need to be followed twice for those counts with *both*
+//!   motorized vehicles and bicycles -- once with the recordnum (and scheme) for the Bicycle 5
+//!   type and once with the recordnum (and scheme) for the Class type.
+//!
+//! 2. 15-minute volume counts
+//!
+//!   - click the **Export** button from the top menu, selecting *ASCII (CSV)*
+//!     as the format.
+//!   - use the following settings on the dialog that pops up (should be default):
+//!     - *Include Start Date*
+//!     - *Include Start Time*
+//!     - *Include Interval Number*
+//!     - *Include Interval Time*
+//!     - *Include unclassed first*
+//!     - *Export Separate*
+//!     - Comma as delimiter
+//!   - click **Save** to save the file locally.
+//!  
 //! ## Exporting from Eco-Counter
 //!
 //! For both bicycle and pedestrian counts, in [Eco-Vizio](https://www.eco-visio.net):
