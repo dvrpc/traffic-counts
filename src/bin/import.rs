@@ -763,6 +763,21 @@ fn main() {
                 }
             }
 
+            // Update setdate.
+            match db::update_setdate(recordnum as u32, &conn) {
+                Ok(_) => {
+                    log(Level::Info, recordnum, "Field SETDATE updated", &conn);
+                }
+                Err(e) => {
+                    log(
+                        Level::Error,
+                        recordnum,
+                        &format!("Failed to update field SETDATE: {e}"),
+                        &conn,
+                    );
+                }
+            }
+
             // Calculate and insert the annual average daily volume, except for bicycle counts,
             // which first require an additional field in the database to be set after the import.
             if count_type != InputCount::FifteenMinuteBicycle

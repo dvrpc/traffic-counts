@@ -51,6 +51,13 @@ pub fn update_intermediate_aadv(recordnum: u32, conn: &Connection) -> Result<(),
     Ok(stmt.execute(&[&recordnum])?)
 }
 
+/// Update setdate - first day of full data, not falling on certain days.
+pub fn update_setdate(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
+    let sql = "begin update_setdate(:1); end;";
+    let mut stmt = conn.statement(sql).build()?;
+    Ok(stmt.execute(&[&recordnum])?)
+}
+
 /// Call database function to calculate and insert AADV.
 pub fn calc_aadv(recordnum: u32, conn: &Connection) -> Result<i32, CountError> {
     match conn.query_row_as::<i32>(&format!("select calc_aadv({}) from dual", recordnum), &[]) {
