@@ -135,8 +135,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::time;
 
-use log::{error, info, warn, Level, LevelFilter};
-use oracle::Connection;
+use log::{error, Level, LevelFilter};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
@@ -144,16 +143,15 @@ use simplelog::{
 use traffic_counts::{
     check_data::check,
     create_binned_bicycle_vol_count, create_speed_and_class_count,
-    db::{self, crud::Crud, ImportLogEntry},
+    db::{self, crud::Crud},
     denormalize::{Denormalize, *},
     extract_from_file::{Extract, InputCount},
-    FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
+    log_msg, FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
     IndividualBicycle, IndividualVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
     TimeInterval,
 };
 
 const LOG: &str = "import.log";
-const CHECK_DATA_LOG: &str = "data_check.log";
 const TIME_BETWEEN_LOOPS: u64 = 20;
 
 fn main() {
@@ -174,21 +172,10 @@ fn main() {
         Ok(_) => false,
         Err(_) => false,
     };
-    // Set up logging, panic if it fails.
-    // (This is being done instead the loop in case the logs accidentally get deleted, so
-    // the files can be recreated.)
-    // Log messages related to actual import.
-    let import_config = ConfigBuilder::new()
-        .set_time_format_rfc3339()
-        .add_filter_allow("import".to_string())
-        .build();
 
-    // Log messages related to data verification.
-    let check_config = ConfigBuilder::new()
-        .set_time_format_rfc3339()
-        .add_filter_allow("check".to_string())
-        .build();
-    CombinedLogger::init(vec![
+    // Set up logging, panic if it fails.
+    let import_config = ConfigBuilder::new().set_time_format_rfc3339().build();
+    let import_log = CombinedLogger::new(vec![
         TermLogger::new(
             LevelFilter::Debug,
             import_config.clone(),
@@ -204,40 +191,21 @@ fn main() {
                 .open(format!("{log_dir}/{LOG}"))
                 .expect("Could not open log file."),
         ),
-        TermLogger::new(
-            LevelFilter::Debug,
-            check_config.clone(),
-            TerminalMode::Mixed,
-            ColorChoice::Auto,
-        ),
-        WriteLogger::new(
-            LevelFilter::Info,
-            check_config,
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(format!("{log_dir}/{CHECK_DATA_LOG}"))
-                .expect("Could not open log file."),
-        ),
-    ])
-    .expect("Could not configure logging.");
+    ]);
 
     // The database env vars aren't needed for a while, but if they aren't available, return
     // early before doing any work.
     let username = match env::var("DB_USERNAME") {
         Ok(v) => v,
         Err(e) => {
-            error!(
-                target: "import",
-                "Unable to load username from .env file: {e}."
-            );
+            error!("Unable to load username from .env file: {e}.");
             return;
         }
     };
     let password = match env::var("DB_PASSWORD") {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "import", "Unable to load password from .env file: {e}.");
+            error!("Unable to load password from .env file: {e}.");
             return;
         }
     };
@@ -252,18 +220,12 @@ fn main() {
             .open(format!("{log_dir}/{LOG}"))
             .expect("Could not open log file.");
 
-        let _ = OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(format!("{log_dir}/{CHECK_DATA_LOG}"))
-            .expect("Could not open log file.");
-
         // Get all the paths of the files that need to be processed.
         let mut paths = vec![];
         let paths = match collect_paths(data_dir.clone().into(), &mut paths) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "import", "{e}");
+                error!("{e}");
                 return;
             }
         };
@@ -279,7 +241,7 @@ fn main() {
             let count_type = match InputCount::from_parent_dir(path) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "import", "{path:?} not processed: {e}");
+                    error!("{path:?} not processed: {e}");
                     cleanup(cleanup_files, path);
                     continue;
                 }
@@ -288,7 +250,7 @@ fn main() {
             let metadata = match FieldMetadata::from_path(path) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "import", "{path:?} not processed: {e}");
+                    error!("{path:?} not processed: {e}");
                     cleanup(cleanup_files, path);
                     continue;
                 }
@@ -303,9 +265,10 @@ fn main() {
                 )
                 .is_err()
             {
-                log(
-                    Level::Error,
+                log_msg(
                     recordnum,
+                    &import_log,
+                    Level::Error,
                     "Not processed: recordnum not found in TC_HEADER table",
                     &conn,
                 );
@@ -314,9 +277,10 @@ fn main() {
             }
 
             // Process the file according to InputCount.
-            log(
-                Level::Info,
+            log_msg(
                 recordnum,
+                &import_log,
+                Level::Info,
                 &format!("Extracting data from {path:?}, a {count_type:?} count"),
                 &conn,
             );
@@ -326,9 +290,10 @@ fn main() {
                     let individual_vehicles = match IndividualVehicle::extract(path) {
                         Ok(v) => v,
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!("Not processed: {e}"),
                                 &conn,
                             );
@@ -359,9 +324,10 @@ fn main() {
                     let mut prepared = TimeBinnedVehicleClassCount::prepare_insert(&conn).unwrap();
                     for count in vehicle_class_count {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"),
                                 &conn,
                             );
@@ -372,10 +338,11 @@ fn main() {
                     let table = <TimeBinnedVehicleClassCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log(Level::Info, recordnum, &format!("Successfully committed class data insert to database ({table} table)"), &conn);
+                            log_msg(
+                                recordnum, &import_log, Level::Info, &format!("Successfully committed class data insert to database ({table} table)"), &conn);
                         }
                         Err(e) => {
-                            log(Level::Error, recordnum, &format!("Error committing class data insert to database ({table} table): {e}"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing class data insert to database ({table} table): {e}"), &conn);
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -384,7 +351,7 @@ fn main() {
                     let mut prepared = TimeBinnedSpeedRangeCount::prepare_insert(&conn).unwrap();
                     for count in speed_range_count {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(Level::Error, recordnum, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
@@ -392,10 +359,10 @@ fn main() {
                     let table = <TimeBinnedSpeedRangeCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log(Level::Info, recordnum, &format!("Successfully committed speed range data insert to database ({table} table)"), &conn);
+                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed speed range data insert to database ({table} table)"), &conn);
                         }
                         Err(e) => {
-                            log(Level::Error, recordnum, &format!("Error committing speed range data insert to database ({table} table): {e}"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing speed range data insert to database ({table} table): {e}"), &conn);
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -410,7 +377,7 @@ fn main() {
                     let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
                     for count in denormalized_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(Level::Error, recordnum, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
@@ -418,10 +385,11 @@ fn main() {
                     let table = <NonNormalVolCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log(Level::Info, recordnum, &format!("Successfully committed denormalized class data insert to database ({table} table)"), &conn);
+                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed denormalized class data insert to database ({table} table)"), &conn);
                         }
                         Err(e) => {
-                            log(Level::Error, recordnum, &format!("Error committing denormalized class data insert to database ({table} table): {e}"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing denormalized class data insert to database ({table} table): {e}"), &conn);
+
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -430,7 +398,7 @@ fn main() {
                     let mut prepared = NonNormalAvgSpeedCount::prepare_insert(&conn).unwrap();
                     for count in non_normal_speedavg_count {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(Level::Error, recordnum, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
@@ -438,10 +406,10 @@ fn main() {
                     let table = <NonNormalAvgSpeedCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log(Level::Info, recordnum, &format!("Successfully committed denormalized speed data insert to database ({table} table)"), &conn);
+                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed denormalized speed data insert to database ({table} table)"), &conn);
                         }
                         Err(e) => {
-                            log(Level::Error, recordnum, &format!("Error committing denormalized speed data insert to database ({table} table): {e}"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing denormalized speed data insert to database ({table} table): {e}"), &conn);
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -452,9 +420,10 @@ fn main() {
                     let counts = match IndividualBicycle::extract(path) {
                         Ok(v) => v,
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!("Not processed: {e}"),
                                 &conn,
                             );
@@ -477,7 +446,7 @@ fn main() {
                     let mut prepared = FifteenMinuteBicycle::prepare_insert(&conn).unwrap();
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(Level::Error, recordnum, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
+                            log_msg(recordnum,  &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
@@ -486,9 +455,10 @@ fn main() {
 
                     match conn.commit() {
                         Ok(()) => {
-                            log(
-                                Level::Info,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Info,
                                 &format!(
                                 "Successfully committed data insert to database ({table} table)"
                             ),
@@ -496,9 +466,10 @@ fn main() {
                             );
                         }
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!(
                                     "Error committing data insert to database ({table} table): {e}"
                                 ),
@@ -514,9 +485,10 @@ fn main() {
                     let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
                         Ok(v) => v,
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!("Not processed: {e}"),
                                 &conn,
                             );
@@ -531,7 +503,7 @@ fn main() {
                     let mut prepared = FifteenMinuteVehicle::prepare_insert(&conn).unwrap();
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(Level::Error, recordnum, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
+                            log_msg(recordnum,  &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
@@ -539,9 +511,10 @@ fn main() {
                     let table = <FifteenMinuteVehicle as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log(
-                                Level::Info,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Info,
                                 &format!(
                                 "Successfully committed data insert to database ({table} table)"
                             ),
@@ -549,9 +522,10 @@ fn main() {
                             );
                         }
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!(
                                     "Error committing data insert to database ({table} table): {e}"
                                 ),
@@ -573,7 +547,7 @@ fn main() {
                     let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
                     for count in denormalized_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(Level::Error, recordnum, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
@@ -581,10 +555,10 @@ fn main() {
                     let table = <NonNormalVolCount as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log(Level::Info, recordnum, &format!("Successfully committed denormalized data insert to database ({table} table)"), &conn);
+                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed denormalized data insert to database ({table} table)"), &conn);
                         }
                         Err(e) => {
-                            log(Level::Error, recordnum,&format!("Error committing denormalized data insert to database ({table} table): {e}"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error,&format!("Error committing denormalized data insert to database ({table} table): {e}"), &conn);
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -595,9 +569,10 @@ fn main() {
                     let fifteen_min_volcount = match FifteenMinuteBicycle::extract(path) {
                         Ok(v) => v,
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!("Not processed: {e}"),
                                 &conn,
                             );
@@ -612,7 +587,7 @@ fn main() {
                     let mut prepared = FifteenMinuteBicycle::prepare_insert(&conn).unwrap();
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(Level::Error, recordnum, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
@@ -620,9 +595,10 @@ fn main() {
                     let table = <FifteenMinuteBicycle as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log(
-                                Level::Info,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Info,
                                 &format!(
                                 "Successfully committed data insert to database ({table} table)"
                             ),
@@ -630,9 +606,10 @@ fn main() {
                             );
                         }
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!(
                                     "Error committing data insert to database ({table} table): {e}"
                                 ),
@@ -648,9 +625,10 @@ fn main() {
                     let fifteen_min_volcount = match FifteenMinutePedestrian::extract(path) {
                         Ok(v) => v,
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!("Not processed: {e}"),
                                 &conn,
                             );
@@ -665,9 +643,10 @@ fn main() {
                     let mut prepared = FifteenMinutePedestrian::prepare_insert(&conn).unwrap();
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!("Error inserting count {count:?}: {e}"),
                                 &conn,
                             );
@@ -678,9 +657,10 @@ fn main() {
                     let table = <FifteenMinutePedestrian as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log(
-                                Level::Info,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Info,
                                 &format!(
                                 "Successfully committed data insert to database ({table} table)"
                             ),
@@ -688,9 +668,10 @@ fn main() {
                             );
                         }
                         Err(e) => {
-                            log(
-                                Level::Error,
+                            log_msg(
                                 recordnum,
+                                &import_log,
+                                Level::Error,
                                 &format!(
                                     "Error committing data insert to database ({table} table): {e}"
                                 ),
@@ -718,25 +699,28 @@ fn main() {
                     &recordnum,
                 ],
             ) {
-                log(
-                    Level::Error,
+                log_msg(
                     recordnum,
+                    &import_log,
+                    Level::Error,
                     &format!("Error updating metadata (tc_header table): {e}"),
                     &conn,
                 );
             };
 
             match conn.commit() {
-                Ok(()) => log(
-                    Level::Info,
+                Ok(()) => log_msg(
                     recordnum,
+                    &import_log,
+                    Level::Info,
                     "Metadata updated (tc_header table)",
                     &conn,
                 ),
                 Err(e) => {
-                    log(
-                        Level::Error,
+                    log_msg(
                         recordnum,
+                        &import_log,
+                        Level::Error,
                         &format!("Error updating metadata (tc_header table): {e}"),
                         &conn,
                     );
@@ -746,17 +730,19 @@ fn main() {
             // Update the intermediate table used for calculating AADV in all cases.
             match db::update_intermediate_aadv(recordnum as u32, &conn) {
                 Ok(_) => {
-                    log(
-                        Level::Info,
+                    log_msg(
                         recordnum,
+                        &import_log,
+                        Level::Info,
                         "Intermediate table TC_COUNTDATE updated",
                         &conn,
                     );
                 }
                 Err(e) => {
-                    log(
-                        Level::Error,
+                    log_msg(
                         recordnum,
+                        &import_log,
+                        Level::Error,
                         &format!("Failed to update intermediate table TC_COUNTDATE: {e}"),
                         &conn,
                     );
@@ -766,12 +752,19 @@ fn main() {
             // Update setdate.
             match db::update_setdate(recordnum as u32, &conn) {
                 Ok(_) => {
-                    log(Level::Info, recordnum, "Field SETDATE updated", &conn);
+                    log_msg(
+                        recordnum,
+                        &import_log,
+                        Level::Info,
+                        "Field SETDATE updated",
+                        &conn,
+                    );
                 }
                 Err(e) => {
-                    log(
-                        Level::Error,
+                    log_msg(
                         recordnum,
+                        &import_log,
+                        Level::Error,
                         &format!("Failed to update field SETDATE: {e}"),
                         &conn,
                     );
@@ -785,17 +778,19 @@ fn main() {
             {
                 match db::calc_aadv(recordnum as u32, &conn) {
                     Ok(_) => {
-                        log(
-                            Level::Info,
+                        log_msg(
                             recordnum,
+                            &import_log,
+                            Level::Info,
                             "AADV calculated and inserted",
                             &conn,
                         );
                     }
                     Err(e) => {
-                        log(
-                            Level::Error,
+                        log_msg(
                             recordnum,
+                            &import_log,
+                            Level::Error,
                             &format!("Failed to calculate/insert AADV: {e}"),
                             &conn,
                         );
@@ -805,10 +800,10 @@ fn main() {
 
             // Check for potential issues with data, after it has been inserted into the database,
             // and log them for review.
-            log(Level::Info, recordnum, "Checking data", &conn);
+            log_msg(recordnum, &import_log, Level::Info, "Checking data", &conn);
 
             if let Err(e) = check(recordnum, &conn) {
-                log(Level::Error, recordnum, &format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect."), &conn);
+                log_msg(recordnum,  &import_log, Level::Error, &format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect."), &conn);
             }
 
             cleanup(cleanup_files, path);
@@ -839,40 +834,5 @@ fn cleanup(cleanup_files: bool, path: &PathBuf) {
         if let Err(e) = fs::remove_file(path) {
             error!("Unable to delete file {path:?} {e}");
         }
-    }
-}
-
-/// Log to stdout/file and possibly to database.
-///
-/// Since db function is fallible, just log any failure with it to stdout/file.
-/// Mostly just a DRY convenience function.
-fn log(level: Level, recordnum: u32, message: &str, conn: &Connection) {
-    match level {
-        Level::Info => {
-            info!(
-                target: "import",
-                "{recordnum}: {message}",
-            );
-        }
-        Level::Warn => {
-            warn!(
-                target: "import",
-                "{recordnum}: {message}",
-            );
-        }
-        Level::Error => {
-            error!(
-                target: "import",
-                "{recordnum}: {message}",
-            );
-        }
-        _ => (),
-    }
-
-    // Try to log to database, log to stdout/file if it fails.
-    if let Err(e) =
-        db::insert_import_log_entry(conn, ImportLogEntry::new(recordnum, message.into(), level))
-    {
-        error!(target: "import", "{recordnum}: Error entering log into database: {e}.");
     }
 }

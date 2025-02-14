@@ -18,8 +18,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
-use log::error;
-use oracle::RowValue;
+use db::ImportLogEntry;
+use log::{error, Level, Log, Record};
+use oracle::{Connection, RowValue};
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -1118,6 +1119,33 @@ pub fn create_time_bins(
         current_bin = current_bin.checked_add_signed(time_to_add).unwrap();
     }
     dts
+}
+
+/// Log to stdout/file and possibly to database.
+///
+/// Since db function is fallible, just log any failure with it to stdout/file.
+/// Mostly just a DRY convenience function.
+pub fn log_msg(recordnum: u32, log: impl Log, level: Level, message: &str, conn: &Connection) {
+    log.log(
+        &Record::builder()
+            .args(format_args!("{recordnum}: {message}"))
+            .level(level)
+            .build(),
+    );
+
+    // Try to log to database, log to stdout/file if it fails.
+    if let Err(e) =
+        db::insert_import_log_entry(conn, ImportLogEntry::new(recordnum, message.into(), level))
+    {
+        log.log(
+            &Record::builder()
+                .args(format_args!(
+                    "{recordnum}: Error entering log into database: {e}"
+                ))
+                .level(Level::Error)
+                .build(),
+        );
+    }
 }
 
 #[cfg(test)]
