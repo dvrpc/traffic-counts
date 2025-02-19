@@ -407,7 +407,6 @@ mod test {
     use super::*;
     use crate::db;
 
-    #[ignore]
     #[test]
     fn fifteen_min_bicycle_disproportionate_direction_found() {
         let (username, password) = db::get_creds();         
@@ -418,7 +417,6 @@ mod test {
         assert!(matches!(result.level, Level::Warn))
     }
 
-    #[ignore]
     #[test]
     fn fifteen_min_bicycle_exessive() {
         let (username, password) = db::get_creds();         

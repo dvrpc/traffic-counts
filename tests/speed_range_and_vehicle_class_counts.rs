@@ -89,13 +89,19 @@ fn speed_binning_is_correct() {
 
 #[test]
 fn empty_periods_created_correctly_166905() {
-    let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
-    let individual_vehicles = IndividualVehicle::extract(path).unwrap();
-    let field_metadata = FieldMetadata::from_path(path).unwrap();
+    let path = Path::new("test_files/vehicle/166905.txt");
+    let (username, password) = db::get_creds();
+    let pool = db::create_pool(username, password).unwrap();
+    let conn = pool.get().unwrap();
+
+    let directions = Directions::from_db(166905, &conn).unwrap();
+
+    let individual_vehicles = IndividualVehicle::extract(path, 166905, &directions).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
         TimeInterval::FifteenMin,
-        field_metadata,
+        166905,
+        &directions,
         individual_vehicles,
     );
 
@@ -157,13 +163,17 @@ fn empty_periods_created_correctly_166905() {
 
 #[test]
 fn counts_created_correctly_165367() {
-    let path = Path::new("test_files/vehicle/165367-ee-38397-45.txt");
-    let individual_vehicles = IndividualVehicle::extract(path).unwrap();
-    let field_metadata = FieldMetadata::from_path(path).unwrap();
+    let (username, password) = db::get_creds();
+    let pool = db::create_pool(username, password).unwrap();
+    let conn = pool.get().unwrap();
+    let path = Path::new("test_files/vehicle/165367.txt");
+    let directions = Directions::from_db(165367, &conn).unwrap();
+    let individual_vehicles = IndividualVehicle::extract(path, 165367, &directions).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
         TimeInterval::FifteenMin,
-        field_metadata,
+        165367,
+        &directions,
         individual_vehicles,
     );
 
@@ -235,13 +245,18 @@ fn counts_created_correctly_165367() {
 #[test]
 fn counts_created_correctly_101() {
     // This file was made up, based on another, but with just over an hour of counts.
-    let path = Path::new("test_files/vehicle/101-eee-21-35.csv");
-    let individual_vehicles = IndividualVehicle::extract(path).unwrap();
-    let field_metadata = FieldMetadata::from_path(path).unwrap();
+    let path = Path::new("test_files/vehicle/101.csv");
+    let directions = Directions::new(
+        LaneDirection::East,
+        Some(LaneDirection::East),
+        Some(LaneDirection::East),
+    );
+    let individual_vehicles = IndividualVehicle::extract(path, 101, &directions).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
         TimeInterval::FifteenMin,
-        field_metadata,
+        101,
+        &directions,
         individual_vehicles,
     );
 

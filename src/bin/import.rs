@@ -18,52 +18,9 @@
 //! The program itself should only fail if it is misconfigured, meaning that,
 //! once started successfully, it should run indefinitely.
 //!
-//! ## Filename specification
+//! ## Exported Filename
 //!
-//! The names of all exported files (see below for export process) should be in the form
-//! [record num]-[direction(s)]-[physical counter id]-[speed limit].csv.
-//!
-//! (.txt can also be used for the file extension rater than .csv.)
-//!
-//! All components must be present, separated by a dash (-).
-//! Here are several examples:
-//!   - 166905-ew-40972-35.csv
-//!     - "166905" is the recordnum of the count.
-//!     - "ew" is the direction. In this case, two lanes going opposite directions.
-//!     - "40972" is the physical machine the count was taken on.
-//!     - "35" is the speed limit.
-//!   - 165367-ee-40972-35.csv
-//!     - "165367" is the recordnum of the count.
-//!     - "ee" is the direction. In this case, two lanes going the same direction.
-//!     - "40972" is the physical machine the count was taken on.
-//!     - "35" is the speed limit.
-//!   - 123456-s-101-na.csv
-//!     - "123456" is the recordnum of the count.
-//!     - "s" is the direction. In this case, only one lane, going south.
-//!     - "101" is the physical machine the count was taken on.
-//!     - "na" for unknown/not available speed limit.
-//!
-//! All possible sets of directions:
-//!   - e
-//!   - w
-//!   - n
-//!   - s
-//!   - ew
-//!   - we
-//!   - ns
-//!   - sn
-//!   - ee
-//!   - ww
-//!   - nn
-//!   - ss
-//!   - eee
-//!   - www
-//!   - nnn
-//!   - sss
-//!
-//! Note that for bicycle and pedestrian counts that are unidirectional, the program will use
-//! the total for each period, capturing both in/out directions and thus any wrong-way travel.
-//! In terms of the filename, this would mean using a single direction in that position.
+//! Give the file the name of the recordnum, appended with .csv or .txt, e.g. 166905.csv.
 //!
 //! ## Exporting from STARneXt
 //!
@@ -131,7 +88,7 @@
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time;
 
@@ -146,9 +103,9 @@ use traffic_counts::{
     db::{self, crud::Crud},
     denormalize::{Denormalize, *},
     extract_from_file::{Extract, InputCount},
-    log_msg, FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
-    IndividualBicycle, IndividualVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
-    TimeInterval,
+    log_msg, CountError, Directions, FifteenMinuteBicycle, FifteenMinutePedestrian,
+    FifteenMinuteVehicle, FileNameProblem, IndividualBicycle, IndividualVehicle,
+    TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount, TimeInterval,
 };
 
 const LOG: &str = "import.log";
@@ -247,7 +204,7 @@ fn main() {
                 }
             };
 
-            let metadata = match FieldMetadata::from_path(path) {
+            let recordnum = match get_recordnum(path) {
                 Ok(v) => v,
                 Err(e) => {
                     error!("{path:?} not processed: {e}");
@@ -255,7 +212,6 @@ fn main() {
                     continue;
                 }
             };
-            let recordnum = metadata.clone().recordnum;
 
             // Check that the count is already included in meta table in database - abort otherwise.
             if conn
@@ -276,6 +232,16 @@ fn main() {
                 continue;
             }
 
+            // Get all the lane directions of a count.
+            let directions = match Directions::from_db(recordnum, &conn) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("{path:?} not processed: {e}");
+                    cleanup(cleanup_files, path);
+                    continue;
+                }
+            };
+
             // Process the file according to InputCount.
             log_msg(
                 recordnum,
@@ -287,32 +253,37 @@ fn main() {
             match count_type {
                 InputCount::IndividualVehicle => {
                     // Extract data from CSV/text file.
-                    let individual_vehicles = match IndividualVehicle::extract(path) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            log_msg(
-                                recordnum,
-                                &import_log,
-                                Level::Error,
-                                &format!("Not processed: {e}"),
-                                &conn,
-                            );
-                            cleanup(cleanup_files, path);
-                            continue;
-                        }
-                    };
+                    let individual_vehicles =
+                        match IndividualVehicle::extract(path, recordnum, &directions) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                log_msg(
+                                    recordnum,
+                                    &import_log,
+                                    Level::Error,
+                                    &format!("Not processed: {e}"),
+                                    &conn,
+                                );
+                                cleanup(cleanup_files, path);
+                                continue;
+                            }
+                        };
 
                     // Create two counts from this: 15-minute speed count and 15-minute class count
                     let (speed_range_count, vehicle_class_count) = create_speed_and_class_count(
                         TimeInterval::FifteenMin,
-                        metadata.clone(),
+                        recordnum,
+                        &directions,
                         individual_vehicles.clone(),
                     );
 
                     // Create records for the non-normalized TC_SPESUM table (another one with
                     // specific hourly fields, this time for average speed/hour).
-                    let non_normal_speedavg_count =
-                        create_non_normal_speedavg_count(metadata.clone(), individual_vehicles);
+                    let non_normal_speedavg_count = create_non_normal_speedavg_count(
+                        recordnum,
+                        directions,
+                        individual_vehicles,
+                    );
 
                     // Delete existing records from db.
                     TimeBinnedVehicleClassCount::delete(&conn, recordnum).unwrap();
@@ -417,7 +388,7 @@ fn main() {
                 }
                 InputCount::IndividualBicycle => {
                     // Extract data from CSV/text file.
-                    let counts = match IndividualBicycle::extract(path) {
+                    let counts = match IndividualBicycle::extract(path, recordnum, &directions) {
                         Ok(v) => v,
                         Err(e) => {
                             log_msg(
@@ -435,7 +406,7 @@ fn main() {
                     // Create aggregated 15-minute bicycle count from this.
                     let fifteen_min_volcount = create_binned_bicycle_vol_count(
                         TimeInterval::FifteenMin,
-                        metadata.clone(),
+                        recordnum,
                         counts,
                     );
 
@@ -482,20 +453,21 @@ fn main() {
                 }
                 InputCount::FifteenMinuteVehicle => {
                     // Extract data from CSV/text file.
-                    let fifteen_min_volcount = match FifteenMinuteVehicle::extract(path) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            log_msg(
-                                recordnum,
-                                &import_log,
-                                Level::Error,
-                                &format!("Not processed: {e}"),
-                                &conn,
-                            );
-                            cleanup(cleanup_files, path);
-                            continue;
-                        }
-                    };
+                    let fifteen_min_volcount =
+                        match FifteenMinuteVehicle::extract(path, recordnum, &directions) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                log_msg(
+                                    recordnum,
+                                    &import_log,
+                                    Level::Error,
+                                    &format!("Not processed: {e}"),
+                                    &conn,
+                                );
+                                cleanup(cleanup_files, path);
+                                continue;
+                            }
+                        };
 
                     // As they are already binned by 15-minute period, these need no further
                     // processing; just insert into database.
@@ -566,20 +538,21 @@ fn main() {
                 }
                 InputCount::FifteenMinuteBicycle => {
                     // Extract data from CSV/text file.
-                    let fifteen_min_volcount = match FifteenMinuteBicycle::extract(path) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            log_msg(
-                                recordnum,
-                                &import_log,
-                                Level::Error,
-                                &format!("Not processed: {e}"),
-                                &conn,
-                            );
-                            cleanup(cleanup_files, path);
-                            continue;
-                        }
-                    };
+                    let fifteen_min_volcount =
+                        match FifteenMinuteBicycle::extract(path, recordnum, &directions) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                log_msg(
+                                    recordnum,
+                                    &import_log,
+                                    Level::Error,
+                                    &format!("Not processed: {e}"),
+                                    &conn,
+                                );
+                                cleanup(cleanup_files, path);
+                                continue;
+                            }
+                        };
 
                     // As they are already binned by 15-minute period, these need no further
                     // processing; just insert into database.
@@ -622,20 +595,21 @@ fn main() {
                 }
                 InputCount::FifteenMinutePedestrian => {
                     // Extract data from CSV/text file.
-                    let fifteen_min_volcount = match FifteenMinutePedestrian::extract(path) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            log_msg(
-                                recordnum,
-                                &import_log,
-                                Level::Error,
-                                &format!("Not processed: {e}"),
-                                &conn,
-                            );
-                            cleanup(cleanup_files, path);
-                            continue;
-                        }
-                    };
+                    let fifteen_min_volcount =
+                        match FifteenMinutePedestrian::extract(path, recordnum, &directions) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                log_msg(
+                                    recordnum,
+                                    &import_log,
+                                    Level::Error,
+                                    &format!("Not processed: {e}"),
+                                    &conn,
+                                );
+                                cleanup(cleanup_files, path);
+                                continue;
+                            }
+                        };
 
                     // As they are already binned by 15-minute period, these need no further
                     // processing; just insert into database.
@@ -689,15 +663,8 @@ fn main() {
                 "update tc_header SET
                 importdatadate = (select current_date from dual),
                 status = :1,
-                counterid = :2,
-                speedlimit = :3
-                where recordnum = :4",
-                &[
-                    &"imported",
-                    &metadata.counter_id,
-                    &metadata.speed_limit,
-                    &recordnum,
-                ],
+                where recordnum = :2",
+                &[&"imported", &recordnum],
             ) {
                 log_msg(
                     recordnum,
@@ -834,5 +801,21 @@ fn cleanup(cleanup_files: bool, path: &PathBuf) {
         if let Err(e) = fs::remove_file(path) {
             error!("Unable to delete file {path:?} {e}");
         }
+    }
+}
+
+fn get_recordnum(path: &Path) -> Result<u32, CountError> {
+    let recordnum = path
+        .file_stem()
+        .ok_or(CountError::BadPath(path.to_owned()))?
+        .to_str()
+        .ok_or(CountError::BadPath(path.to_owned()))?;
+
+    match recordnum.parse() {
+        Ok(v) => Ok(v),
+        Err(_) => Err(CountError::InvalidFileName {
+            problem: FileNameProblem::InvalidRecordNum,
+            path: path.to_owned(),
+        }),
     }
 }

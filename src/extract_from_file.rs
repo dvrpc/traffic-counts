@@ -9,7 +9,7 @@ use csv::{Reader, ReaderBuilder};
 use log::error;
 
 use crate::{
-    CountError, FieldMetadata, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
+    CountError, Directions, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
     IndividualBicycle, IndividualVehicle,
 };
 
@@ -70,17 +70,24 @@ impl InputCount {
 /// A trait for extracting count data from a file.
 pub trait Extract {
     type Item;
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError>;
+    fn extract(
+        path: &Path,
+        recordnum: u32,
+        directions: &Directions,
+    ) -> Result<Vec<Self::Item>, CountError>;
 }
 
 /// Extract FifteenMinuteVehicle records from a file.
 impl Extract for FifteenMinuteVehicle {
     type Item = FifteenMinuteVehicle;
 
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+    fn extract(
+        path: &Path,
+        recordnum: u32,
+        directions: &Directions,
+    ) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
-        let metadata = FieldMetadata::from_path(path)?;
 
         // Iterate through data rows.
         let mut counts = vec![];
@@ -102,11 +109,11 @@ impl Extract for FifteenMinuteVehicle {
             match row.as_ref().unwrap().get(3) {
                 Some(count) => match count.parse() {
                     Ok(count) => match FifteenMinuteVehicle::new(
-                        metadata.recordnum,
+                        recordnum,
                         count_date,
                         datetime,
                         count,
-                        Some(metadata.directions.direction1),
+                        Some(directions.direction1),
                         Some(1),
                     ) {
                         Ok(v) => counts.push(v),
@@ -117,15 +124,15 @@ impl Extract for FifteenMinuteVehicle {
                     },
                     Err(e) => return Err(CountError::ParseError(e)),
                 },
-                None => return Err(CountError::DirectionLenMisMatch(path.to_owned())),
+                None => return Err(CountError::DirectionLenMisMatch),
             }
 
             // There may also be a second count within the row.
-            if let Some(direction) = metadata.directions.direction2 {
+            if let Some(direction) = directions.direction2 {
                 match row.as_ref().unwrap().get(4) {
                     Some(count) => match count.parse() {
                         Ok(count) => match FifteenMinuteVehicle::new(
-                            metadata.recordnum,
+                            recordnum,
                             count_date,
                             datetime,
                             count,
@@ -140,15 +147,15 @@ impl Extract for FifteenMinuteVehicle {
                         },
                         Err(e) => return Err(CountError::ParseError(e)),
                     },
-                    None => return Err(CountError::DirectionLenMisMatch(path.to_owned())),
+                    None => return Err(CountError::DirectionLenMisMatch),
                 }
             }
             // There may also be a third count within the row.
-            if let Some(direction) = metadata.directions.direction3 {
+            if let Some(direction) = directions.direction3 {
                 match row.as_ref().unwrap().get(5) {
                     Some(count) => match count.parse() {
                         Ok(count) => match FifteenMinuteVehicle::new(
-                            metadata.recordnum,
+                            recordnum,
                             count_date,
                             datetime,
                             count,
@@ -163,7 +170,7 @@ impl Extract for FifteenMinuteVehicle {
                         },
                         Err(e) => return Err(CountError::ParseError(e)),
                     },
-                    None => return Err(CountError::DirectionLenMisMatch(path.to_owned())),
+                    None => return Err(CountError::DirectionLenMisMatch),
                 }
             }
         }
@@ -175,7 +182,7 @@ impl Extract for FifteenMinuteVehicle {
 impl Extract for IndividualVehicle {
     type Item = IndividualVehicle;
 
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+    fn extract(path: &Path, _: u32, _: &Directions) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
@@ -218,7 +225,7 @@ impl Extract for IndividualVehicle {
 impl Extract for IndividualBicycle {
     type Item = IndividualBicycle;
 
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+    fn extract(path: &Path, _: u32, _: &Directions) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
@@ -263,10 +270,13 @@ impl Extract for IndividualBicycle {
 impl Extract for FifteenMinuteBicycle {
     type Item = FifteenMinuteBicycle;
 
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+    fn extract(
+        path: &Path,
+        recordnum: u32,
+        directions: &Directions,
+    ) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
-        let metadata = FieldMetadata::from_path(path)?;
 
         // Iterate through data rows.
         let mut counts = vec![];
@@ -277,11 +287,11 @@ impl Extract for FifteenMinuteBicycle {
             let count_dt = NaiveDateTime::parse_from_str(datetime_col, datetime_format).unwrap();
 
             // Determine which fields to collect depending on direction(s) of count.
-            match metadata.directions.direction2 {
+            match directions.direction2 {
                 // If there's only one direction for this count, we only need the total.
                 None => {
                     match FifteenMinuteBicycle::new(
-                        metadata.recordnum,
+                        recordnum,
                         count_dt.date(),
                         count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
@@ -298,7 +308,7 @@ impl Extract for FifteenMinuteBicycle {
                 // If there are two directions, we need total, indir, and outdir.
                 Some(_) => {
                     match FifteenMinuteBicycle::new(
-                        metadata.recordnum,
+                        recordnum,
                         count_dt.date(),
                         count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
@@ -322,10 +332,13 @@ impl Extract for FifteenMinuteBicycle {
 impl Extract for FifteenMinutePedestrian {
     type Item = FifteenMinutePedestrian;
 
-    fn extract(path: &Path) -> Result<Vec<Self::Item>, CountError> {
+    fn extract(
+        path: &Path,
+        recordnum: u32,
+        directions: &Directions,
+    ) -> Result<Vec<Self::Item>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
-        let metadata = FieldMetadata::from_path(path)?;
 
         // Iterate through data rows.
         let mut counts = vec![];
@@ -336,11 +349,11 @@ impl Extract for FifteenMinutePedestrian {
             let count_dt = NaiveDateTime::parse_from_str(datetime_col, datetime_format).unwrap();
 
             // Determine which fields to collect depending on direction(s) of count.
-            match metadata.directions.direction2 {
+            match directions.direction2 {
                 // If there's only one direction for this count, we only need the total.
                 None => {
                     match FifteenMinutePedestrian::new(
-                        metadata.recordnum,
+                        recordnum,
                         count_dt.date(),
                         count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
@@ -357,7 +370,7 @@ impl Extract for FifteenMinutePedestrian {
                 // If there are two directions, we need total, indir, and outdir.
                 Some(_) => {
                     match FifteenMinutePedestrian::new(
-                        metadata.recordnum,
+                        recordnum,
                         count_dt.date(),
                         count_dt,
                         row.as_ref().unwrap()[1].parse().unwrap(),
@@ -412,19 +425,29 @@ pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::LaneDirection;
+    use crate::{db, LaneDirection};
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts() {
-        let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
-        let counted_vehicles = IndividualVehicle::extract(path).unwrap();
+        let (username, password) = db::get_creds();
+        let pool = db::create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+
+        let path = Path::new("test_files/vehicle/166905.txt");
+        let directions = Directions::from_db(166905, &conn).unwrap();
+        let counted_vehicles = IndividualVehicle::extract(path, 166905, &directions).unwrap();
         assert_eq!(counted_vehicles.len(), 8706);
     }
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts_by_lane() {
-        let path = Path::new("test_files/vehicle/101-eee-21-35.csv");
-        let counted_vehicles = IndividualVehicle::extract(path).unwrap();
+        let path = Path::new("test_files/vehicle/101.csv");
+        let directions = Directions::new(
+            LaneDirection::East,
+            Some(LaneDirection::East),
+            Some(LaneDirection::East),
+        );
+        let counted_vehicles = IndividualVehicle::extract(path, 101, &directions).unwrap();
         assert_eq!(counted_vehicles.len(), 227);
 
         let lane1 = counted_vehicles
@@ -447,15 +470,27 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_168193() {
-        let path = Path::new("test_files/15minutevehicle/168193-ew-39352-na.txt");
-        let fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
+        let (username, password) = db::get_creds();
+        let pool = db::create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+        let path = Path::new("test_files/15minutevehicle/168193.txt");
+        let directions = Directions::from_db(168193, &conn).unwrap();
+        dbg!(&directions);
+        let fifteen_min_volcount =
+            FifteenMinuteVehicle::extract(path, 168193, &directions).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 384)
     }
 
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_102() {
-        let path = Path::new("test_files/15minutevehicle/102-www-21-35.csv");
-        let mut fifteen_min_volcount = FifteenMinuteVehicle::extract(path).unwrap();
+        let path = Path::new("test_files/15minutevehicle/102.csv");
+        let directions = Directions::new(
+            LaneDirection::West,
+            Some(LaneDirection::West),
+            Some(LaneDirection::West),
+        );
+        let mut fifteen_min_volcount =
+            FifteenMinuteVehicle::extract(path, 102, &directions).unwrap();
         fifteen_min_volcount.sort_unstable_by_key(|count| (count.date, count.time, count.lane));
         assert_eq!(fifteen_min_volcount.len(), 57);
 
@@ -475,18 +510,28 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_vehicle_errs_when_dirs_mismatch_in_filename_and_data_103() {
-        let path = Path::new("test_files/15minutevehicle/103-sss-21-35.csv");
+        let path = Path::new("test_files/15minutevehicle/103.csv");
+        let directions = Directions::new(
+            LaneDirection::South,
+            Some(LaneDirection::South),
+            Some(LaneDirection::South),
+        );
 
         assert!(matches!(
-            FifteenMinuteVehicle::extract(path),
-            Err(CountError::DirectionLenMisMatch(_))
+            FifteenMinuteVehicle::extract(path, 103, &directions),
+            Err(CountError::DirectionLenMisMatch)
         ))
     }
 
     #[test]
     fn extract_fifteen_min_bicycle_gets_correct_number_of_counts() {
-        let path = Path::new("test_files/15minutebicycle/167607-ns-4175-na.csv");
-        let fifteen_min_volcount = FifteenMinuteBicycle::extract(path).unwrap();
+        let path = Path::new("test_files/15minutebicycle/167607.csv");
+        let (username, password) = db::get_creds();
+        let pool = db::create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+        let directions = Directions::from_db(167607, &conn).unwrap();
+        let fifteen_min_volcount =
+            FifteenMinuteBicycle::extract(path, 167607, &directions).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 480);
 
         let in_sum = fifteen_min_volcount
@@ -508,8 +553,13 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_pedestrian_gets_correct_number_of_counts() {
-        let path = Path::new("test_files/15minutepedestrian/167297-ns-4874-na.csv");
-        let fifteen_min_volcount = FifteenMinutePedestrian::extract(path).unwrap();
+        let path = Path::new("test_files/15minutepedestrian/167297.csv");
+        let (username, password) = db::get_creds();
+        let pool = db::create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+        let directions = Directions::from_db(167297, &conn).unwrap();
+        let fifteen_min_volcount =
+            FifteenMinutePedestrian::extract(path, 167297, &directions).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 768);
 
         let in_sum = fifteen_min_volcount
@@ -564,25 +614,25 @@ mod tests {
 
     #[test]
     fn num_nondata_rows_correct_15min_veh_sample() {
-        let path = Path::new("test_files/15minutevehicle/168193-ew-39352-na.txt");
+        let path = Path::new("test_files/15minutevehicle/168193.txt");
         assert_eq!(num_nondata_rows(path).unwrap(), 5);
     }
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_ind_veh_sample() {
-        let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
+        let path = Path::new("test_files/vehicle/166905.txt");
         assert_eq!(num_nondata_rows(path).unwrap(), 4);
     }
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_15min_bicycle_sample() {
-        let path = Path::new("test_files/15minutebicycle/167607-ns-4175-na.csv");
+        let path = Path::new("test_files/15minutebicycle/167607.csv");
         assert_eq!(num_nondata_rows(path).unwrap(), 3);
     }
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_15min_pedestrian_sample() {
-        let path = Path::new("test_files/15minutepedestrian/167297-ns-4874-na.csv");
+        let path = Path::new("test_files/15minutepedestrian/167297.csv");
         assert_eq!(num_nondata_rows(path).unwrap(), 3);
     }
 
@@ -597,7 +647,7 @@ mod tests {
 
     #[test]
     fn num_nondata_rows_correct() {
-        let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
+        let path = Path::new("test_files/vehicle/166905.txt");
         let num_rows = num_nondata_rows(path).unwrap();
         assert_eq!(num_rows, 4);
     }

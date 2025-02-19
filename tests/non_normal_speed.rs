@@ -9,10 +9,15 @@ use traffic_counts::{
 #[test]
 fn create_non_normal_avgspeed_count_166905_is_correct() {
     // two directions, two lanes
-    let path = Path::new("test_files/vehicle/166905-ew-40972-35.txt");
-    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
-    let field_metadata = FieldMetadata::from_path(path).unwrap();
-    let mut non_normal_count = create_non_normal_speedavg_count(field_metadata, counted_vehicles);
+    let path = Path::new("test_files/vehicle/166905.txt");
+    let (username, password) = db::get_creds();
+    let pool = db::create_pool(username, password).unwrap();
+    let conn = pool.get().unwrap();
+    let directions = Directions::from_db(166905, &conn).unwrap();
+
+    let counted_vehicles = IndividualVehicle::extract(path, 166905, &directions).unwrap();
+    let mut non_normal_count =
+        create_non_normal_speedavg_count(166905, directions, counted_vehicles);
     assert_eq!(non_normal_count.len(), 6);
 
     // Sort by date, and then lane, so elements of the vec are in an expected order to test.
@@ -56,10 +61,14 @@ fn create_non_normal_avgspeed_count_166905_is_correct() {
 #[test]
 fn create_non_normal_avgspeed_count_165367_is_correct() {
     // one direction, two lanes
-    let path = Path::new("test_files/vehicle/165367-ee-38397-45.txt");
-    let counted_vehicles = IndividualVehicle::extract(path).unwrap();
-    let field_metadata = FieldMetadata::from_path(path).unwrap();
-    let mut non_normal_count = create_non_normal_speedavg_count(field_metadata, counted_vehicles);
+    let path = Path::new("test_files/vehicle/165367.txt");
+    let (username, password) = db::get_creds();
+    let pool = db::create_pool(username, password).unwrap();
+    let conn = pool.get().unwrap();
+    let directions = Directions::from_db(165367, &conn).unwrap();
+    let counted_vehicles = IndividualVehicle::extract(path, 165367, &directions).unwrap();
+    let mut non_normal_count =
+        create_non_normal_speedavg_count(165367, directions, counted_vehicles);
     assert_eq!(non_normal_count.len(), 10);
 
     // Sort by date, and then lane, so elements of the vec are in an expected order to test.

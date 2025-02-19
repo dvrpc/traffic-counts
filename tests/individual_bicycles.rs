@@ -3,21 +3,23 @@ use std::path::Path;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use traffic_counts::{
-    create_binned_bicycle_vol_count, extract_from_file::Extract, FieldMetadata,
+    create_binned_bicycle_vol_count, db, extract_from_file::Extract, Directions,
     FifteenMinuteBicycle, IndividualBicycle, TimeInterval,
 };
 
 #[test]
 fn empty_periods_created_correctly_178955() {
-    let path = Path::new("test_files/bicycle/178955-s-1613-25.csv");
-    let individual_bicycles = IndividualBicycle::extract(path).unwrap();
-    let field_metadata = FieldMetadata::from_path(path).unwrap();
+    let path = Path::new("test_files/bicycle/178955.csv");
+    let (username, password) = db::get_creds();
+    let pool = db::create_pool(username, password).unwrap();
+    let conn = pool.get().unwrap();
 
-    let mut bikes15min = create_binned_bicycle_vol_count(
-        TimeInterval::FifteenMin,
-        field_metadata,
-        individual_bicycles,
-    );
+    let directions = Directions::from_db(178955, &conn).unwrap();
+
+    let individual_bicycles = IndividualBicycle::extract(path, 178955, &directions).unwrap();
+
+    let mut bikes15min =
+        create_binned_bicycle_vol_count(TimeInterval::FifteenMin, 178955, individual_bicycles);
 
     bikes15min.sort_unstable_by_key(|count| (count.date, count.time.time()));
 
@@ -54,15 +56,15 @@ fn empty_periods_created_correctly_178955() {
 
 #[test]
 fn counts_correct_178955() {
-    let path = Path::new("test_files/bicycle/178955-s-1613-25.csv");
-    let individual_bicycles = IndividualBicycle::extract(path).unwrap();
-    let field_metadata = FieldMetadata::from_path(path).unwrap();
+    let path = Path::new("test_files/bicycle/178955.csv");
+    let (username, password) = db::get_creds();
+    let pool = db::create_pool(username, password).unwrap();
+    let conn = pool.get().unwrap();
+    let directions = Directions::from_db(178955, &conn).unwrap();
+    let individual_bicycles = IndividualBicycle::extract(path, 178955, &directions).unwrap();
 
-    let mut bikes15min = create_binned_bicycle_vol_count(
-        TimeInterval::FifteenMin,
-        field_metadata,
-        individual_bicycles,
-    );
+    let mut bikes15min =
+        create_binned_bicycle_vol_count(TimeInterval::FifteenMin, 178955, individual_bicycles);
 
     bikes15min.sort_unstable_by_key(|count| (count.date, count.time.time()));
 
@@ -104,15 +106,17 @@ fn counts_correct_178955() {
 
 #[test]
 fn counts_correct_178959() {
-    let path = Path::new("test_files/bicycle/178959-ew-2060-25.csv");
-    let individual_bicycles = IndividualBicycle::extract(path).unwrap();
-    let field_metadata = FieldMetadata::from_path(path).unwrap();
+    let path = Path::new("test_files/bicycle/178959.csv");
+    let (username, password) = db::get_creds();
+    let pool = db::create_pool(username, password).unwrap();
+    let conn = pool.get().unwrap();
 
-    let mut bikes15min = create_binned_bicycle_vol_count(
-        TimeInterval::FifteenMin,
-        field_metadata,
-        individual_bicycles,
-    );
+    let directions = Directions::from_db(178959, &conn).unwrap();
+
+    let individual_bicycles = IndividualBicycle::extract(path, 178959, &directions).unwrap();
+
+    let mut bikes15min =
+        create_binned_bicycle_vol_count(TimeInterval::FifteenMin, 178959, individual_bicycles);
 
     bikes15min.sort_unstable_by_key(|count| (count.date, count.time.time()));
 

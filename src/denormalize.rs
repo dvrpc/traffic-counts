@@ -231,7 +231,8 @@ pub struct NonNormalAvgSpeedCount {
 
 /// Create non-normalized average speed counts from [`IndividualVehicle`]s.
 pub fn create_non_normal_speedavg_count(
-    metadata: FieldMetadata,
+    recordnum: u32,
+    directions: Directions,
     counts: Vec<IndividualVehicle>,
 ) -> Vec<NonNormalAvgSpeedCount> {
     let mut non_normal_raw_speed_map: HashMap<NonNormalCountKey, NonNormalRawSpeedValue> =
@@ -245,11 +246,11 @@ pub fn create_non_normal_speedavg_count(
 
     // Collect all the speeds per fields in key.
     for count in counts {
-        // Get the direction from the lane of count/metadata of filename.
+        // Get the direction from the lane.
         let direction = match count.lane {
-            1 => metadata.directions.direction1,
-            2 => metadata.directions.direction2.unwrap(),
-            3 => metadata.directions.direction3.unwrap(),
+            1 => directions.direction1,
+            2 => directions.direction2.unwrap(),
+            3 => directions.direction3.unwrap(),
             _ => {
                 error!("Unable to determine lane/direction.");
                 continue;
@@ -257,7 +258,7 @@ pub fn create_non_normal_speedavg_count(
         };
 
         let key = NonNormalCountKey {
-            recordnum: metadata.recordnum,
+            recordnum,
             date: count.date,
             direction: Some(direction),
             lane: Some(count.lane),

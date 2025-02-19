@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::io;
 use std::num::ParseIntError;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
@@ -57,10 +57,12 @@ pub enum CountError {
     BadHeader(PathBuf),
     #[error("no such direction '{0}'")]
     BadDirection(String),
+    #[error("missing directions")]
+    MissingDirection,
     #[error("mismatch in count types between file location ('{0}') and header of that file")]
     LocationHeaderMisMatch(PathBuf),
-    #[error("mismatch in number of directions between filename ('{0}') and data in that file")]
-    DirectionLenMisMatch(PathBuf),
+    #[error("mismatch in number of directions between database and data in that file")]
+    DirectionLenMisMatch,
     #[error("cannot parse value as number")]
     ParseError(#[from] ParseIntError),
     #[error("no such vehicle class '{0}'")]
@@ -86,11 +88,8 @@ pub enum CountError {
 /// Identifying the problem when there's an error with a filename.
 #[derive(Debug)]
 pub enum FileNameProblem {
-    TooManyParts,
-    TooFewParts,
     InvalidRecordNum,
     InvalidDirections,
-    InvalidSpeedLimit,
 }
 
 /// All of the kinds of counts.
@@ -416,120 +415,6 @@ pub struct Metadata {
     pub y: Option<f32>,
 }
 
-/// The field metadata of an input count, which is a subset of the full [`Metadata`] and includes
-/// id, direction(s), count machine id, and - potentially - the speed limit.
-///
-/// See the [import](../import/index.html) program for filename specification.
-#[derive(Debug, Clone, PartialEq)]
-pub struct FieldMetadata {
-    pub recordnum: u32,
-    pub directions: Directions,
-    pub counter_id: String,
-    pub speed_limit: Option<u8>,
-}
-
-impl FieldMetadata {
-    /// Get an input count's metadata from its path.
-    pub fn from_path(path: &Path) -> Result<Self, CountError> {
-        let parts: Vec<&str> = path
-            .file_stem()
-            .ok_or(CountError::BadPath(path.to_owned()))?
-            .to_str()
-            .ok_or(CountError::BadPath(path.to_owned()))?
-            .split('-')
-            .collect();
-
-        if parts.len() < 4 {
-            return Err(CountError::InvalidFileName {
-                problem: FileNameProblem::TooFewParts,
-                path: path.to_owned(),
-            });
-        }
-        if parts.len() > 4 {
-            return Err(CountError::InvalidFileName {
-                problem: FileNameProblem::TooManyParts,
-                path: path.to_owned(),
-            });
-        }
-
-        let recordnum = match parts[0].parse() {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(CountError::InvalidFileName {
-                    problem: FileNameProblem::InvalidRecordNum,
-                    path: path.to_owned(),
-                })
-            }
-        };
-
-        let directions: Directions = match parts[1] {
-            "nnn" => Directions::new(
-                LaneDirection::North,
-                Some(LaneDirection::North),
-                Some(LaneDirection::North),
-            ),
-            "sss" => Directions::new(
-                LaneDirection::South,
-                Some(LaneDirection::South),
-                Some(LaneDirection::South),
-            ),
-            "eee" => Directions::new(
-                LaneDirection::East,
-                Some(LaneDirection::East),
-                Some(LaneDirection::East),
-            ),
-            "www" => Directions::new(
-                LaneDirection::West,
-                Some(LaneDirection::West),
-                Some(LaneDirection::West),
-            ),
-            "ns" => Directions::new(LaneDirection::North, Some(LaneDirection::South), None),
-            "sn" => Directions::new(LaneDirection::South, Some(LaneDirection::North), None),
-            "ew" => Directions::new(LaneDirection::East, Some(LaneDirection::West), None),
-            "we" => Directions::new(LaneDirection::West, Some(LaneDirection::East), None),
-            "nn" => Directions::new(LaneDirection::North, Some(LaneDirection::North), None),
-            "ss" => Directions::new(LaneDirection::South, Some(LaneDirection::South), None),
-            "ee" => Directions::new(LaneDirection::East, Some(LaneDirection::East), None),
-            "ww" => Directions::new(LaneDirection::West, Some(LaneDirection::West), None),
-            "n" => Directions::new(LaneDirection::North, None, None),
-            "s" => Directions::new(LaneDirection::South, None, None),
-            "e" => Directions::new(LaneDirection::East, None, None),
-            "w" => Directions::new(LaneDirection::West, None, None),
-            _ => {
-                return Err(CountError::InvalidFileName {
-                    problem: FileNameProblem::InvalidDirections,
-                    path: path.to_owned(),
-                })
-            }
-        };
-
-        let counter_id = parts[2].to_string();
-
-        let speed_limit = if parts[3] == "na" {
-            None
-        } else {
-            match parts[3].parse() {
-                Ok(v) => Some(v),
-                Err(_) => {
-                    return Err(CountError::InvalidFileName {
-                        problem: FileNameProblem::InvalidSpeedLimit,
-                        path: path.to_owned(),
-                    })
-                }
-            }
-        };
-
-        let metadata = Self {
-            recordnum,
-            directions,
-            counter_id,
-            speed_limit,
-        };
-
-        Ok(metadata)
-    }
-}
-
 /// The direction of a road.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Deserialize)]
 pub enum RoadDirection {
@@ -621,6 +506,37 @@ impl Directions {
             direction2,
             direction3,
         }
+    }
+
+    /// Get lane directions for a particular count from the database.
+    pub fn from_db(recordnum: u32, conn: &Connection) -> Result<Directions, CountError> {
+        let (dir1, dir2, dir3) = conn
+            .query_row_as::<(Option<String>, Option<String>, Option<String>)>(
+                "select cldir1, cldir2, cldir3 from tc_header where recordnum = :1",
+                &[&recordnum],
+            )?;
+
+        let direction1 = if let Some(v) = dir1 {
+            LaneDirection::from_str(&v)?
+        } else {
+            return Err(CountError::MissingDirection);
+        };
+        let direction2 = if let Some(v) = dir2 {
+            Some(LaneDirection::from_str(&v)?)
+        } else {
+            None
+        };
+        let direction3 = if let Some(v) = dir3 {
+            Some(LaneDirection::from_str(&v)?)
+        } else {
+            None
+        };
+
+        Ok(Directions {
+            direction1,
+            direction2,
+            direction3,
+        })
     }
 }
 
@@ -755,7 +671,8 @@ pub struct TimeBinnedSpeedRangeCount {
 /// Create time-binned speed and class counts from [`IndividualVehicle`]s.
 pub fn create_speed_and_class_count(
     interval: TimeInterval,
-    metadata: FieldMetadata,
+    recordnum: u32,
+    directions: &Directions,
     mut counts: Vec<IndividualVehicle>,
 ) -> (
     Vec<TimeBinnedSpeedRangeCount>,
@@ -769,11 +686,11 @@ pub fn create_speed_and_class_count(
     let mut vehicle_class_map: HashMap<BinnedCountKey, VehicleClassCount> = HashMap::new();
 
     for count in counts.clone() {
-        // Get the direction from the lane of count/metadata of filename.
+        // Get the direction from the lane.
         let direction = match count.lane {
-            1 => metadata.directions.direction1,
-            2 => metadata.directions.direction2.unwrap(),
-            3 => metadata.directions.direction3.unwrap(),
+            1 => directions.direction1,
+            2 => directions.direction2.unwrap(),
+            3 => directions.direction3.unwrap(),
             _ => {
                 error!("Unable to determine lane/direction.");
                 continue;
@@ -792,21 +709,13 @@ pub fn create_speed_and_class_count(
         speed_range_map
             .entry(key)
             .and_modify(|c| c.insert(count.speed))
-            .or_insert(SpeedRangeCount::first(
-                metadata.recordnum,
-                direction,
-                count.speed,
-            ));
+            .or_insert(SpeedRangeCount::first(recordnum, direction, count.speed));
 
         // Add new entry to 15-min vehicle class map or increment existing one.
         vehicle_class_map
             .entry(key)
             .and_modify(|c| c.insert(count.class.clone()))
-            .or_insert(VehicleClassCount::first(
-                metadata.recordnum,
-                direction,
-                count.class,
-            ));
+            .or_insert(VehicleClassCount::first(recordnum, direction, count.class));
     }
 
     /*
@@ -832,9 +741,9 @@ pub fn create_speed_and_class_count(
     let all_datetimes = create_time_bins(first_dt, last_dt, interval);
 
     let mut all_keys = vec![];
-    let all_lanes = if metadata.directions.direction3.is_some() {
+    let all_lanes = if directions.direction3.is_some() {
         vec![1, 2, 3]
-    } else if metadata.directions.direction3.is_none() && metadata.directions.direction2.is_some() {
+    } else if directions.direction3.is_none() && directions.direction2.is_some() {
         vec![1, 2]
     } else {
         vec![1]
@@ -853,9 +762,9 @@ pub fn create_speed_and_class_count(
     // Add missing periods for speed range count
     for key in all_keys {
         let direction = match key.lane {
-            1 => metadata.directions.direction1,
-            2 => metadata.directions.direction2.unwrap(),
-            3 => metadata.directions.direction3.unwrap(),
+            1 => directions.direction1,
+            2 => directions.direction2.unwrap(),
+            3 => directions.direction3.unwrap(),
             _ => {
                 error!("Unable to determine lane/direction.");
                 continue;
@@ -863,10 +772,10 @@ pub fn create_speed_and_class_count(
         };
         speed_range_map
             .entry(key)
-            .or_insert(SpeedRangeCount::new(metadata.recordnum, direction));
+            .or_insert(SpeedRangeCount::new(recordnum, direction));
         vehicle_class_map
             .entry(key)
-            .or_insert(VehicleClassCount::new(metadata.recordnum, direction));
+            .or_insert(VehicleClassCount::new(recordnum, direction));
     }
 
     // Convert speed range count from HashMap to Vec.
@@ -929,7 +838,7 @@ pub fn create_speed_and_class_count(
 /// Create time-binned bicycle volume count.
 pub fn create_binned_bicycle_vol_count(
     interval: TimeInterval,
-    metadata: FieldMetadata,
+    recordnum: u32,
     mut counts: Vec<IndividualBicycle>,
 ) -> Vec<FifteenMinuteBicycle> {
     if counts.is_empty() {
@@ -978,7 +887,7 @@ pub fn create_binned_bicycle_vol_count(
                     };
                 })
                 .or_insert(DataValues {
-                    recordnum: metadata.recordnum,
+                    recordnum,
                     total: 1,
                     indir: Some(1),
                     outdir: Some(0),
@@ -996,7 +905,7 @@ pub fn create_binned_bicycle_vol_count(
                     };
                 })
                 .or_insert(DataValues {
-                    recordnum: metadata.recordnum,
+                    recordnum,
                     total: 1,
                     indir: Some(0),
                     outdir: Some(1),
@@ -1038,7 +947,7 @@ pub fn create_binned_bicycle_vol_count(
     // Add missing periods.
     for key in all_keys {
         count_map.entry(key).or_insert(DataValues {
-            recordnum: metadata.recordnum,
+            recordnum,
             total: 0,
             indir: Some(0),
             outdir: Some(0),
