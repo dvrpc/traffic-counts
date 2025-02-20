@@ -298,14 +298,12 @@ pub fn get_count_kind(conn: &Connection, recordnum: u32) -> Result<Option<CountK
 mod tests {
     use super::*;
 
-    #[ignore]
     #[test]
     fn create_pool_succeeds() {
         let (username, password) = get_creds();
         assert!(create_pool(username, password).is_ok())
     }
 
-    #[ignore]
     #[test]
     fn select_type_correct() {
         let (username, password) = get_creds();

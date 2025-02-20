@@ -561,7 +561,6 @@ mod tests {
     use super::*;
     use crate::db::{create_pool, get_creds};
 
-    #[ignore]
     #[test]
     fn denormalize_vol_count_correct_num_records_and_total_count_166905() {
         let (username, password) = get_creds();
@@ -621,7 +620,6 @@ mod tests {
         );
     }
 
-    #[ignore]
     #[test]
     fn denormalize_vol_count_correct_num_records_and_total_count_165367() {
         let (username, password) = get_creds();

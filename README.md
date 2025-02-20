@@ -14,5 +14,5 @@ DB_PASSWORD='password here'
 
 ## Tests
 
-NOTE: the tests in the `db` module require database access, which is limited to white-listed IPs. Therefore, tests are ignored by default. To include them in the test suite, use `cargo test -- --include-ignored`.
+`cargo test`. Note that db access is required for much of the test suite.
 
