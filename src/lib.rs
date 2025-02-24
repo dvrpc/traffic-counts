@@ -2,7 +2,8 @@
 //! and enables performing various kinds of operations on them, like
 //! [extracting][extract_from_file] data from files,
 //! [CRUD db operations][db::crud],
-//! and [denormalizing][denormalize] count data.
+//! [aggregating volume data by hour][HourlyVehicle::from_db], and
+//! [averaging speed data by hour][HourlyAvgSpeed::create].
 //!
 //! The [import](../import/index.html) program implements extracting data from files
 //! and inserting it into our database. See its documentation for further details, including
@@ -26,7 +27,6 @@ use thiserror::Error;
 
 pub mod check_data;
 pub mod db;
-pub mod denormalize;
 pub mod extract_from_file;
 pub mod intermediate;
 use intermediate::*;
@@ -179,7 +179,7 @@ impl Display for CountKind {
 /// Three kinds of counts can be derived from this type of data:
 ///   - [TimeBinnedVehicleClassCount] by [create_speed_and_class_count]
 ///   - [TimeBinnedSpeedRangeCount] also by [create_speed_and_class_count]  
-///   - [NonNormalAvgSpeedCount](denormalize::NonNormalAvgSpeedCount) by [denormalize::create_non_normal_speedavg_count]
+///   - [HourlyAvgSpeed] by [HourlyAvgSpeed::create]
 #[derive(Debug, Clone)]
 pub struct IndividualVehicle {
     pub date: NaiveDate,
@@ -362,6 +362,217 @@ impl FifteenMinuteVehicle {
             direction,
             lane,
         })
+    }
+}
+
+/// Vehicle counts aggregated by hour.
+///
+/// The datetime is truncated to the top of the hour - 13:00, 14:00, etc.
+#[derive(Debug, Clone)]
+pub struct HourlyVehicle {
+    pub recordnum: u32,
+    pub datetime: NaiveDateTime,
+    pub count: u32,
+    pub direction: LaneDirection,
+    pub lane: u8,
+}
+
+impl HourlyVehicle {
+    /// Create hourly counts from a database table.
+    pub fn from_db<'a>(
+        recordnum: u32,
+        table: &'a str,
+        dir_field: &'a str,
+        vol_field: &'a str,
+        conn: &Connection,
+    ) -> Result<Vec<HourlyVehicle>, CountError> {
+        let results = match conn.query_as::<(NaiveDateTime, NaiveDate, u32, String, u32)>(
+            &format!(
+                "select TRUNC(counttime, 'HH24'), countdate, sum({}), {}, countlane 
+                from {} 
+                where recordnum = :1 
+                group by (countdate, trunc(counttime, 'HH24')), {}, countlane 
+                order by countdate",
+                &vol_field, &dir_field, &table, &dir_field
+            ),
+            &[&recordnum],
+        ) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(CountError::DbError(format!(
+                    "{recordnum} not found in {table}"
+                )))
+            }
+        };
+
+        let mut hourly_veh_counts = vec![];
+        for result in results {
+            let (counttime, countdate, count, dir, lane) = result?;
+
+            let datetime = NaiveDateTime::new(countdate, counttime.time());
+
+            hourly_veh_counts.push(HourlyVehicle {
+                recordnum,
+                datetime,
+                count,
+                direction: LaneDirection::from_str(&dir).unwrap(),
+                lane: lane as u8,
+            });
+        }
+
+        Ok(hourly_veh_counts)
+    }
+}
+
+/// Speed counts averaged by hour.
+///
+/// The datetime is truncated to the top of the hour - 13:00, 14:00, etc.
+#[derive(Debug, Clone)]
+pub struct HourlyAvgSpeed {
+    pub recordnum: u32,
+    pub datetime: NaiveDateTime,
+    pub speed: Option<f32>,
+    pub direction: LaneDirection,
+    pub lane: u8,
+}
+
+impl HourlyAvgSpeed {
+    /// Create hourly average speed counts from [`IndividualVehicle`]s.
+    pub fn create(
+        recordnum: u32,
+        directions: Directions,
+        mut counts: Vec<IndividualVehicle>,
+    ) -> Vec<Self> {
+        if counts.is_empty() {
+            return vec![];
+        }
+        // The key for the hashmap.
+        #[derive(Debug, Eq, PartialEq, Hash)]
+        struct AvgSpeedKey {
+            pub recordnum: u32,
+            pub datetime: NaiveDateTime,
+            pub direction: LaneDirection,
+            pub lane: u8,
+        }
+
+        let mut raw_speed_map: HashMap<AvgSpeedKey, Vec<f32>> = HashMap::new();
+
+        // Get all speeds in each hour.
+        for count in counts.clone() {
+            let direction = match count.lane {
+                1 => directions.direction1,
+                2 => directions.direction2.unwrap(),
+                3 => directions.direction3.unwrap(),
+                _ => {
+                    error!("Unable to determine lane/direction.");
+                    continue;
+                }
+            };
+
+            let key = AvgSpeedKey {
+                recordnum,
+                datetime: NaiveDateTime::new(
+                    count.date,
+                    count
+                        .time
+                        .time()
+                        .with_minute(0)
+                        .unwrap()
+                        .with_second(0)
+                        .unwrap()
+                        .with_nanosecond(0)
+                        .unwrap(),
+                ),
+                direction,
+                lane: count.lane,
+            };
+
+            // Add new entry if necessary, then insert data.
+            raw_speed_map
+                .entry(key)
+                .and_modify(|c| c.push(count.speed))
+                .or_insert(vec![count.speed]);
+        }
+
+        /*
+          If there was some time period (whose length is `TimeInterval`) where no vehicle was counted,
+          there will be no corresponding entry in our HashMap for it. However, that's because of the
+          data we are using - `IndividualVehicle`s, which are vehicles that were counted - not because
+          there is missing data for that time period. So create those where necessary.
+        */
+
+        // Sort counts by date and time, get range, check if number of records is less than expected
+        // for every period to be included, insert any missing.
+        counts.sort_unstable_by_key(|c| (c.date, c.time.time()));
+
+        let first_dt = NaiveDateTime::new(
+            counts.first().unwrap().date,
+            counts.first().unwrap().time.time(),
+        );
+        let last_dt = NaiveDateTime::new(
+            counts.last().unwrap().date,
+            counts.last().unwrap().time.time(),
+        );
+
+        let all_datetimes = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
+
+        let mut all_keys = vec![];
+
+        // construct all possible keys
+        for datetime in all_datetimes.clone() {
+            // Direction 1
+            all_keys.push(AvgSpeedKey {
+                recordnum,
+                datetime,
+                direction: directions.direction1,
+                lane: 1,
+            });
+            // Direction 2
+            if let Some(v) = directions.direction2 {
+                all_keys.push(AvgSpeedKey {
+                    recordnum,
+                    datetime,
+                    direction: v,
+                    lane: 2,
+                });
+            }
+            // Direction 3
+            if let Some(v) = directions.direction3 {
+                all_keys.push(AvgSpeedKey {
+                    recordnum,
+                    datetime,
+                    direction: v,
+                    lane: 3,
+                });
+            }
+        }
+        // Add missing periods for speed range count
+        for key in all_keys {
+            raw_speed_map.entry(key).or_default();
+        }
+
+        // Calculate the average speed per date/hour from the vecs.
+        let mut hourly_speed_avg = vec![];
+        for (key, value) in raw_speed_map {
+            if value.is_empty() {
+                hourly_speed_avg.push(HourlyAvgSpeed {
+                    recordnum: key.recordnum,
+                    datetime: key.datetime,
+                    speed: None,
+                    direction: key.direction,
+                    lane: key.lane,
+                })
+            } else {
+                hourly_speed_avg.push(HourlyAvgSpeed {
+                    recordnum: key.recordnum,
+                    datetime: key.datetime,
+                    speed: Some(value.iter().sum::<f32>() / value.len() as f32),
+                    direction: key.direction,
+                    lane: key.lane,
+                })
+            }
+        }
+        hourly_speed_avg
     }
 }
 
@@ -1059,7 +1270,11 @@ pub fn log_msg(recordnum: u32, log: impl Log, level: Level, message: &str, conn:
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
+    use db::{create_pool, get_creds};
+    use extract_from_file::Extract;
 
     #[test]
     fn time_binning_fifteen_min_is_correct() {
@@ -1196,5 +1411,173 @@ mod tests {
         let keys_hour = create_time_bins(first_dt, last_dt, TimeInterval::Hour);
         assert_eq!(keys_15.len(), 5);
         assert_eq!(keys_hour.len(), 2);
+    }
+
+    #[test]
+    fn hourly_vol_count_correct_num_records_and_total_count_166905() {
+        let (username, password) = get_creds();
+        let pool = create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+
+        // two directions, two lanes
+        let mut vol_count =
+            HourlyVehicle::from_db(166905, "tc_clacount", "ctdir", "total", &conn).unwrap();
+        assert_eq!(vol_count.len(), 98);
+
+        // Sort by date, and then lane, so elements of the vec are in an expected order to test.
+        vol_count.sort_unstable_by_key(|count| (count.datetime, count.lane));
+
+        // Ensure order is what we expect/count starts at correct times.
+        assert_eq!(
+            vol_count[0].datetime,
+            NaiveDateTime::parse_from_str("2023-11-06 10:00", "%Y-%m-%d %H:%M").unwrap()
+        );
+        assert_eq!(vol_count[0].direction, LaneDirection::East);
+        assert_eq!(vol_count[0].lane, 1);
+
+        assert_eq!(vol_count[1].direction, LaneDirection::West);
+        assert_eq!(vol_count[1].lane, 2);
+
+        assert_eq!(
+            vol_count.last().unwrap().datetime,
+            NaiveDateTime::parse_from_str("2023-11-08 10:00", "%Y-%m-%d %H:%M").unwrap()
+        );
+
+        assert_eq!(
+            vol_count
+                .iter()
+                .filter(|x| x.datetime.date() == NaiveDate::from_ymd_opt(2023, 11, 6).unwrap())
+                .map(|x| x.count)
+                .sum::<u32>(),
+            2897
+        );
+        assert_eq!(
+            vol_count
+                .iter()
+                .filter(|x| x.datetime.date() == NaiveDate::from_ymd_opt(2023, 11, 7).unwrap())
+                .map(|x| x.count)
+                .sum::<u32>(),
+            4450
+        );
+        assert_eq!(
+            vol_count
+                .iter()
+                .filter(|x| x.datetime.date() == NaiveDate::from_ymd_opt(2023, 11, 8).unwrap())
+                .map(|x| x.count)
+                .sum::<u32>(),
+            1359
+        );
+    }
+
+    #[test]
+    fn hourly_vol_count_correct_num_records_and_total_count_165367() {
+        let (username, password) = get_creds();
+        let pool = create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+
+        // one direction, two lanes
+        let vol_count =
+            HourlyVehicle::from_db(165367, "tc_clacount", "ctdir", "total", &conn).unwrap();
+
+        // Test total counts.
+        assert_eq!(
+            vol_count
+                .iter()
+                .filter(|x| x.datetime.date() == NaiveDate::from_ymd_opt(2023, 11, 6).unwrap())
+                .map(|x| x.count)
+                .sum::<u32>(),
+            8712
+        );
+        assert_eq!(
+            vol_count
+                .iter()
+                .filter(|x| x.datetime.date() == NaiveDate::from_ymd_opt(2023, 11, 7).unwrap())
+                .map(|x| x.count)
+                .sum::<u32>(),
+            14751
+        );
+        assert_eq!(
+            vol_count
+                .iter()
+                .filter(|x| x.datetime.date() == NaiveDate::from_ymd_opt(2023, 11, 8).unwrap())
+                .map(|x| x.count)
+                .sum::<u32>(),
+            15298
+        );
+        assert_eq!(
+            vol_count
+                .iter()
+                .filter(|x| x.datetime.date() == NaiveDate::from_ymd_opt(2023, 11, 9).unwrap())
+                .map(|x| x.count)
+                .sum::<u32>(),
+            15379
+        );
+        assert_eq!(
+            vol_count
+                .iter()
+                .filter(|x| x.datetime.date() == NaiveDate::from_ymd_opt(2023, 11, 10).unwrap())
+                .map(|x| x.count)
+                .sum::<u32>(),
+            4278
+        );
+    }
+
+    #[test]
+    fn create_hourly_avg_speed_count_166905_is_correct() {
+        // two directions, two lanes
+        let path = Path::new("test_files/vehicle/166905.txt");
+        let (username, password) = db::get_creds();
+        let pool = db::create_pool(username, password).unwrap();
+        let conn = pool.get().unwrap();
+        let directions = Directions::from_db(166905, &conn).unwrap();
+
+        let counted_vehicles = IndividualVehicle::extract(path, 166905, &directions).unwrap();
+        let mut hourly_avg_speed = HourlyAvgSpeed::create(166905, directions, counted_vehicles);
+        assert_eq!(hourly_avg_speed.len(), 98);
+
+        // Sort by date, and then lane, so elements of the vec are in an expected order to test.
+        hourly_avg_speed.sort_unstable_by_key(|count| (count.datetime, count.lane));
+
+        // Ensure order is what we expect/count starts at correct times.
+        assert_eq!(
+            hourly_avg_speed[0].datetime,
+            NaiveDateTime::parse_from_str("2023-11-06 10:00", "%Y-%m-%d %H:%M").unwrap()
+        );
+        assert_eq!(hourly_avg_speed[0].direction, LaneDirection::East);
+        assert_eq!(hourly_avg_speed[0].lane, 1);
+
+        assert_eq!(
+            hourly_avg_speed.last().unwrap().datetime,
+            NaiveDateTime::parse_from_str("2023-11-08 10:00", "%Y-%m-%d %H:%M").unwrap()
+        );
+        assert_eq!(
+            hourly_avg_speed.last().unwrap().direction,
+            LaneDirection::West
+        );
+        assert_eq!(hourly_avg_speed.last().unwrap().lane, 2);
+
+        // spotcheck averages
+        // Nov 6 11am, lane 1
+        assert_eq!(
+            format!("{:.2}", hourly_avg_speed[2].speed.unwrap()),
+            "30.36"
+        );
+        // Nov 6 11am, lane 2
+        assert_eq!(
+            format!("{:.2}", hourly_avg_speed[3].speed.unwrap()),
+            "32.71"
+        );
+        // Nov 7 5pm, lane 2
+        assert_eq!(
+            format!("{:.2}", hourly_avg_speed[63].speed.unwrap()),
+            "31.94"
+        );
+        // Nov 8, 2am, lane 1
+        assert!(hourly_avg_speed[80].speed.is_none());
+        // Nov 8, 9am, lane 1
+        assert_eq!(
+            format!("{:.2}", hourly_avg_speed[94].speed.unwrap()),
+            "31.63"
+        );
     }
 }

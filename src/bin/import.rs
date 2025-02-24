@@ -101,11 +101,10 @@ use traffic_counts::{
     check_data::check,
     create_binned_bicycle_vol_count, create_speed_and_class_count,
     db::{self, crud::Crud},
-    denormalize::{Denormalize, *},
     extract_from_file::{Extract, InputCount},
     log_msg, CountError, Directions, FifteenMinuteBicycle, FifteenMinutePedestrian,
-    FifteenMinuteVehicle, FileNameProblem, IndividualBicycle, IndividualVehicle,
-    TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount, TimeInterval,
+    FifteenMinuteVehicle, FileNameProblem, HourlyAvgSpeed, HourlyVehicle, IndividualBicycle,
+    IndividualVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount, TimeInterval,
 };
 
 const LOG: &str = "import.log";
@@ -277,19 +276,11 @@ fn main() {
                         individual_vehicles.clone(),
                     );
 
-                    // Create records for the non-normalized TC_SPESUM table (another one with
-                    // specific hourly fields, this time for average speed/hour).
-                    let non_normal_speedavg_count = create_non_normal_speedavg_count(
-                        recordnum,
-                        directions,
-                        individual_vehicles,
-                    );
-
                     // Delete existing records from db.
                     TimeBinnedVehicleClassCount::delete(&conn, recordnum).unwrap();
                     TimeBinnedSpeedRangeCount::delete(&conn, recordnum).unwrap();
-                    NonNormalAvgSpeedCount::delete(&conn, recordnum).unwrap();
-                    NonNormalVolCount::delete(&conn, recordnum).unwrap();
+                    HourlyVehicle::delete(&conn, recordnum).unwrap();
+                    HourlyAvgSpeed::delete(&conn, recordnum).unwrap();
 
                     // Create prepared statements and use them to insert counts.
                     let mut prepared = TimeBinnedVehicleClassCount::prepare_insert(&conn).unwrap();
@@ -339,48 +330,54 @@ fn main() {
                         }
                     }
 
-                    // Denormalize this data to insert into tc_volcount table.
-                    let denormalized_volcount =
-                        TimeBinnedVehicleClassCount::denormalize_vol_count(recordnum, &conn)
+                    // Aggregate volume data by hour.
+                    let volcount =
+                        HourlyVehicle::from_db(recordnum, "tc_clacount", "ctdir", "total", &conn)
                             .unwrap();
 
                     // Create prepared statements and use them to insert counts.
-                    let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
-                    for count in denormalized_volcount {
+                    let mut prepared = HourlyVehicle::prepare_insert(&conn).unwrap();
+                    for count in volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
                     }
-                    let table = <NonNormalVolCount as Crud>::COUNT_TABLE;
+                    let table = <HourlyVehicle as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed denormalized class data insert to database ({table} table)"), &conn);
+                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed hourly volume data into database ({table} table)"), &conn);
                         }
                         Err(e) => {
-                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing denormalized class data insert to database ({table} table): {e}"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing hourly volume data into database ({table} table): {e}"), &conn);
 
                             cleanup(cleanup_files, path);
                             continue;
                         }
                     }
 
-                    let mut prepared = NonNormalAvgSpeedCount::prepare_insert(&conn).unwrap();
-                    for count in non_normal_speedavg_count {
+                    // Average speed data by hour.
+                    let avg_speed =
+                        HourlyAvgSpeed::create(recordnum, directions, individual_vehicles);
+
+                    // Create prepared statements and use them to insert counts.
+                    let mut prepared = HourlyAvgSpeed::prepare_insert(&conn).unwrap();
+                    for count in avg_speed {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
                     }
-                    let table = <NonNormalAvgSpeedCount as Crud>::COUNT_TABLE;
+                    let table = <HourlyAvgSpeed as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed denormalized speed data insert to database ({table} table)"), &conn);
+                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed hourly speed averages into database ({table} table)"), &conn);
                         }
                         Err(e) => {
-                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing denormalized speed data insert to database ({table} table): {e}"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing hourly speed averages into database ({table} table): {e}"), &conn);
+
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -508,29 +505,36 @@ fn main() {
                         }
                     }
 
-                    // Denormalize this data to insert into tc_volcount table.
-                    let denormalized_volcount =
-                        FifteenMinuteVehicle::denormalize_vol_count(recordnum, &conn).unwrap();
-
                     // Delete existing records from db.
-                    NonNormalVolCount::delete(&conn, recordnum).unwrap();
+                    HourlyVehicle::delete(&conn, recordnum).unwrap();
+
+                    // Aggregate into hourly data, to insert into another table.
+                    let volcount = HourlyVehicle::from_db(
+                        recordnum,
+                        "tc_15minvolcount",
+                        "cntdir",
+                        "volcount",
+                        &conn,
+                    )
+                    .unwrap();
 
                     // Create prepared statements and use them to insert counts.
-                    let mut prepared = NonNormalVolCount::prepare_insert(&conn).unwrap();
-                    for count in denormalized_volcount {
+                    let mut prepared = HourlyVehicle::prepare_insert(&conn).unwrap();
+                    for count in volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
                             cleanup(cleanup_files, path);
                             continue 'paths_loop;
                         }
                     }
-                    let table = <NonNormalVolCount as Crud>::COUNT_TABLE;
+                    let table = <HourlyVehicle as Crud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
-                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed denormalized data insert to database ({table} table)"), &conn);
+                            log_msg(recordnum, &import_log, Level::Info, &format!("Successfully committed hourly volume data into database ({table} table)"), &conn);
                         }
                         Err(e) => {
-                            log_msg(recordnum, &import_log, Level::Error,&format!("Error committing denormalized data insert to database ({table} table): {e}"), &conn);
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error committing class-hourly volume data into database ({table} table): {e}"), &conn);
+
                             cleanup(cleanup_files, path);
                             continue;
                         }
@@ -659,30 +663,31 @@ fn main() {
             }
 
             // Update metadata table in db.
-            if let Err(e) = conn.execute(
+            match conn.execute(
                 "update tc_header SET
                 importdatadate = (select current_date from dual),
-                status = :1,
+                status = :1
                 where recordnum = :2",
                 &[&"imported", &recordnum],
             ) {
-                log_msg(
-                    recordnum,
-                    &import_log,
-                    Level::Error,
-                    &format!("Error updating metadata (tc_header table): {e}"),
-                    &conn,
-                );
-            };
-
-            match conn.commit() {
-                Ok(()) => log_msg(
-                    recordnum,
-                    &import_log,
-                    Level::Info,
-                    "Metadata updated (tc_header table)",
-                    &conn,
-                ),
+                Ok(_) => match conn.commit() {
+                    Ok(()) => log_msg(
+                        recordnum,
+                        &import_log,
+                        Level::Info,
+                        "Metadata updated (tc_header table)",
+                        &conn,
+                    ),
+                    Err(e) => {
+                        log_msg(
+                            recordnum,
+                            &import_log,
+                            Level::Error,
+                            &format!("Error committing metadata (tc_header table) update: {e}"),
+                            &conn,
+                        );
+                    }
+                },
                 Err(e) => {
                     log_msg(
                         recordnum,
@@ -692,7 +697,7 @@ fn main() {
                         &conn,
                     );
                 }
-            };
+            }
 
             // Update the intermediate table used for calculating AADV in all cases.
             match db::update_intermediate_aadv(recordnum as u32, &conn) {

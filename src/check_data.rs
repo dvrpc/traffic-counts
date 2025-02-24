@@ -2,7 +2,7 @@
 use std::fmt::Write;
 use std::fs::OpenOptions;
 use std::env;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime};
