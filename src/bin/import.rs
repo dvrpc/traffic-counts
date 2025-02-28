@@ -331,9 +331,19 @@ fn main() {
                     }
 
                     // Aggregate volume data by hour.
-                    let volcount =
-                        HourlyVehicle::from_db(recordnum, "tc_clacount", "ctdir", "total", &conn)
-                            .unwrap();
+                    let volcount = match HourlyVehicle::from_db(
+                        recordnum,
+                        "tc_clacount_new",
+                        "total",
+                        &conn,
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error getting data from tc_clacount table for {recordnum}: {e}"), &conn);
+                            cleanup(cleanup_files, path);
+                            continue;
+                        }
+                    };
 
                     // Create prepared statements and use them to insert counts.
                     let mut prepared = HourlyVehicle::prepare_insert(&conn).unwrap();
@@ -404,6 +414,7 @@ fn main() {
                     let fifteen_min_volcount = create_binned_bicycle_vol_count(
                         TimeInterval::FifteenMin,
                         recordnum,
+                        &directions,
                         counts,
                     );
 
@@ -509,14 +520,19 @@ fn main() {
                     HourlyVehicle::delete(&conn, recordnum).unwrap();
 
                     // Aggregate into hourly data, to insert into another table.
-                    let volcount = HourlyVehicle::from_db(
+                    let volcount = match HourlyVehicle::from_db(
                         recordnum,
-                        "tc_15minvolcount",
-                        "cntdir",
-                        "volcount",
+                        "tc_15minvolcount_new",
+                        "volume",
                         &conn,
-                    )
-                    .unwrap();
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            log_msg(recordnum, &import_log, Level::Error, &format!("Error getting data from tc_15minvolcount_new table for {recordnum}: {e}"), &conn);
+                            cleanup(cleanup_files, path);
+                            continue;
+                        }
+                    };
 
                     // Create prepared statements and use them to insert counts.
                     let mut prepared = HourlyVehicle::prepare_insert(&conn).unwrap();

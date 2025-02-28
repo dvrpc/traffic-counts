@@ -4,6 +4,8 @@
 
 use oracle::{Connection, Statement};
 
+use chrono::NaiveDateTime;
+
 use crate::{
     CountError, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
     HourlyAvgSpeed, HourlyVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
@@ -13,19 +15,13 @@ use crate::{
 pub trait Crud {
     /// The name of the table in the database that this count type corresponds to.
     const COUNT_TABLE: &'static str; // associated constant
-    /// Field in COUNT_TABLE with recordnum.
-    const COUNT_RECORDNUM_FIELD: &'static str = "recordnum";
 
     /// Select all records from the table.
     fn select(conn: &Connection, recordnum: u32) -> Result<Vec<Self>, CountError>
     where
         Self: std::marker::Sized + oracle::RowValue,
     {
-        let sql = &format!(
-            "select * FROM {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
+        let sql = &format!("select * FROM {} where recordnum = :1", &Self::COUNT_TABLE,);
         let results = conn.query_as::<Self>(sql, &[&recordnum])?;
 
         let mut data = vec![];
@@ -38,11 +34,7 @@ pub trait Crud {
 
     /// Delete all records in the table with a particular recordnum.
     fn delete(conn: &Connection, recordnum: u32) -> Result<(), oracle::Error> {
-        let sql = &format!(
-            "delete from {} where {} = :1",
-            &Self::COUNT_TABLE,
-            &Self::COUNT_RECORDNUM_FIELD
-        );
+        let sql = &format!("delete from {} where recordnum = :1", &Self::COUNT_TABLE,);
         conn.execute(sql, &[&recordnum])?;
         conn.commit()
     }
@@ -55,16 +47,16 @@ pub trait Crud {
 }
 
 impl Crud for TimeBinnedVehicleClassCount {
-    const COUNT_TABLE: &'static str = "tc_clacount";
+    const COUNT_TABLE: &'static str = "tc_clacount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
-            "insert into {} (recordnum, countdate, counttime, countlane, total, ctdir, \
+            "insert into {} (recordnum, countdatetime, countlane, total, cntdir, \
             bikes, cars_and_tlrs, ax2_long, buses, ax2_6_tire, ax3_single, ax4_single, \
             lt_5_ax_double, ax5_double, gt_5_ax_double, lt_6_ax_multi, ax6_multi, gt_6_ax_multi, \
             unclassified)
             VALUES \
-            (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
+            (:1, :2, :3, :4, :5, :6, :7, :8, :9, :11, :12, :13, :14, :15, :16, :17, :18, 
             :19, :20)",
             &Self::COUNT_TABLE,
         );
@@ -73,8 +65,7 @@ impl Crud for TimeBinnedVehicleClassCount {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.recordnum,
-            &self.date,
-            &self.time,
+            &NaiveDateTime::new(self.date, self.time.time()),
             &self.lane,
             &self.total,
             &self.direction,
@@ -96,15 +87,15 @@ impl Crud for TimeBinnedVehicleClassCount {
     }
 }
 impl Crud for TimeBinnedSpeedRangeCount {
-    const COUNT_TABLE: &'static str = "tc_specount";
+    const COUNT_TABLE: &'static str = "tc_specount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {} (
-            recordnum, countdate, counttime, countlane, total, ctdir, \
+            recordnum, countdatetime, countlane, total, cntdir, \
             s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14)
             VALUES \
-            (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
+            (:1, :2, :3, :4, :5, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, 
             :19, :20)",
             &Self::COUNT_TABLE,
         );
@@ -114,8 +105,7 @@ impl Crud for TimeBinnedSpeedRangeCount {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.recordnum,
-            &self.date,
-            &self.time,
+            &NaiveDateTime::new(self.date, self.time.time()),
             &self.lane,
             &self.total,
             &self.direction,
@@ -142,7 +132,7 @@ impl Crud for HourlyAvgSpeed {
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
-            (recordnum, countdatetime, avgspeed, countlane, ctdir) \
+            (recordnum, countdatetime, avgspeed, countlane, cntdir) \
             VALUES (:1, :2, :3, :4, :5)",
             &Self::COUNT_TABLE,
         );
@@ -161,13 +151,13 @@ impl Crud for HourlyAvgSpeed {
 }
 
 impl Crud for FifteenMinuteVehicle {
-    const COUNT_TABLE: &'static str = "tc_15minvolcount";
+    const COUNT_TABLE: &'static str = "tc_15minvolcount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
-            (recordnum, countdate, counttime, volcount, cntdir, countlane) \
-            VALUES (:1, :2, :3, :4, :5, :6)",
+            (recordnum, countdatetime, volume, cntdir, countlane) \
+            VALUES (:1, :2, :3, :4, :5)",
             &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
@@ -176,8 +166,7 @@ impl Crud for FifteenMinuteVehicle {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[
             &self.recordnum,
-            &self.date,
-            &self.time,
+            &NaiveDateTime::new(self.date, self.time.time()),
             &self.count,
             &self.direction,
             &self.lane,
@@ -210,53 +199,37 @@ impl Crud for HourlyVehicle {
 }
 
 impl Crud for FifteenMinuteBicycle {
-    const COUNT_TABLE: &'static str = "tc_bikecount";
-    const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
+    const COUNT_TABLE: &'static str = "tc_bikecount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
-            (dvrpcnum, countdate, counttime, total, incount, outcount) \
-            VALUES (:1, :2, :3, :4, :5, :6)",
+            (recordnum, countdatetime, volume, cntdir) \
+            VALUES (:1, :2, :3, :4)",
             &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        stmt.execute(&[
-            &self.recordnum,
-            &self.date,
-            &self.time,
-            &self.total,
-            &self.indir,
-            &self.outdir,
-        ])
+        stmt.execute(&[&self.recordnum, &self.datetime, &self.volume, &self.cntdir])
     }
 }
 
 impl Crud for FifteenMinutePedestrian {
-    const COUNT_TABLE: &'static str = "tc_pedcount";
-    const COUNT_RECORDNUM_FIELD: &'static str = "dvrpcnum";
+    const COUNT_TABLE: &'static str = "tc_pedcount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
             "insert into {}
-            (dvrpcnum, countdate, counttime, total, \"IN\", \"OUT\") \
-            VALUES (:1, :2, :3, :4, :5, :6)",
+            (recordnum, countdatetime, volume, cntdir) \
+            VALUES (:1, :2, :3, :4)",
             &Self::COUNT_TABLE,
         );
         conn.statement(sql).build()
     }
 
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
-        stmt.execute(&[
-            &self.recordnum,
-            &self.date,
-            &self.time,
-            &self.total,
-            &self.indir,
-            &self.outdir,
-        ])
+        stmt.execute(&[&self.recordnum, &self.datetime, &self.volume, &self.cntdir])
     }
 }

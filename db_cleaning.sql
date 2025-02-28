@@ -24,18 +24,18 @@ update tc_header set sidewalk = 'west' where sidewalk in ('W', 'w', 'West');
 update tc_header set sidewalk = Null where sidewalk = '25';
 
 
--- Normalize/fix ctdir values in tc_specount table.
-update tc_specount set ctdir = 'north' where ctdir in ('N', 'n', 'North');
-update tc_specount set ctdir = 'south' where ctdir in ('S', 's', 'South');
-update tc_specount set ctdir = 'east' where ctdir in ('E', 'e', 'East');
-update tc_specount set ctdir = 'west' where ctdir in ('W', 'w', 'West');
+-- Normalize/fix cntdir values in tc_specount table.
+update tc_specount set cntdir = 'north' where cntdir in ('N', 'n', 'North');
+update tc_specount set cntdir = 'south' where cntdir in ('S', 's', 'South');
+update tc_specount set cntdir = 'east' where cntdir in ('E', 'e', 'East');
+update tc_specount set cntdir = 'west' where cntdir in ('W', 'w', 'West');
 
 
--- Normalize/fix ctdir values in tc_clacount table.
-update tc_clacount set ctdir = 'north' where ctdir in ('N', 'n', 'North');
-update tc_clacount set ctdir = 'south' where ctdir in ('S', 's', 'South');
-update tc_clacount set ctdir = 'east' where ctdir in ('E', 'e', 'East');
-update tc_clacount set ctdir = 'west' where ctdir in ('W', 'w', 'West');
+-- Normalize/fix cntdir values in tc_clacount table.
+update tc_clacount set cntdir = 'north' where cntdir in ('N', 'n', 'North');
+update tc_clacount set cntdir = 'south' where cntdir in ('S', 's', 'South');
+update tc_clacount set cntdir = 'east' where cntdir in ('E', 'e', 'East');
+update tc_clacount set cntdir = 'west' where cntdir in ('W', 'w', 'West');
 
 -- Clean values (but no constraint was added nor type change made to prevent
 -- future bad values from being entered).

@@ -286,41 +286,32 @@ impl Extract for FifteenMinuteBicycle {
             let datetime_col = &row.as_ref().unwrap()[0];
             let count_dt = NaiveDateTime::parse_from_str(datetime_col, datetime_format).unwrap();
 
-            // Determine which fields to collect depending on direction(s) of count.
-            match directions.direction2 {
-                // If there's only one direction for this count, we only need the total.
-                None => {
-                    match FifteenMinuteBicycle::new(
-                        recordnum,
-                        count_dt.date(),
-                        count_dt,
-                        row.as_ref().unwrap()[1].parse().unwrap(),
-                        None,
-                        None,
-                    ) {
-                        Ok(v) => counts.push(v),
-                        Err(e) => {
-                            error!("{e}");
-                            continue;
-                        }
-                    };
+            // Direction1/indir
+            match FifteenMinuteBicycle::new(
+                recordnum,
+                count_dt,
+                row.as_ref().unwrap()[2].parse().unwrap(),
+                directions.direction1,
+            ) {
+                Ok(v) => counts.push(v),
+                Err(e) => {
+                    error!("{e}");
+                    continue;
                 }
-                // If there are two directions, we need total, indir, and outdir.
-                Some(_) => {
-                    match FifteenMinuteBicycle::new(
-                        recordnum,
-                        count_dt.date(),
-                        count_dt,
-                        row.as_ref().unwrap()[1].parse().unwrap(),
-                        Some(row.as_ref().unwrap()[2].parse().unwrap()),
-                        Some(row.as_ref().unwrap()[3].parse().unwrap()),
-                    ) {
-                        Ok(v) => counts.push(v),
-                        Err(e) => {
-                            error!("{e}");
-                            continue;
-                        }
-                    };
+            }
+            // Optionally direction2/outdir
+            if let Some(v) = directions.direction2 {
+                match FifteenMinuteBicycle::new(
+                    recordnum,
+                    count_dt,
+                    row.as_ref().unwrap()[3].parse().unwrap(),
+                    v,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
                 }
             }
         }
@@ -348,41 +339,32 @@ impl Extract for FifteenMinutePedestrian {
             let datetime_col = &row.as_ref().unwrap()[0];
             let count_dt = NaiveDateTime::parse_from_str(datetime_col, datetime_format).unwrap();
 
-            // Determine which fields to collect depending on direction(s) of count.
-            match directions.direction2 {
-                // If there's only one direction for this count, we only need the total.
-                None => {
-                    match FifteenMinutePedestrian::new(
-                        recordnum,
-                        count_dt.date(),
-                        count_dt,
-                        row.as_ref().unwrap()[1].parse().unwrap(),
-                        None,
-                        None,
-                    ) {
-                        Ok(v) => counts.push(v),
-                        Err(e) => {
-                            error!("{e}");
-                            continue;
-                        }
-                    };
+            // Direction1/indir
+            match FifteenMinutePedestrian::new(
+                recordnum,
+                count_dt,
+                row.as_ref().unwrap()[2].parse().unwrap(),
+                directions.direction1,
+            ) {
+                Ok(v) => counts.push(v),
+                Err(e) => {
+                    error!("{e}");
+                    continue;
                 }
-                // If there are two directions, we need total, indir, and outdir.
-                Some(_) => {
-                    match FifteenMinutePedestrian::new(
-                        recordnum,
-                        count_dt.date(),
-                        count_dt,
-                        row.as_ref().unwrap()[1].parse().unwrap(),
-                        Some(row.as_ref().unwrap()[2].parse().unwrap()),
-                        Some(row.as_ref().unwrap()[3].parse().unwrap()),
-                    ) {
-                        Ok(v) => counts.push(v),
-                        Err(e) => {
-                            error!("{e}");
-                            continue;
-                        }
-                    };
+            }
+            // Optionally direction2/outdir
+            if let Some(v) = directions.direction2 {
+                match FifteenMinutePedestrian::new(
+                    recordnum,
+                    count_dt,
+                    row.as_ref().unwrap()[3].parse().unwrap(),
+                    v,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
                 }
             }
         }
@@ -475,7 +457,6 @@ mod tests {
         let conn = pool.get().unwrap();
         let path = Path::new("test_files/15minutevehicle/168193.txt");
         let directions = Directions::from_db(168193, &conn).unwrap();
-        dbg!(&directions);
         let fifteen_min_volcount =
             FifteenMinuteVehicle::extract(path, 168193, &directions).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 384)
@@ -524,59 +505,55 @@ mod tests {
     }
 
     #[test]
-    fn extract_fifteen_min_bicycle_gets_correct_number_of_counts() {
+    fn extract_fifteen_min_bicycle_gets_correct_number_of_counts_167607() {
         let path = Path::new("test_files/15minutebicycle/167607.csv");
-        let (username, password) = db::get_creds();
-        let pool = db::create_pool(username, password).unwrap();
-        let conn = pool.get().unwrap();
-        let directions = Directions::from_db(167607, &conn).unwrap();
+        let directions = Directions {
+            direction1: LaneDirection::North,
+            direction2: Some(LaneDirection::South),
+            direction3: None,
+        };
         let fifteen_min_volcount =
             FifteenMinuteBicycle::extract(path, 167607, &directions).unwrap();
-        assert_eq!(fifteen_min_volcount.len(), 480);
+        assert_eq!(fifteen_min_volcount.len(), 960);
 
-        let in_sum = fifteen_min_volcount
+        let north_sum = fifteen_min_volcount
             .iter()
-            .map(|count| count.indir.unwrap())
+            .filter(|count| count.cntdir == LaneDirection::North)
+            .map(|count| count.volume)
             .sum::<u16>();
-        let out_sum = fifteen_min_volcount
+        let south_sum = fifteen_min_volcount
             .iter()
-            .map(|count| count.outdir.unwrap())
+            .filter(|count| count.cntdir == LaneDirection::South)
+            .map(|count| count.volume)
             .sum::<u16>();
-        let sum = fifteen_min_volcount
-            .iter()
-            .map(|count| count.total)
-            .sum::<u16>();
-        assert_eq!(in_sum, 491);
-        assert_eq!(out_sum, 20);
-        assert_eq!(sum, 511);
+        assert_eq!(north_sum, 491);
+        assert_eq!(south_sum, 20);
     }
 
     #[test]
-    fn extract_fifteen_min_pedestrian_gets_correct_number_of_counts() {
+    fn extract_fifteen_min_pedestrian_gets_correct_number_of_counts167297() {
         let path = Path::new("test_files/15minutepedestrian/167297.csv");
-        let (username, password) = db::get_creds();
-        let pool = db::create_pool(username, password).unwrap();
-        let conn = pool.get().unwrap();
-        let directions = Directions::from_db(167297, &conn).unwrap();
+        let directions = Directions {
+            direction1: LaneDirection::North,
+            direction2: Some(LaneDirection::South),
+            direction3: None,
+        };
         let fifteen_min_volcount =
             FifteenMinutePedestrian::extract(path, 167297, &directions).unwrap();
-        assert_eq!(fifteen_min_volcount.len(), 768);
+        assert_eq!(fifteen_min_volcount.len(), 1536);
 
-        let in_sum = fifteen_min_volcount
+        let north_sum = fifteen_min_volcount
             .iter()
-            .map(|count| count.indir.unwrap())
+            .filter(|count| count.cntdir == LaneDirection::North)
+            .map(|count| count.volume)
             .sum::<u16>();
-        let out_sum = fifteen_min_volcount
+        let south_sum = fifteen_min_volcount
             .iter()
-            .map(|count| count.outdir.unwrap())
+            .filter(|count| count.cntdir == LaneDirection::South)
+            .map(|count| count.volume)
             .sum::<u16>();
-        let sum = fifteen_min_volcount
-            .iter()
-            .map(|count| count.total)
-            .sum::<u16>();
-        assert_eq!(in_sum, 1281);
-        assert_eq!(out_sum, 1201);
-        assert_eq!(sum, 2482);
+        assert_eq!(north_sum, 1281);
+        assert_eq!(south_sum, 1201);
     }
 
     #[test]

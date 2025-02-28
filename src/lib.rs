@@ -242,41 +242,30 @@ impl IndividualBicycle {
 /// or created from records of [`IndividualBicycle`]s.
 #[derive(Debug, Clone, RowValue, PartialEq)]
 pub struct FifteenMinuteBicycle {
-    #[row_value(rename = "dvrpcnum")]
     pub recordnum: u32,
-    #[row_value(rename = "countdate")]
-    pub date: NaiveDate,
-    #[row_value(rename = "counttime")]
-    pub time: NaiveDateTime,
-    pub total: u16,
-    #[row_value(rename = "incount")]
-    pub indir: Option<u16>,
-    #[row_value(rename = "outcount")]
-    pub outdir: Option<u16>,
+    pub datetime: NaiveDateTime,
+    pub volume: u16,
+    pub cntdir: LaneDirection,
 }
 
 impl GetDate for FifteenMinuteBicycle {
     fn get_date(&self) -> NaiveDate {
-        self.date
+        self.datetime.date()
     }
 }
 
 impl FifteenMinuteBicycle {
     pub fn new(
         recordnum: u32,
-        date: NaiveDate,
-        time: NaiveDateTime,
-        total: u16,
-        indir: Option<u16>,
-        outdir: Option<u16>,
+        datetime: NaiveDateTime,
+        volume: u16,
+        cntdir: LaneDirection,
     ) -> Result<Self, CountError> {
         Ok(Self {
             recordnum,
-            date,
-            time,
-            total,
-            indir,
-            outdir,
+            datetime,
+            volume,
+            cntdir,
         })
     }
 }
@@ -284,41 +273,30 @@ impl FifteenMinuteBicycle {
 /// Pre-binned, 15-minute pedestrian volume counts.
 #[derive(Debug, Clone, RowValue)]
 pub struct FifteenMinutePedestrian {
-    #[row_value(rename = "dvrpcnum")]
     pub recordnum: u32,
-    #[row_value(rename = "countdate")]
-    pub date: NaiveDate,
-    #[row_value(rename = "counttime")]
-    pub time: NaiveDateTime,
-    pub total: u16,
-    #[row_value(rename = "incount")]
-    pub indir: Option<u16>,
-    #[row_value(rename = "outcount")]
-    pub outdir: Option<u16>,
+    pub datetime: NaiveDateTime,
+    pub volume: u16,
+    pub cntdir: LaneDirection,
 }
 
 impl GetDate for FifteenMinutePedestrian {
     fn get_date(&self) -> NaiveDate {
-        self.date
+        self.datetime.date()
     }
 }
 
 impl FifteenMinutePedestrian {
     pub fn new(
         recordnum: u32,
-        date: NaiveDate,
-        time: NaiveDateTime,
-        total: u16,
-        indir: Option<u16>,
-        outdir: Option<u16>,
+        datetime: NaiveDateTime,
+        volume: u16,
+        cntdir: LaneDirection,
     ) -> Result<Self, CountError> {
         Ok(Self {
             recordnum,
-            date,
-            time,
-            total,
-            indir,
-            outdir,
+            datetime,
+            volume,
+            cntdir,
         })
     }
 }
@@ -382,34 +360,27 @@ impl HourlyVehicle {
     pub fn from_db<'a>(
         recordnum: u32,
         table: &'a str,
-        dir_field: &'a str,
         vol_field: &'a str,
         conn: &Connection,
     ) -> Result<Vec<HourlyVehicle>, CountError> {
-        let results = match conn.query_as::<(NaiveDateTime, NaiveDate, u32, String, u32)>(
+        let results = match conn.query_as::<(NaiveDateTime, u32, String, u32)>(
             &format!(
-                "select TRUNC(counttime, 'HH24'), countdate, sum({}), {}, countlane 
+                "select TRUNC(countdatetime, 'HH24'), sum({}), cntdir, countlane 
                 from {} 
                 where recordnum = :1 
-                group by (countdate, trunc(counttime, 'HH24')), {}, countlane 
-                order by countdate",
-                &vol_field, &dir_field, &table, &dir_field
+                group by trunc(countdatetime, 'HH24'), cntdir, countlane 
+                order by trunc(countdatetime, 'HH24')",
+                &vol_field, &table
             ),
             &[&recordnum],
         ) {
             Ok(v) => v,
-            Err(_) => {
-                return Err(CountError::DbError(format!(
-                    "{recordnum} not found in {table}"
-                )))
-            }
+            Err(e) => return Err(CountError::DbError(format!("{e}"))),
         };
 
         let mut hourly_veh_counts = vec![];
         for result in results {
-            let (counttime, countdate, count, dir, lane) = result?;
-
-            let datetime = NaiveDateTime::new(countdate, counttime.time());
+            let (datetime, count, dir, lane) = result?;
 
             hourly_veh_counts.push(HourlyVehicle {
                 recordnum,
@@ -815,7 +786,7 @@ pub struct TimeBinnedVehicleClassCount {
     #[row_value(rename = "countlane")]
     pub lane: Option<u8>,
     pub recordnum: u32,
-    #[row_value(rename = "ctdir")]
+    #[row_value(rename = "cntdir")]
     pub direction: Option<LaneDirection>,
     #[row_value(rename = "bikes")]
     pub c1: u32,
@@ -860,7 +831,7 @@ pub struct TimeBinnedSpeedRangeCount {
     #[row_value(rename = "countlane")]
     pub lane: Option<u8>,
     pub recordnum: u32,
-    #[row_value(rename = "ctdir")]
+    #[row_value(rename = "cntdir")]
     pub direction: Option<LaneDirection>,
     pub s1: u32,
     pub s2: u32,
@@ -1050,6 +1021,7 @@ pub fn create_speed_and_class_count(
 pub fn create_binned_bicycle_vol_count(
     interval: TimeInterval,
     recordnum: u32,
+    directions: &Directions,
     mut counts: Vec<IndividualBicycle>,
 ) -> Vec<FifteenMinuteBicycle> {
     if counts.is_empty() {
@@ -1061,67 +1033,33 @@ pub fn create_binned_bicycle_vol_count(
     // in order to keep updating them as we go through all the counts.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct DataKey {
-        pub date: NaiveDate,
-        pub time: NaiveDateTime,
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    pub struct DataValues {
         pub recordnum: u32,
-        pub total: u16,
-        pub indir: Option<u16>,
-        pub outdir: Option<u16>,
+        pub datetime: NaiveDateTime,
+        pub direction: LaneDirection,
     }
 
-    let mut count_map: HashMap<DataKey, DataValues> = HashMap::new();
+    let mut count_map: HashMap<DataKey, u16> = HashMap::new();
 
     for count in counts.clone() {
         // Create a key for the Hashmap for time intervals
+        let direction = match count.lane {
+            1 => directions.direction1,
+            2 => directions.direction2.unwrap(),
+            _ => {
+                error!("Unable to determine lane/direction.");
+                continue;
+            }
+        };
         let time_part = bin_time(count.time.time(), interval);
         let key = DataKey {
-            date: count.date,
-            time: NaiveDateTime::new(count.date, time_part),
+            recordnum,
+            datetime: NaiveDateTime::new(count.date, time_part),
+            direction,
         };
 
         // Insert or update values.
         // Each item is one bicycle counted; whether it's indir or outdir depends on lane.
-        if count.lane == 1 {
-            count_map
-                .entry(key)
-                .and_modify(|c| {
-                    c.total += 1;
-                    c.indir = if let Some(mut v) = c.indir {
-                        v += 1;
-                        Some(v)
-                    } else {
-                        Some(1)
-                    };
-                })
-                .or_insert(DataValues {
-                    recordnum,
-                    total: 1,
-                    indir: Some(1),
-                    outdir: Some(0),
-                });
-        } else if count.lane == 2 {
-            count_map
-                .entry(key)
-                .and_modify(|c| {
-                    c.total += 1;
-                    c.outdir = if let Some(mut v) = c.outdir {
-                        v += 1;
-                        Some(v)
-                    } else {
-                        Some(1)
-                    };
-                })
-                .or_insert(DataValues {
-                    recordnum,
-                    total: 1,
-                    indir: Some(0),
-                    outdir: Some(1),
-                });
-        }
+        count_map.entry(key).and_modify(|c| *c += 1).or_insert(1);
     }
 
     /*
@@ -1150,34 +1088,34 @@ pub fn create_binned_bicycle_vol_count(
     // Construct all possible keys.
     for datetime in all_datetimes.clone() {
         all_keys.push(DataKey {
-            date: datetime.date(),
-            time: datetime,
-        })
+            recordnum,
+            datetime,
+            direction: directions.direction1,
+        });
+        if let Some(v) = directions.direction2 {
+            all_keys.push(DataKey {
+                recordnum,
+                datetime,
+                direction: v,
+            });
+        }
     }
 
     // Add missing periods.
     for key in all_keys {
-        count_map.entry(key).or_insert(DataValues {
-            recordnum,
-            total: 0,
-            indir: Some(0),
-            outdir: Some(0),
-        });
+        count_map.entry(key).or_insert(0);
     }
 
     // Convert from HashMap to Vec.
     let mut bicycle_vol_count = vec![];
-    for (key, value) in count_map {
+    for (key, volume) in count_map {
         bicycle_vol_count.push(FifteenMinuteBicycle {
-            recordnum: value.recordnum,
-            date: key.date,
-            time: key.time,
-            total: value.total,
-            indir: value.indir,
-            outdir: value.outdir,
+            recordnum: key.recordnum,
+            datetime: key.datetime,
+            volume,
+            cntdir: key.direction,
         });
     }
-
     bicycle_vol_count
 }
 
@@ -1421,7 +1359,7 @@ mod tests {
 
         // two directions, two lanes
         let mut vol_count =
-            HourlyVehicle::from_db(166905, "tc_clacount", "ctdir", "total", &conn).unwrap();
+            HourlyVehicle::from_db(166905, "tc_clacount_new", "total", &conn).unwrap();
         assert_eq!(vol_count.len(), 98);
 
         // Sort by date, and then lane, so elements of the vec are in an expected order to test.
@@ -1476,8 +1414,7 @@ mod tests {
         let conn = pool.get().unwrap();
 
         // one direction, two lanes
-        let vol_count =
-            HourlyVehicle::from_db(165367, "tc_clacount", "ctdir", "total", &conn).unwrap();
+        let vol_count = HourlyVehicle::from_db(165367, "tc_clacount_new", "total", &conn).unwrap();
 
         // Test total counts.
         assert_eq!(
