@@ -92,7 +92,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time;
 
-use log::{error, Level, LevelFilter};
+use log::{Level, LevelFilter, Log, Record};
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
@@ -154,14 +154,24 @@ fn main() {
     let username = match env::var("DB_USERNAME") {
         Ok(v) => v,
         Err(e) => {
-            error!("Unable to load username from .env file: {e}.");
+            import_log.log(
+                &Record::builder()
+                    .args(format_args!("Unable to load username from .env file: {e}"))
+                    .level(Level::Error)
+                    .build(),
+            );
             return;
         }
     };
     let password = match env::var("DB_PASSWORD") {
         Ok(v) => v,
         Err(e) => {
-            error!("Unable to load password from .env file: {e}.");
+            import_log.log(
+                &Record::builder()
+                    .args(format_args!("Unable to load password from .env file: {e}"))
+                    .level(Level::Error)
+                    .build(),
+            );
             return;
         }
     };
@@ -181,7 +191,12 @@ fn main() {
         let paths = match collect_paths(data_dir.clone().into(), &mut paths) {
             Ok(v) => v,
             Err(e) => {
-                error!("{e}");
+                import_log.log(
+                    &Record::builder()
+                        .args(format_args!("{e}"))
+                        .level(Level::Error)
+                        .build(),
+                );
                 return;
             }
         };
@@ -197,8 +212,13 @@ fn main() {
             let count_type = match InputCount::from_parent_dir(path) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("{path:?} not processed: {e}");
-                    cleanup(cleanup_files, path);
+                    import_log.log(
+                        &Record::builder()
+                            .args(format_args!("{path:?} not processed: {e}"))
+                            .level(Level::Error)
+                            .build(),
+                    );
+                    cleanup(cleanup_files, path, &import_log);
                     continue;
                 }
             };
@@ -206,8 +226,13 @@ fn main() {
             let recordnum = match get_recordnum(path) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("{path:?} not processed: {e}");
-                    cleanup(cleanup_files, path);
+                    import_log.log(
+                        &Record::builder()
+                            .args(format_args!("{path:?} not processed: {e}"))
+                            .level(Level::Error)
+                            .build(),
+                    );
+                    cleanup(cleanup_files, path, &import_log);
                     continue;
                 }
             };
@@ -224,10 +249,12 @@ fn main() {
                     recordnum,
                     &import_log,
                     Level::Error,
-                    "Not processed: recordnum not found in TC_HEADER table",
+                    &format!(
+                        "{path:?} not processed: recordnum probably not found in TC_HEADER table)"
+                    ),
                     &conn,
                 );
-                cleanup(cleanup_files, path);
+                cleanup(cleanup_files, path, &import_log);
                 continue;
             }
 
@@ -235,8 +262,14 @@ fn main() {
             let directions = match Directions::from_db(recordnum, &conn) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("{path:?} not processed: {e}");
-                    cleanup(cleanup_files, path);
+                    log_msg(
+                        recordnum,
+                        &import_log,
+                        Level::Error,
+                        &format!("{path:?} not processed: {e}"),
+                        &conn,
+                    );
+                    cleanup(cleanup_files, path, &import_log);
                     continue;
                 }
             };
@@ -263,7 +296,7 @@ fn main() {
                                     &format!("Not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path);
+                                cleanup(cleanup_files, path, &import_log);
                                 continue;
                             }
                         };
@@ -293,7 +326,7 @@ fn main() {
                                 &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -305,7 +338,7 @@ fn main() {
                         }
                         Err(e) => {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error committing class data insert to database ({table} table): {e}"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -314,7 +347,7 @@ fn main() {
                     for count in speed_range_count {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -325,7 +358,7 @@ fn main() {
                         }
                         Err(e) => {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error committing speed range data insert to database ({table} table): {e}"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -340,7 +373,7 @@ fn main() {
                         Ok(v) => v,
                         Err(e) => {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error getting data from tc_clacount table for {recordnum}: {e}"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     };
@@ -350,7 +383,7 @@ fn main() {
                     for count in volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -362,7 +395,7 @@ fn main() {
                         Err(e) => {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error committing hourly volume data into database ({table} table): {e}"), &conn);
 
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -376,7 +409,7 @@ fn main() {
                     for count in avg_speed {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -388,7 +421,7 @@ fn main() {
                         Err(e) => {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error committing hourly speed averages into database ({table} table): {e}"), &conn);
 
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -405,7 +438,7 @@ fn main() {
                                 &format!("Not processed: {e}"),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     };
@@ -426,7 +459,7 @@ fn main() {
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum,  &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -454,7 +487,7 @@ fn main() {
                                 ),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -472,7 +505,7 @@ fn main() {
                                     &format!("Not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path);
+                                cleanup(cleanup_files, path, &import_log);
                                 continue;
                             }
                         };
@@ -484,7 +517,7 @@ fn main() {
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum,  &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -511,7 +544,7 @@ fn main() {
                                 ),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -529,7 +562,7 @@ fn main() {
                         Ok(v) => v,
                         Err(e) => {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error getting data from tc_15minvolcount_new table for {recordnum}: {e}"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     };
@@ -539,7 +572,7 @@ fn main() {
                     for count in volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -551,7 +584,7 @@ fn main() {
                         Err(e) => {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error committing class-hourly volume data into database ({table} table): {e}"), &conn);
 
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -569,7 +602,7 @@ fn main() {
                                     &format!("Not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path);
+                                cleanup(cleanup_files, path, &import_log);
                                 continue;
                             }
                         };
@@ -581,7 +614,7 @@ fn main() {
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -608,7 +641,7 @@ fn main() {
                                 ),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -626,7 +659,7 @@ fn main() {
                                     &format!("Not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path);
+                                cleanup(cleanup_files, path, &import_log);
                                 continue;
                             }
                         };
@@ -644,7 +677,7 @@ fn main() {
                                 &format!("Error inserting count {count:?}: {e}"),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -671,7 +704,7 @@ fn main() {
                                 ),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path);
+                            cleanup(cleanup_files, path, &import_log);
                             continue;
                         }
                     }
@@ -794,7 +827,7 @@ fn main() {
                 log_msg(recordnum,  &import_log, Level::Error, &format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect."), &conn);
             }
 
-            cleanup(cleanup_files, path);
+            cleanup(cleanup_files, path, &import_log);
         }
         // Wait to try again
         thread::sleep(time::Duration::from_secs(TIME_BETWEEN_LOOPS));
@@ -817,10 +850,15 @@ fn collect_paths(dir: PathBuf, paths: &mut Vec<PathBuf>) -> io::Result<&mut Vec<
     Ok(paths)
 }
 
-fn cleanup(cleanup_files: bool, path: &PathBuf) {
+fn cleanup(cleanup_files: bool, path: &PathBuf, log: impl Log) {
     if cleanup_files {
         if let Err(e) = fs::remove_file(path) {
-            error!("Unable to delete file {path:?} {e}");
+            log.log(
+                &Record::builder()
+                    .args(format_args!("Unable to delete file {path:?} {e}"))
+                    .level(Level::Error)
+                    .build(),
+            );
         }
     }
 }
