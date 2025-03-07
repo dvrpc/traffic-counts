@@ -4,7 +4,7 @@
 use std::fs::{self, File};
 use std::path::Path;
 
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{format::ParseErrorKind, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::{Reader, ReaderBuilder};
 use log::error;
 
@@ -13,7 +13,7 @@ use crate::{
     IndividualBicycle, IndividualVehicle,
 };
 
-// headers stripped of double quotes and spaces
+// Headers stripped of double quotes and spaces.
 const FIFTEEN_MINUTE_VEHICLE_HEADER: &str = "Number,Date,Time,Channel1";
 const FIFTEEN_MINUTE_BIKE_OR_PED_HEADER: &str = "Time,";
 const IND_VEH_OR_IND_BIKE: &str = "Veh.No.,Date,Time,Channel,Class,Speed";
@@ -92,25 +92,16 @@ impl Extract for FifteenMinuteVehicle {
         // Iterate through data rows.
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
-            // Parse date.
-            let date_format = "%-m/%-d/%Y";
-            let date_col = &row.as_ref().unwrap()[1];
-            let count_date = NaiveDate::parse_from_str(date_col, date_format).unwrap();
-
-            // Parse time.
-            let time_format = "%-I:%M %P";
-            let time_col = &row.as_ref().unwrap()[2];
-            let count_time = NaiveTime::parse_from_str(time_col, time_format).unwrap();
-
-            let datetime = NaiveDateTime::new(count_date, count_time);
+            let row = row?;
+            let datetime = NaiveDateTime::new(parse_date(&row[1])?, parse_time(&row[2])?);
 
             // There will always be at least one count per row.
             // Extract the first (and perhaps only) direction.
-            match row.as_ref().unwrap().get(3) {
+            match row.get(3) {
                 Some(count) => match count.parse() {
                     Ok(count) => match FifteenMinuteVehicle::new(
                         recordnum,
-                        count_date,
+                        datetime.date(),
                         datetime,
                         count,
                         Some(directions.direction1),
@@ -122,18 +113,18 @@ impl Extract for FifteenMinuteVehicle {
                             continue;
                         }
                     },
-                    Err(e) => return Err(CountError::ParseError(e)),
+                    Err(e) => return Err(CountError::ParseIntError(e)),
                 },
                 None => return Err(CountError::DirectionLenMisMatch),
             }
 
             // There may also be a second count within the row.
             if let Some(direction) = directions.direction2 {
-                match row.as_ref().unwrap().get(4) {
+                match row.get(4) {
                     Some(count) => match count.parse() {
                         Ok(count) => match FifteenMinuteVehicle::new(
                             recordnum,
-                            count_date,
+                            datetime.date(),
                             datetime,
                             count,
                             Some(direction),
@@ -145,18 +136,18 @@ impl Extract for FifteenMinuteVehicle {
                                 continue;
                             }
                         },
-                        Err(e) => return Err(CountError::ParseError(e)),
+                        Err(e) => return Err(CountError::ParseIntError(e)),
                     },
                     None => return Err(CountError::DirectionLenMisMatch),
                 }
             }
             // There may also be a third count within the row.
             if let Some(direction) = directions.direction3 {
-                match row.as_ref().unwrap().get(5) {
+                match row.get(5) {
                     Some(count) => match count.parse() {
                         Ok(count) => match FifteenMinuteVehicle::new(
                             recordnum,
-                            count_date,
+                            datetime.date(),
                             datetime,
                             count,
                             Some(direction),
@@ -168,7 +159,7 @@ impl Extract for FifteenMinuteVehicle {
                                 continue;
                             }
                         },
-                        Err(e) => return Err(CountError::ParseError(e)),
+                        Err(e) => return Err(CountError::ParseIntError(e)),
                     },
                     None => return Err(CountError::DirectionLenMisMatch),
                 }
@@ -189,24 +180,14 @@ impl Extract for IndividualVehicle {
         // Iterate through data rows.
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
-            // Parse date.
-            let date_format = "%-m/%-d/%Y";
-            let date_col = &row.as_ref().unwrap()[1];
-            let count_date = NaiveDate::parse_from_str(date_col, date_format).unwrap();
-
-            // Parse time.
-            let time_format = "%-I:%M:%S %P";
-            let time_col = &row.as_ref().unwrap()[2];
-            let count_time = NaiveTime::parse_from_str(time_col, time_format).unwrap();
-
-            let datetime = NaiveDateTime::new(count_date, count_time);
-
+            let row = row?;
+            let datetime = NaiveDateTime::new(parse_date(&row[1])?, parse_time(&row[2])?);
             let count = match IndividualVehicle::new(
-                count_date,
+                datetime.date(),
                 datetime,
-                row.as_ref().unwrap()[3].parse().unwrap(),
-                row.as_ref().unwrap()[4].parse().unwrap(),
-                row.as_ref().unwrap()[5].parse().unwrap(),
+                row[3].parse()?,
+                row[4].parse()?,
+                row[5].parse()?,
             ) {
                 Ok(v) => v,
                 Err(e) => {
@@ -232,27 +213,14 @@ impl Extract for IndividualBicycle {
         // Iterate through data rows.
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
+            let row = row?;
             // Bicycles are given class 14. Skip if not 14.
-            if row.as_ref().unwrap()[4].parse::<u16>().unwrap() != 14 {
+            if row[4].parse::<u16>()? != 14 {
                 continue;
             }
-            // Parse date.
-            let date_format = "%-m/%-d/%Y";
-            let date_col = &row.as_ref().unwrap()[1];
-            let count_date = NaiveDate::parse_from_str(date_col, date_format).unwrap();
+            let datetime = NaiveDateTime::new(parse_date(&row[1])?, parse_time(&row[2])?);
 
-            // Parse time.
-            let time_format = "%-I:%M:%S %P";
-            let time_col = &row.as_ref().unwrap()[2];
-            let count_time = NaiveTime::parse_from_str(time_col, time_format).unwrap();
-
-            let datetime = NaiveDateTime::new(count_date, count_time);
-
-            let count = match IndividualBicycle::new(
-                count_date,
-                datetime,
-                row.as_ref().unwrap()[3].parse().unwrap(),
-            ) {
+            let count = match IndividualBicycle::new(datetime.date(), datetime, row[3].parse()?) {
                 Ok(v) => v,
                 Err(e) => {
                     error!("{e}");
@@ -281,16 +249,14 @@ impl Extract for FifteenMinuteBicycle {
         // Iterate through data rows.
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
-            // Parse datetime.
-            let datetime_format = "%Y-%m-%d %H:%M:%S";
-            let datetime_col = &row.as_ref().unwrap()[0];
-            let count_dt = NaiveDateTime::parse_from_str(datetime_col, datetime_format).unwrap();
+            let row = row?;
+            let datetime = parse_datetime(&row[0])?;
 
             // Direction1/indir
             match FifteenMinuteBicycle::new(
                 recordnum,
-                count_dt,
-                row.as_ref().unwrap()[2].parse().unwrap(),
+                datetime,
+                row[2].parse()?,
                 directions.direction1,
             ) {
                 Ok(v) => counts.push(v),
@@ -301,12 +267,7 @@ impl Extract for FifteenMinuteBicycle {
             }
             // Optionally direction2/outdir
             if let Some(v) = directions.direction2 {
-                match FifteenMinuteBicycle::new(
-                    recordnum,
-                    count_dt,
-                    row.as_ref().unwrap()[3].parse().unwrap(),
-                    v,
-                ) {
+                match FifteenMinuteBicycle::new(recordnum, datetime, row[3].parse()?, v) {
                     Ok(v) => counts.push(v),
                     Err(e) => {
                         error!("{e}");
@@ -334,16 +295,14 @@ impl Extract for FifteenMinutePedestrian {
         // Iterate through data rows.
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
-            // Parse datetime.
-            let datetime_format = "%Y-%m-%d %H:%M:%S";
-            let datetime_col = &row.as_ref().unwrap()[0];
-            let count_dt = NaiveDateTime::parse_from_str(datetime_col, datetime_format).unwrap();
+            let row = row?;
+            let datetime = parse_datetime(&row[0])?;
 
             // Direction1/indir
             match FifteenMinutePedestrian::new(
                 recordnum,
-                count_dt,
-                row.as_ref().unwrap()[2].parse().unwrap(),
+                datetime,
+                row[2].parse()?,
                 directions.direction1,
             ) {
                 Ok(v) => counts.push(v),
@@ -354,12 +313,7 @@ impl Extract for FifteenMinutePedestrian {
             }
             // Optionally direction2/outdir
             if let Some(v) = directions.direction2 {
-                match FifteenMinutePedestrian::new(
-                    recordnum,
-                    count_dt,
-                    row.as_ref().unwrap()[3].parse().unwrap(),
-                    v,
-                ) {
+                match FifteenMinutePedestrian::new(recordnum, datetime, row[3].parse()?, v) {
                     Ok(v) => counts.push(v),
                     Err(e) => {
                         error!("{e}");
@@ -402,6 +356,48 @@ pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
         }
     }
     Err(CountError::BadHeader(path.to_owned()))
+}
+
+/// Parse time from a str that can be in multiple formats.
+fn parse_time(s: &str) -> Result<NaiveTime, CountError> {
+    let mut err = ParseErrorKind::Invalid;
+
+    for fmt in ["%-I:%M %P", "%-I:%M:%S %P", "%-I:%M%P", "%-I:%M:%S%P"] {
+        match NaiveTime::parse_from_str(s, fmt) {
+            Ok(v) => return Ok(v),
+            Err(e) => err = e.kind(),
+        }
+    }
+    // If no format was successfully used in parsing, return error.
+    Err(CountError::ChronoParseError(err))
+}
+
+/// Parse date from a str that can be in multiple formats.
+fn parse_date(s: &str) -> Result<NaiveDate, CountError> {
+    let mut err = ParseErrorKind::Invalid;
+
+    for fmt in ["%-m/%-d/%Y", "%-m-%-d-%Y"] {
+        match NaiveDate::parse_from_str(s, fmt) {
+            Ok(v) => return Ok(v),
+            Err(e) => err = e.kind(),
+        }
+    }
+    // If no format was successfully used in parsing, return error.
+    Err(CountError::ChronoParseError(err))
+}
+
+/// Parse datetime from a str that can be in multiple formats.
+fn parse_datetime(s: &str) -> Result<NaiveDateTime, CountError> {
+    let mut err = ParseErrorKind::Invalid;
+
+    for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"] {
+        match NaiveDateTime::parse_from_str(s, fmt) {
+            Ok(v) => return Ok(v),
+            Err(e) => err = e.kind(),
+        }
+    }
+    // If no format was successfully used in parsing, return error.
+    Err(CountError::ChronoParseError(err))
 }
 
 #[cfg(test)]
@@ -627,5 +623,47 @@ mod tests {
         let path = Path::new("test_files/vehicle/166905.txt");
         let num_rows = num_nondata_rows(path).unwrap();
         assert_eq!(num_rows, 4);
+    }
+
+    #[test]
+    fn parse_time_hh_mm_ss_p() {
+        assert!(parse_time("03:00:00 PM").is_ok());
+        assert!(parse_time("3:00:00 PM").is_ok());
+        assert!(parse_time("12:00:00 AM").is_ok());
+    }
+    #[test]
+    fn parse_time_hh_mm_ssp() {
+        assert!(parse_time("03:00:00PM").is_ok());
+        assert!(parse_time("3:00:00PM").is_ok());
+        assert!(parse_time("12:00:00AM").is_ok());
+    }
+    #[test]
+    fn parse_time_hh_mm_p() {
+        assert!(parse_time("03:00 PM").is_ok());
+        assert!(parse_time("3:00 PM").is_ok());
+        assert!(parse_time("12:00 AM").is_ok());
+    }
+    #[test]
+    fn parse_time_hh_mmp() {
+        assert!(parse_time("03:00PM").is_ok());
+        assert!(parse_time("3:00PM").is_ok());
+        assert!(parse_time("12:00AM").is_ok());
+    }
+    #[test]
+    fn parse_date_correct() {
+        assert!(parse_date("3/15/2025").is_ok());
+        assert!(parse_date("03/15/2025").is_ok());
+        assert!(parse_date("03/05/2025").is_ok());
+        assert!(parse_date("03/5/2025").is_ok());
+        assert!(parse_date("3-15-2025").is_ok());
+        assert!(parse_date("03-15-2025").is_ok());
+        assert!(parse_date("03-05-2025").is_ok());
+        assert!(parse_date("03-5-2025").is_ok());
+    }
+
+    #[test]
+    fn parse_datetime_correct() {
+        assert!(parse_datetime("2025-03-07 23:15:00").is_ok());
+        assert!(parse_datetime("2025-03-07 23:15").is_ok());
     }
 }

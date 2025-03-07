@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::io;
-use std::num::ParseIntError;
+use std::num::{ParseFloatError, ParseIntError};
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -64,7 +64,11 @@ pub enum CountError {
     #[error("mismatch in number of directions between database and data in that file")]
     DirectionLenMisMatch,
     #[error("cannot parse value as number")]
-    ParseError(#[from] ParseIntError),
+    ParseIntError(#[from] ParseIntError),
+    #[error("cannot parse value as number")]
+    ParseFloatError(#[from] ParseFloatError),
+    #[error("cannot parse date/time '{0:?}'")]
+    ChronoParseError(chrono::format::ParseErrorKind),
     #[error("no such vehicle class '{0}'")]
     BadVehicleClass(u8),
     #[error("unable to determine interval from count")]
