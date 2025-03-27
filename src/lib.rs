@@ -860,12 +860,15 @@ pub fn create_speed_and_class_count(
     recordnum: u32,
     directions: &Directions,
     mut counts: Vec<IndividualVehicle>,
-) -> (
-    Vec<TimeBinnedSpeedRangeCount>,
-    Vec<TimeBinnedVehicleClassCount>,
-) {
+) -> Result<
+    (
+        Vec<TimeBinnedSpeedRangeCount>,
+        Vec<TimeBinnedVehicleClassCount>,
+    ),
+    CountError,
+> {
     if counts.is_empty() {
-        return (vec![], vec![]);
+        return Ok((vec![], vec![]));
     }
 
     let mut speed_range_map: HashMap<BinnedCountKey, SpeedRangeCount> = HashMap::new();
@@ -875,11 +878,18 @@ pub fn create_speed_and_class_count(
         // Get the direction from the lane.
         let direction = match count.lane {
             1 => directions.direction1,
-            2 => directions.direction2.unwrap(),
-            3 => directions.direction3.unwrap(),
+            2 => match directions.direction2 {
+                Some(v) => v,
+                None => return Err(CountError::MissingDirection),
+            },
+            3 => match directions.direction3 {
+                Some(v) => v,
+                None => return Err(CountError::MissingDirection),
+            },
             _ => {
-                error!("Unable to determine lane/direction.");
-                continue;
+                return Err(CountError::BadDirection(
+                    "Unable to determine lane/direction.".to_string(),
+                ))
             }
         };
 
@@ -949,11 +959,18 @@ pub fn create_speed_and_class_count(
     for key in all_keys {
         let direction = match key.lane {
             1 => directions.direction1,
-            2 => directions.direction2.unwrap(),
-            3 => directions.direction3.unwrap(),
+            2 => match directions.direction2 {
+                Some(v) => v,
+                None => return Err(CountError::MissingDirection),
+            },
+            3 => match directions.direction3 {
+                Some(v) => v,
+                None => return Err(CountError::MissingDirection),
+            },
             _ => {
-                error!("Unable to determine lane/direction.");
-                continue;
+                return Err(CountError::BadDirection(
+                    "Unable to determine lane/direction.".to_string(),
+                ))
             }
         };
         speed_range_map
@@ -1018,7 +1035,7 @@ pub fn create_speed_and_class_count(
         });
     }
 
-    (speed_range_count, vehicle_class_count)
+    Ok((speed_range_count, vehicle_class_count))
 }
 
 /// Create time-binned bicycle volume count.
@@ -1216,7 +1233,7 @@ mod tests {
 
     use super::*;
     use db::{create_pool, get_creds};
-    use extract_from_file::Extract;
+    use extract_from_file::Bicycles;
 
     #[test]
     fn time_binning_fifteen_min_is_correct() {
@@ -1466,13 +1483,13 @@ mod tests {
     #[test]
     fn create_hourly_avg_speed_count_166905_is_correct() {
         // two directions, two lanes
-        let path = Path::new("test_files/vehicle/166905.txt");
+        let path = Path::new("test_files/vehicle_only/166905.txt");
         let (username, password) = db::get_creds();
         let pool = db::create_pool(username, password).unwrap();
         let conn = pool.get().unwrap();
         let directions = Directions::from_db(166905, &conn).unwrap();
 
-        let counted_vehicles = IndividualVehicle::extract(path, 166905, &directions).unwrap();
+        let counted_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
         let mut hourly_avg_speed = HourlyAvgSpeed::create(166905, directions, counted_vehicles);
         assert_eq!(hourly_avg_speed.len(), 98);
 

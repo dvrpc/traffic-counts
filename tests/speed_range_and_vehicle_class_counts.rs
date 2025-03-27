@@ -5,7 +5,7 @@ use std::path::Path;
 
 use chrono::NaiveDateTime;
 
-use traffic_counts::{extract_from_file::Extract, intermediate::*, *};
+use traffic_counts::{extract_from_file::Bicycles, intermediate::*, *};
 
 #[test]
 fn speed_binning_is_correct() {
@@ -89,21 +89,22 @@ fn speed_binning_is_correct() {
 
 #[test]
 fn empty_periods_created_correctly_166905() {
-    let path = Path::new("test_files/vehicle/166905.txt");
+    let path = Path::new("test_files/vehicle_only/166905.txt");
     let (username, password) = db::get_creds();
     let pool = db::create_pool(username, password).unwrap();
     let conn = pool.get().unwrap();
 
     let directions = Directions::from_db(166905, &conn).unwrap();
 
-    let individual_vehicles = IndividualVehicle::extract(path, 166905, &directions).unwrap();
+    let individual_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
         TimeInterval::FifteenMin,
         166905,
         &directions,
         individual_vehicles,
-    );
+    )
+    .unwrap();
 
     speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
     vehicle_class_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
@@ -166,16 +167,17 @@ fn counts_created_correctly_165367() {
     let (username, password) = db::get_creds();
     let pool = db::create_pool(username, password).unwrap();
     let conn = pool.get().unwrap();
-    let path = Path::new("test_files/vehicle/165367.txt");
+    let path = Path::new("test_files/vehicle_only/165367.txt");
     let directions = Directions::from_db(165367, &conn).unwrap();
-    let individual_vehicles = IndividualVehicle::extract(path, 165367, &directions).unwrap();
+    let individual_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
         TimeInterval::FifteenMin,
         165367,
         &directions,
         individual_vehicles,
-    );
+    )
+    .unwrap();
 
     speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
     vehicle_class_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
@@ -245,20 +247,21 @@ fn counts_created_correctly_165367() {
 #[test]
 fn counts_created_correctly_101() {
     // This file was made up, based on another, but with just over an hour of counts.
-    let path = Path::new("test_files/vehicle/101.csv");
+    let path = Path::new("test_files/vehicle_only/101.csv");
     let directions = Directions::new(
         LaneDirection::East,
         Some(LaneDirection::East),
         Some(LaneDirection::East),
     );
-    let individual_vehicles = IndividualVehicle::extract(path, 101, &directions).unwrap();
+    let individual_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(
         TimeInterval::FifteenMin,
         101,
         &directions,
         individual_vehicles,
-    );
+    )
+    .unwrap();
 
     speed_range_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));
     vehicle_class_count.sort_unstable_by_key(|count| (count.date, count.time.time(), count.lane));

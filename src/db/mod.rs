@@ -59,9 +59,9 @@ pub fn update_setdate(recordnum: u32, conn: &Connection) -> Result<(), CountErro
 }
 
 /// Call database function to calculate and insert AADV.
-pub fn calc_aadv(recordnum: u32, conn: &Connection) -> Result<i32, CountError> {
-    match conn.query_row_as::<i32>(&format!("select calc_aadv({}) from dual", recordnum), &[]) {
-        Ok(v) => Ok(v),
+pub fn calc_aadv(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
+    match conn.query(&format!("select calc_aadv({}) from dual", recordnum), &[]) {
+        Ok(_) => Ok(()),
         Err(_) => Err(CountError::DbError(format!(
             "Unable to calculate AADV for {recordnum}"
         ))),

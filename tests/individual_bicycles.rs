@@ -3,20 +3,20 @@ use std::path::Path;
 use chrono::{NaiveDate, NaiveDateTime};
 
 use traffic_counts::{
-    create_binned_bicycle_vol_count, extract_from_file::Extract, Directions, FifteenMinuteBicycle,
-    IndividualBicycle, LaneDirection, TimeInterval,
+    create_binned_bicycle_vol_count, Directions, FifteenMinuteBicycle, IndividualBicycle,
+    LaneDirection, TimeInterval,
 };
 
 #[test]
 fn empty_periods_created_correctly_178955() {
-    let path = Path::new("test_files/bicycle/178955.csv");
+    let path = Path::new("test_files/vehicle_and_bicycle/178955.csv");
     let directions = Directions {
         direction1: LaneDirection::South,
         direction2: None,
         direction3: None,
     };
 
-    let individual_bicycles = IndividualBicycle::extract(path, 178955, &directions).unwrap();
+    let individual_bicycles = IndividualBicycle::extract(path).unwrap();
 
     let mut bikes15min = create_binned_bicycle_vol_count(
         TimeInterval::FifteenMin,
@@ -50,13 +50,13 @@ fn empty_periods_created_correctly_178955() {
 
 #[test]
 fn counts_correct_178955() {
-    let path = Path::new("test_files/bicycle/178955.csv");
+    let path = Path::new("test_files/vehicle_and_bicycle/178955.csv");
     let directions = Directions {
         direction1: LaneDirection::South,
         direction2: None,
         direction3: None,
     };
-    let individual_bicycles = IndividualBicycle::extract(path, 178955, &directions).unwrap();
+    let individual_bicycles = IndividualBicycle::extract(path).unwrap();
 
     let mut bikes15min = create_binned_bicycle_vol_count(
         TimeInterval::FifteenMin,
@@ -98,14 +98,14 @@ fn counts_correct_178955() {
 
 #[test]
 fn counts_correct_178959() {
-    let path = Path::new("test_files/bicycle/178959.csv");
+    let path = Path::new("test_files/vehicle_and_bicycle/178959.csv");
     let directions = Directions {
         direction1: LaneDirection::East,
         direction2: Some(LaneDirection::West),
         direction3: None,
     };
 
-    let individual_bicycles = IndividualBicycle::extract(path, 178959, &directions).unwrap();
+    let individual_bicycles = IndividualBicycle::extract(path).unwrap();
 
     let mut bikes15min = create_binned_bicycle_vol_count(
         TimeInterval::FifteenMin,

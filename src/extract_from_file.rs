@@ -36,10 +36,10 @@ pub enum InputCount {
     ///
     /// See [`IndividualVehicle`], the corresponding type.
     IndividualVehicle,
-    /// Individual bicycles from StarNext/JAMAR prior to any binning.
+    /// Individual vehicles and individual bicycles from StarNext/JAMAR prior to any binning.
     ///
-    /// See ['IndividualBicycle'], the corresponding type.
-    IndividualBicycle,
+    /// See [`IndividualVehicle`] and [`IndividualBicycle`], the corresponding types.
+    IndividualVehicleAndIndividualBicycle,
 }
 
 impl InputCount {
@@ -60,32 +60,20 @@ impl InputCount {
             "15minutebicycle" => Ok(InputCount::FifteenMinuteBicycle),
             "15minutepedestrian" => Ok(InputCount::FifteenMinutePedestrian),
             "15minutevehicle" => Ok(InputCount::FifteenMinuteVehicle),
-            "vehicle" => Ok(InputCount::IndividualVehicle),
-            "bicycle" => Ok(InputCount::IndividualBicycle),
+            "vehicle_only" => Ok(InputCount::IndividualVehicle),
+            "vehicle_and_bicycle" => Ok(InputCount::IndividualVehicleAndIndividualBicycle),
             _ => Err(CountError::BadLocation(parent.to_string())),
         }
     }
 }
 
-/// A trait for extracting count data from a file.
-pub trait Extract {
-    type Item;
-    fn extract(
+// Extract FifteenMinuteVehicle records from a file.
+impl FifteenMinuteVehicle {
+    pub fn extract(
         path: &Path,
         recordnum: u32,
         directions: &Directions,
-    ) -> Result<Vec<Self::Item>, CountError>;
-}
-
-/// Extract FifteenMinuteVehicle records from a file.
-impl Extract for FifteenMinuteVehicle {
-    type Item = FifteenMinuteVehicle;
-
-    fn extract(
-        path: &Path,
-        recordnum: u32,
-        directions: &Directions,
-    ) -> Result<Vec<Self::Item>, CountError> {
+    ) -> Result<Vec<Self>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
@@ -169,11 +157,14 @@ impl Extract for FifteenMinuteVehicle {
     }
 }
 
-/// Extract IndividualVehicle records from a file.
-impl Extract for IndividualVehicle {
-    type Item = IndividualVehicle;
+/// The number for unknown class depends on which schema is usededj
+pub enum Bicycles {
+    Without, // Modified Schema F
+    With,    // Modified Schema F - With Bikes
+}
 
-    fn extract(path: &Path, _: u32, _: &Directions) -> Result<Vec<Self::Item>, CountError> {
+impl IndividualVehicle {
+    pub fn extract(path: &Path, bicycles: Bicycles) -> Result<Vec<Self>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
@@ -182,18 +173,44 @@ impl Extract for IndividualVehicle {
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             let row = row?;
             let datetime = NaiveDateTime::new(parse_date(&row[1])?, parse_time(&row[2])?);
-            let count = match IndividualVehicle::new(
-                datetime.date(),
-                datetime,
-                row[3].parse()?,
-                row[4].parse()?,
-                row[5].parse()?,
-            ) {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("{e}");
-                    continue;
-                }
+
+            // If bicycles are included, they are given class 14. They should not be included at
+            // all - not as bicycles nor as unclassified, because they are included in separate
+            // recordnum and count.
+            let count = match bicycles {
+                Bicycles::With => match row[4].parse() {
+                    Ok(14) => continue,
+                    Ok(v) => match IndividualVehicle::new(
+                        datetime.date(),
+                        datetime,
+                        row[3].parse()?,
+                        v,
+                        row[5].parse()?,
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("{e}");
+                            continue;
+                        }
+                    },
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
+                },
+                Bicycles::Without => match IndividualVehicle::new(
+                    datetime.date(),
+                    datetime,
+                    row[3].parse()?,
+                    row[4].parse()?,
+                    row[5].parse()?,
+                ) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
+                },
             };
 
             counts.push(count);
@@ -203,10 +220,8 @@ impl Extract for IndividualVehicle {
 }
 
 /// Extract IndividualBicycle records from a file.
-impl Extract for IndividualBicycle {
-    type Item = IndividualBicycle;
-
-    fn extract(path: &Path, _: u32, _: &Directions) -> Result<Vec<Self::Item>, CountError> {
+impl IndividualBicycle {
+    pub fn extract(path: &Path) -> Result<Vec<Self>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
@@ -234,15 +249,16 @@ impl Extract for IndividualBicycle {
     }
 }
 
-/// Extract FifteenMinuteBicycle records from a file.
-impl Extract for FifteenMinuteBicycle {
-    type Item = FifteenMinuteBicycle;
+// impl Extract for FifteenMinuteBicycle {
+//     type Item = FifteenMinuteBicycle;
 
-    fn extract(
+/// Extract FifteenMinuteBicycle records from a file.
+impl FifteenMinuteBicycle {
+    pub fn extract(
         path: &Path,
         recordnum: u32,
         directions: &Directions,
-    ) -> Result<Vec<Self::Item>, CountError> {
+    ) -> Result<Vec<Self>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
@@ -280,15 +296,16 @@ impl Extract for FifteenMinuteBicycle {
     }
 }
 
-/// Extract FifteenMinutePedestrian records from a file.
-impl Extract for FifteenMinutePedestrian {
-    type Item = FifteenMinutePedestrian;
+// impl Extract for FifteenMinutePedestrian {
+//     type Item = FifteenMinutePedestrian;
 
-    fn extract(
+/// Extract FifteenMinutePedestrian records from a file.
+impl FifteenMinutePedestrian {
+    pub fn extract(
         path: &Path,
         recordnum: u32,
         directions: &Directions,
-    ) -> Result<Vec<Self::Item>, CountError> {
+    ) -> Result<Vec<Self>, CountError> {
         let data_file = File::open(path)?;
         let mut rdr = create_reader(&data_file);
 
@@ -407,25 +424,15 @@ mod tests {
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts() {
-        let (username, password) = db::get_creds();
-        let pool = db::create_pool(username, password).unwrap();
-        let conn = pool.get().unwrap();
-
-        let path = Path::new("test_files/vehicle/166905.txt");
-        let directions = Directions::from_db(166905, &conn).unwrap();
-        let counted_vehicles = IndividualVehicle::extract(path, 166905, &directions).unwrap();
+        let path = Path::new("test_files/vehicle_only/166905.txt");
+        let counted_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
         assert_eq!(counted_vehicles.len(), 8706);
     }
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts_by_lane() {
-        let path = Path::new("test_files/vehicle/101.csv");
-        let directions = Directions::new(
-            LaneDirection::East,
-            Some(LaneDirection::East),
-            Some(LaneDirection::East),
-        );
-        let counted_vehicles = IndividualVehicle::extract(path, 101, &directions).unwrap();
+        let path = Path::new("test_files/vehicle_only/101.csv");
+        let counted_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
         assert_eq!(counted_vehicles.len(), 227);
 
         let lane1 = counted_vehicles
@@ -554,7 +561,8 @@ mod tests {
 
     #[test]
     fn count_type_from_location_correct_ind_veh() {
-        let count_type = InputCount::from_parent_dir(Path::new("/vehicle/count_data.csv")).unwrap();
+        let count_type =
+            InputCount::from_parent_dir(Path::new("/vehicle_only/count_data.csv")).unwrap();
         assert_eq!(count_type, InputCount::IndividualVehicle)
     }
 
@@ -593,7 +601,7 @@ mod tests {
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_ind_veh_sample() {
-        let path = Path::new("test_files/vehicle/166905.txt");
+        let path = Path::new("test_files/vehicle_only/166905.txt");
         assert_eq!(num_nondata_rows(path).unwrap(), 4);
     }
 
@@ -620,7 +628,7 @@ mod tests {
 
     #[test]
     fn num_nondata_rows_correct() {
-        let path = Path::new("test_files/vehicle/166905.txt");
+        let path = Path::new("test_files/vehicle_only/166905.txt");
         let num_rows = num_nondata_rows(path).unwrap();
         assert_eq!(num_rows, 4);
     }
