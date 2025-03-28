@@ -12,6 +12,9 @@
 //! derives the appropriate counts from it, and then inserts these into our database and removes
 //! the file.
 //!
+//! **NOTE**: The direction(s) of the count (cldir1 at a minimum, and possibly cldir2 and cldir3)
+//! need to be set in the database prior to the import.
+//!
 //! A [log][`LOG`] of the program's work is kept in the main directory.
 //! The program is able to log most errors and continue its execution,
 //! so that an error in one file will not prevent it from successfully processing another.
@@ -42,7 +45,9 @@
 //!     as the format. Then:
 //!     - leave the radio button checked for *Export all vehicles*
 //!     - click **Next**
-//!     - click the checkboxes for all channels available
+//!     - click the checkboxes for all channels available (unless the count in the database has
+//!       been set up to only correspond to one direction of a bidirectional count; in that case,
+//!       choose the appropriate channel)
 //!     - click the **Output Format** button, and then choose the following settings:
 //!       - under the "Header Fields" column:
 //!         - *Start Date and Time*
