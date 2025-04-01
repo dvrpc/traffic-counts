@@ -82,7 +82,10 @@ impl FifteenMinuteVehicle {
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             let row = row?;
-            let datetime = NaiveDateTime::new(parse_date(&row[1])?, parse_time(&row[2])?);
+            let datetime = NaiveDateTime::new(
+                parse_date(row.get(1).ok_or(CountError::MissingDirection)?)?,
+                parse_time(row.get(2).ok_or(CountError::MissingDataColumn)?)?,
+            );
 
             // There will always be at least one count per row.
             // Extract the first (and perhaps only) direction.
@@ -173,20 +176,23 @@ impl IndividualVehicle {
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             let row = row?;
-            let datetime = NaiveDateTime::new(parse_date(&row[1])?, parse_time(&row[2])?);
+            let datetime = NaiveDateTime::new(
+                parse_date(row.get(1).ok_or(CountError::MissingDataColumn)?)?,
+                parse_time(row.get(2).ok_or(CountError::MissingDataColumn)?)?,
+            );
 
             // If bicycles are included, they are given class 14. They should not be included at
             // all - not as bicycles nor as unclassified, because they are included in separate
             // recordnum and count.
             let count = match bicycles {
-                Bicycles::With => match row[4].parse() {
+                Bicycles::With => match row.get(4).ok_or(CountError::MissingDataColumn)?.parse() {
                     Ok(14) => continue,
                     Ok(v) => match IndividualVehicle::new(
                         datetime.date(),
                         datetime,
-                        row[3].parse()?,
+                        row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
                         v,
-                        row[5].parse()?,
+                        row.get(5).ok_or(CountError::MissingDataColumn)?.parse()?,
                     ) {
                         Ok(v) => v,
                         Err(e) => {
@@ -202,9 +208,9 @@ impl IndividualVehicle {
                 Bicycles::Without => match IndividualVehicle::new(
                     datetime.date(),
                     datetime,
-                    row[3].parse()?,
-                    row[4].parse()?,
-                    row[5].parse()?,
+                    row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    row.get(4).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    row.get(5).ok_or(CountError::MissingDataColumn)?.parse()?,
                 ) {
                     Ok(v) => v,
                     Err(e) => {
@@ -231,12 +237,24 @@ impl IndividualBicycle {
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             let row = row?;
             // Bicycles are given class 14. Skip if not 14.
-            if row[4].parse::<u16>()? != 14 {
+            if row
+                .get(4)
+                .ok_or(CountError::MissingDataColumn)?
+                .parse::<u16>()?
+                != 14
+            {
                 continue;
             }
-            let datetime = NaiveDateTime::new(parse_date(&row[1])?, parse_time(&row[2])?);
+            let datetime = NaiveDateTime::new(
+                parse_date(row.get(1).ok_or(CountError::MissingDataColumn)?)?,
+                parse_time(row.get(2).ok_or(CountError::MissingDataColumn)?)?,
+            );
 
-            let count = match IndividualBicycle::new(datetime.date(), datetime, row[3].parse()?) {
+            let count = match IndividualBicycle::new(
+                datetime.date(),
+                datetime,
+                row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
+            ) {
                 Ok(v) => v,
                 Err(e) => {
                     error!("{e}");
@@ -264,13 +282,13 @@ impl FifteenMinuteBicycle {
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             let row = row?;
-            let datetime = parse_datetime(&row[0])?;
+            let datetime = parse_datetime(row.get(0).ok_or(CountError::MissingDataColumn)?)?;
 
             // Direction1/indir
             match FifteenMinuteBicycle::new(
                 recordnum,
                 datetime,
-                row[2].parse()?,
+                row.get(2).ok_or(CountError::MissingDataColumn)?.parse()?,
                 directions.direction1,
             ) {
                 Ok(v) => counts.push(v),
@@ -281,7 +299,12 @@ impl FifteenMinuteBicycle {
             }
             // Optionally direction2/outdir
             if let Some(v) = directions.direction2 {
-                match FifteenMinuteBicycle::new(recordnum, datetime, row[3].parse()?, v) {
+                match FifteenMinuteBicycle::new(
+                    recordnum,
+                    datetime,
+                    row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    v,
+                ) {
                     Ok(v) => counts.push(v),
                     Err(e) => {
                         error!("{e}");
@@ -308,13 +331,13 @@ impl FifteenMinutePedestrian {
         let mut counts = vec![];
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             let row = row?;
-            let datetime = parse_datetime(&row[0])?;
+            let datetime = parse_datetime(row.get(0).ok_or(CountError::MissingDataColumn)?)?;
 
             // Direction1/indir
             match FifteenMinutePedestrian::new(
                 recordnum,
                 datetime,
-                row[2].parse()?,
+                row.get(2).ok_or(CountError::MissingDataColumn)?.parse()?,
                 directions.direction1,
             ) {
                 Ok(v) => counts.push(v),
@@ -325,7 +348,12 @@ impl FifteenMinutePedestrian {
             }
             // Optionally direction2/outdir
             if let Some(v) = directions.direction2 {
-                match FifteenMinutePedestrian::new(recordnum, datetime, row[3].parse()?, v) {
+                match FifteenMinutePedestrian::new(
+                    recordnum,
+                    datetime,
+                    row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    v,
+                ) {
                     Ok(v) => counts.push(v),
                     Err(e) => {
                         error!("{e}");

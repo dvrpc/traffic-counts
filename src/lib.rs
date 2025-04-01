@@ -63,6 +63,8 @@ pub enum CountError {
     LocationHeaderMisMatch(PathBuf),
     #[error("mismatch in number of directions between database and data in that file")]
     DirectionLenMisMatch,
+    #[error("data does not exist in expected column")]
+    MissingDataColumn,
     #[error("cannot parse value as number")]
     ParseIntError(#[from] ParseIntError),
     #[error("cannot parse value as number")]
