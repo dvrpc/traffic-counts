@@ -250,9 +250,6 @@ impl IndividualBicycle {
     }
 }
 
-// impl Extract for FifteenMinuteBicycle {
-//     type Item = FifteenMinuteBicycle;
-
 /// Extract FifteenMinuteBicycle records from a file.
 impl FifteenMinuteBicycle {
     pub fn extract(
@@ -296,9 +293,6 @@ impl FifteenMinuteBicycle {
         Ok(counts)
     }
 }
-
-// impl Extract for FifteenMinutePedestrian {
-//     type Item = FifteenMinutePedestrian;
 
 /// Extract FifteenMinutePedestrian records from a file.
 impl FifteenMinutePedestrian {
