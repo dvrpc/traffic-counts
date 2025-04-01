@@ -14,7 +14,8 @@ use crate::{
 };
 
 // Headers stripped of double quotes and spaces.
-const FIFTEEN_MINUTE_VEHICLE_HEADER: &str = "Number,Date,Time,Channel1";
+const FIFTEEN_MINUTE_VEHICLE_HEADER1: &str = "Number,Date,Time,Channel1";
+const FIFTEEN_MINUTE_VEHICLE_HEADER2: &str = "Number,Date,Time,Channel2";
 const FIFTEEN_MINUTE_BIKE_OR_PED_HEADER: &str = "Time,";
 const IND_VEH_OR_IND_BIKE: &str = "Veh.No.,Date,Time,Channel,Class,Speed";
 
@@ -366,7 +367,8 @@ pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
         num_rows += 1;
         let line = line.replace(['"', ' '], "");
         if line.starts_with(FIFTEEN_MINUTE_BIKE_OR_PED_HEADER)
-            || line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER)
+            || line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER1)
+            || line.contains(FIFTEEN_MINUTE_VEHICLE_HEADER2)
             || line.contains(IND_VEH_OR_IND_BIKE)
         {
             return Ok(num_rows);
