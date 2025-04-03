@@ -99,6 +99,7 @@ use std::thread;
 use std::time;
 
 use log::{Level, LevelFilter, Log, Record};
+use oracle::ConnStatus;
 use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
@@ -181,10 +182,69 @@ fn main() {
             return;
         }
     };
-    let pool = db::create_pool(username, password).unwrap();
-    let conn = pool.get().unwrap();
+    let pool = match db::create_pool(username, password) {
+        Ok(v) => v,
+        Err(e) => {
+            import_log.log(
+                &Record::builder()
+                    .args(format_args!("Unable to get db connection pool: {e}."))
+                    .level(Level::Error)
+                    .build(),
+            );
+            return;
+        }
+    };
+    let mut conn = match pool.get() {
+        Ok(v) => v,
+        Err(e) => {
+            import_log.log(
+                &Record::builder()
+                    .args(format_args!("Unable to get db connection: {e}."))
+                    .level(Level::Error)
+                    .build(),
+            );
+            return;
+        }
+    };
 
     loop {
+        // Check the connection and try to get another if not "normal".
+        match conn.status() {
+            Ok(v) => {
+                if v != ConnStatus::Normal {
+                    conn = match pool.get() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            import_log.log(
+                                &Record::builder()
+                                    .args(format_args!(
+                                        "Unable to get db connection ({e}), trying again..."
+                                    ))
+                                    .level(Level::Error)
+                                    .build(),
+                            );
+                            // Wait to try again
+                            thread::sleep(time::Duration::from_secs(30));
+                            continue;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                import_log.log(
+                    &Record::builder()
+                        .args(format_args!(
+                            "Unable to check db connection ({e}), will try to check again and connect..."
+                        ))
+                        .level(Level::Error)
+                        .build(),
+                );
+                // Wait to try again
+                thread::sleep(time::Duration::from_secs(30));
+                continue;
+            }
+        };
+
         // Recreate the logs in case they somehow get deleted.
         let _ = OpenOptions::new()
             .append(true)
