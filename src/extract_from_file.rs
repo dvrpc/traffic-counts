@@ -284,6 +284,18 @@ impl FifteenMinuteBicycle {
             let row = row?;
             let datetime = parse_datetime(row.get(0).ok_or(CountError::MissingDataColumn)?)?;
 
+            // Ignore row if no value in total count column.
+            match row
+                .get(1)
+                .ok_or(CountError::MissingDataColumn)?
+                .parse::<u32>()
+            {
+                Ok(_) => (),
+                Err(_) => {
+                    continue;
+                }
+            };
+
             // Direction1/indir
             match FifteenMinuteBicycle::new(
                 recordnum,
@@ -332,6 +344,18 @@ impl FifteenMinutePedestrian {
         for row in rdr.records().skip(num_nondata_rows(path)?) {
             let row = row?;
             let datetime = parse_datetime(row.get(0).ok_or(CountError::MissingDataColumn)?)?;
+
+            // Ignore row if no value in total count column.
+            match row
+                .get(1)
+                .ok_or(CountError::MissingDataColumn)?
+                .parse::<u32>()
+            {
+                Ok(_) => (),
+                Err(_) => {
+                    continue;
+                }
+            };
 
             // Direction1/indir
             match FifteenMinutePedestrian::new(
@@ -423,7 +447,7 @@ fn parse_time(s: &str) -> Result<NaiveTime, CountError> {
 fn parse_date(s: &str) -> Result<NaiveDate, CountError> {
     let mut err = ParseErrorKind::Invalid;
 
-    for fmt in ["%-m/%-d/%Y", "%-m-%-d-%Y"] {
+    for fmt in ["%-m/%-d/%Y", "%-m-%-d-%Y", "%Y-%m-%d"] {
         match NaiveDate::parse_from_str(s, fmt) {
             Ok(v) => return Ok(v),
             Err(e) => err = e.kind(),
@@ -450,7 +474,7 @@ fn parse_datetime(s: &str) -> Result<NaiveDateTime, CountError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{db, LaneDirection};
+    use crate::LaneDirection;
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts() {
@@ -702,6 +726,7 @@ mod tests {
         assert!(parse_date("03-15-2025").is_ok());
         assert!(parse_date("03-05-2025").is_ok());
         assert!(parse_date("03-5-2025").is_ok());
+        assert!(parse_date("2025-03-05").is_ok());
     }
 
     #[test]
