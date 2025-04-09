@@ -403,7 +403,13 @@ pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
 fn parse_time(s: &str) -> Result<NaiveTime, CountError> {
     let mut err = ParseErrorKind::Invalid;
 
-    for fmt in ["%-I:%M %P", "%-I:%M:%S %P", "%-I:%M%P", "%-I:%M:%S%P"] {
+    for fmt in [
+        "%-I:%M %P",
+        "%-I:%M:%S %P",
+        "%-I:%M%P",
+        "%-I:%M:%S%P",
+        "%H:%M:%S",
+    ] {
         match NaiveTime::parse_from_str(s, fmt) {
             Ok(v) => return Ok(v),
             Err(e) => err = e.kind(),
@@ -477,13 +483,12 @@ mod tests {
         assert_eq!(lane3.len(), 27);
     }
 
+    /// Note that 168193's contents doesn't match with db: this was one that had previously
+    /// been separated into two different counts due to limitations of previous import program.
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_168193() {
-        let (username, password) = db::get_creds();
-        let pool = db::create_pool(username, password).unwrap();
-        let conn = pool.get().unwrap();
         let path = Path::new("test_files/15minutevehicle/168193.txt");
-        let directions = Directions::from_db(168193, &conn).unwrap();
+        let directions = Directions::new(LaneDirection::East, Some(LaneDirection::West), None);
         let fifteen_min_volcount =
             FifteenMinuteVehicle::extract(path, 168193, &directions).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 384)
@@ -680,6 +685,12 @@ mod tests {
         assert!(parse_time("03:00PM").is_ok());
         assert!(parse_time("3:00PM").is_ok());
         assert!(parse_time("12:00AM").is_ok());
+    }
+    #[test]
+    fn parse_time_24hh_mm_ss() {
+        assert!(parse_time("03:00:00").is_ok());
+        assert!(parse_time("12:00:00").is_ok());
+        assert!(parse_time("23:00:00").is_ok());
     }
     #[test]
     fn parse_date_correct() {
