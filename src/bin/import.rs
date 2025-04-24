@@ -115,7 +115,13 @@ use traffic_counts::{
 };
 
 const LOG: &str = "import.log";
+const REVIEW_DIR: &str = "for_review"; // Directory to place files to review.
 const TIME_BETWEEN_LOOPS: u64 = 20;
+
+enum CleanMethod {
+    Delete,
+    Move,
+}
 
 fn main() {
     // Load file containing environment variables, panic if it doesn't exist.
@@ -127,14 +133,6 @@ fn main() {
 
     // Get env var for path where log will be, panic if it doesn't exist.
     let log_dir = env::var("LOG_DIR").expect("Unable to load log directory path from .env file.");
-
-    // Get env var for whether or not to clean up files.
-    // (When run in production, we want to remove the data files after they've been processed.)
-    let cleanup_files = match env::var("IMPORT_CLEANUP_FILES") {
-        Ok(v) if v == "true" => true,
-        Ok(_) => false,
-        Err(_) => false,
-    };
 
     // Set up logging, panic if it fails.
     let import_config = ConfigBuilder::new().set_time_format_rfc3339().build();
@@ -284,7 +282,7 @@ fn main() {
                             .level(Level::Error)
                             .build(),
                     );
-                    cleanup(cleanup_files, path, &import_log);
+                    cleanup(CleanMethod::Move, path, &import_log);
                     continue;
                 }
             };
@@ -298,7 +296,7 @@ fn main() {
                             .level(Level::Error)
                             .build(),
                     );
-                    cleanup(cleanup_files, path, &import_log);
+                    cleanup(CleanMethod::Move, path, &import_log);
                     continue;
                 }
             };
@@ -315,7 +313,7 @@ fn main() {
                         .level(Level::Error)
                         .build(),
                 );
-                cleanup(cleanup_files, path, &import_log);
+                cleanup(CleanMethod::Move, path, &import_log);
                 continue;
             }
 
@@ -336,7 +334,7 @@ fn main() {
                     ),
                     &conn,
                 );
-                cleanup(cleanup_files, path, &import_log);
+                cleanup(CleanMethod::Move, path, &import_log);
                 continue;
             }
             if let Some(v) = recordnum2 {
@@ -356,7 +354,7 @@ fn main() {
                         ),
                         &conn,
                     );
-                    cleanup(cleanup_files, path, &import_log);
+                    cleanup(CleanMethod::Move, path, &import_log);
                     continue;
                 }
             }
@@ -372,7 +370,7 @@ fn main() {
                         &format!("{path:?} not processed: {e}"),
                         &conn,
                     );
-                    cleanup(cleanup_files, path, &import_log);
+                    cleanup(CleanMethod::Move, path, &import_log);
                     continue;
                 }
             };
@@ -420,7 +418,7 @@ fn main() {
                                 &format!("Not processed: {e}"),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     };
@@ -442,7 +440,7 @@ fn main() {
                                 &format!("Error creating speed/class count: {e:?}; further processing has been abandoned"),
                                 &conn,
                             );
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue 'paths_loop;
                             }
                         };
@@ -464,7 +462,7 @@ fn main() {
                                 &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -476,7 +474,7 @@ fn main() {
                         }
                         Err(e) => {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error committing class data insert to database ({table} table): {e}"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     }
@@ -485,7 +483,7 @@ fn main() {
                     for count in speed_range_count {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -496,7 +494,7 @@ fn main() {
                         }
                         Err(e) => {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error committing speed range data insert to database ({table} table): {e}"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     }
@@ -511,7 +509,7 @@ fn main() {
                         Ok(v) => v,
                         Err(e) => {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error getting data from tc_clacount table for {recordnum1}: {e}"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     };
@@ -521,7 +519,7 @@ fn main() {
                     for count in volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -533,7 +531,7 @@ fn main() {
                         Err(e) => {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error committing hourly volume data into database ({table} table): {e}"), &conn);
 
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     }
@@ -547,7 +545,7 @@ fn main() {
                     for count in avg_speed {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -559,7 +557,7 @@ fn main() {
                         Err(e) => {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error committing hourly speed averages into database ({table} table): {e}"), &conn);
 
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     }
@@ -580,7 +578,7 @@ fn main() {
                                     log_msg(
                                         recordnum2, &import_log, Level::Error, &format!("{recordnum2} not processed: type in database is incorrect, should be 'Bicycle 5'"), &conn,
                                     );
-                                    cleanup(cleanup_files, path, &import_log);
+                                    cleanup(CleanMethod::Move, path, &import_log);
                                     continue;
                                 }
                             }
@@ -588,7 +586,7 @@ fn main() {
                                 log_msg(
                                         recordnum2, &import_log, Level::Error, &format!("{recordnum2} not processed: error checking type in database: {e}"), &conn,
                                     );
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue;
                             }
                         }
@@ -604,7 +602,7 @@ fn main() {
                                     &format!("Not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue;
                             }
                         };
@@ -619,7 +617,7 @@ fn main() {
                                     &format!("{path:?} not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue;
                             }
                         };
@@ -640,7 +638,7 @@ fn main() {
                         for count in fifteen_min_volcount {
                             if let Err(e) = count.insert(&mut prepared) {
                                 log_msg(recordnum2,  &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue 'paths_loop;
                             }
                         }
@@ -668,7 +666,7 @@ fn main() {
                                     ),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue;
                             }
                         }
@@ -687,7 +685,7 @@ fn main() {
                                     &format!("Not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue;
                             }
                         };
@@ -699,7 +697,7 @@ fn main() {
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum1,  &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -726,7 +724,7 @@ fn main() {
                                 ),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     }
@@ -744,7 +742,7 @@ fn main() {
                         Ok(v) => v,
                         Err(e) => {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error getting data from tc_15minvolcount_new table for {recordnum1}: {e}"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     };
@@ -754,7 +752,7 @@ fn main() {
                     for count in volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -766,7 +764,7 @@ fn main() {
                         Err(e) => {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error committing class-hourly volume data into database ({table} table): {e}"), &conn);
 
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     }
@@ -784,7 +782,7 @@ fn main() {
                                     &format!("Not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue;
                             }
                         };
@@ -796,7 +794,7 @@ fn main() {
                     for count in fifteen_min_volcount {
                         if let Err(e) = count.insert(&mut prepared) {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -823,7 +821,7 @@ fn main() {
                                 ),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     }
@@ -841,7 +839,7 @@ fn main() {
                                     &format!("Not processed: {e}"),
                                     &conn,
                                 );
-                                cleanup(cleanup_files, path, &import_log);
+                                cleanup(CleanMethod::Move, path, &import_log);
                                 continue;
                             }
                         };
@@ -859,7 +857,7 @@ fn main() {
                                 &format!("Error inserting count {count:?}: {e}"),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue 'paths_loop;
                         }
                     }
@@ -886,7 +884,7 @@ fn main() {
                                 ),
                                 &conn,
                             );
-                            cleanup(cleanup_files, path, &import_log);
+                            cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }
                     }
@@ -1087,7 +1085,7 @@ fn main() {
                 }
             }
 
-            cleanup(cleanup_files, path, &import_log);
+            cleanup(CleanMethod::Delete, path, &import_log);
         }
         // Wait to try again
         thread::sleep(time::Duration::from_secs(TIME_BETWEEN_LOOPS));
@@ -1098,6 +1096,13 @@ fn main() {
 fn collect_paths(dir: PathBuf, paths: &mut Vec<PathBuf>) -> io::Result<&mut Vec<PathBuf>> {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
+
+        // Ignore files in the directory for reviewing files.
+        if let Some(v) = path.to_str() {
+            if v.contains(REVIEW_DIR) {
+                continue;
+            }
+        }
 
         if path.is_dir() {
             collect_paths(path, paths)?;
@@ -1110,15 +1115,43 @@ fn collect_paths(dir: PathBuf, paths: &mut Vec<PathBuf>) -> io::Result<&mut Vec<
     Ok(paths)
 }
 
-fn cleanup(cleanup_files: bool, path: &PathBuf, log: impl Log) {
-    if cleanup_files {
-        if let Err(e) = fs::remove_file(path) {
-            log.log(
-                &Record::builder()
-                    .args(format_args!("Unable to delete file {path:?} {e}"))
-                    .level(Level::Error)
-                    .build(),
-            );
+fn cleanup(method: CleanMethod, path: &PathBuf, log: impl Log) {
+    match method {
+        CleanMethod::Delete => {
+            if let Err(e) = fs::remove_file(path) {
+                log.log(
+                    &Record::builder()
+                        .args(format_args!("Unable to delete file {path:?} {e}"))
+                        .level(Level::Error)
+                        .build(),
+                );
+            }
+        }
+        CleanMethod::Move => {
+            // Get current filename and then construct new path.
+            let filename = match path.as_path().file_name() {
+                Some(v) => v,
+                None => return,
+            };
+            let mut ancestors = path.as_path().ancestors();
+            ancestors.next(); // Remove filename.
+            ancestors.next(); // Remove parent directory.
+
+            let new_path = if let Some(v) = ancestors.next() {
+                v.join(REVIEW_DIR).join(filename)
+            } else {
+                return;
+            };
+
+            // Move it.
+            if let Err(e) = fs::rename(path, new_path) {
+                log.log(
+                    &Record::builder()
+                        .args(format_args!("Unable to move file {path:?} {e}"))
+                        .level(Level::Error)
+                        .build(),
+                );
+            }
         }
     }
 }
