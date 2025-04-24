@@ -9,7 +9,7 @@ use traffic_counts::{
 
 #[test]
 fn empty_periods_created_correctly_178955() {
-    let path = Path::new("test_files/vehicle_and_bicycle/178955.csv");
+    let path = Path::new("test_files/jamar_vehicle_and_bicycle/178955.csv");
     let directions = Directions {
         direction1: LaneDirection::South,
         direction2: None,
@@ -50,7 +50,7 @@ fn empty_periods_created_correctly_178955() {
 
 #[test]
 fn counts_correct_178955() {
-    let path = Path::new("test_files/vehicle_and_bicycle/178955.csv");
+    let path = Path::new("test_files/jamar_vehicle_and_bicycle/178955.csv");
     let directions = Directions {
         direction1: LaneDirection::South,
         direction2: None,
@@ -98,7 +98,7 @@ fn counts_correct_178955() {
 
 #[test]
 fn counts_correct_178959() {
-    let path = Path::new("test_files/vehicle_and_bicycle/178959.csv");
+    let path = Path::new("test_files/jamar_vehicle_and_bicycle/178959.csv");
     let directions = Directions {
         direction1: LaneDirection::East,
         direction2: Some(LaneDirection::West),

@@ -1485,7 +1485,7 @@ mod tests {
     #[test]
     fn create_hourly_avg_speed_count_166905_is_correct() {
         // two directions, two lanes
-        let path = Path::new("test_files/vehicle_only/166905.txt");
+        let path = Path::new("test_files/jamar_vehicle/166905.txt");
         let (username, password) = db::get_creds();
         let pool = db::create_pool(username, password).unwrap();
         let conn = pool.get().unwrap();

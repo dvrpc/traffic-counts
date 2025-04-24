@@ -1,12 +1,18 @@
 //! Import traffic counts to our database from files.
-//! This program watches a directory for files to be uploaded to one of the following subdirectories:
-//!   - vehicle_only/ - for raw, unbinned class and speed counts of [vehicles][IndividualVehicle], from STARneXt/JAMAR
-//!   - vehicle_and_bicycle/ - for raw, unbinned class and speed counts of [vehicles][IndividualVehicle] *and* [bicycles][IndividualBicycle], from STARneXt/JAMAR
-//!   - 15minutevehicle/ - for [pre-binned, 15-minute volume counts][FifteenMinuteVehicle] from STARneXt/JAMAR
-//!   - 15minutebicycle/ - for [pre-binned, 15-minute bicycle counts][FifteenMinuteBicycle] from
-//!     Eco-Counter
-//!   - 15minutepedestrian/ - for [pre-binned, 15-minute pedestrian counts][FifteenMinutePedestrian]
-//!     from Eco-Counter
+//! This program watches a directory for files to be uploaded to one of the following
+//! subdirectories:
+//!   - jamar_vehicle/ - for raw, unbinned class and speed counts of [vehicles][IndividualVehicle],
+//!     from STARneXt/JAMAR
+//!   - jamar_bicycle/ - for raw, unbinned class and speed counts of [bicycles][IndividualBicycle],
+//!     from STARneXt/JAMAR
+//!   - jamar_vehicle_and_bicycle/ - for raw, unbinned class and speed counts of
+//!     [vehicles][IndividualVehicle] *and* [bicycles][IndividualBicycle], from STARneXt/JAMAR
+//!   - jamar_15minutevehicle/ - for
+//!     [pre-binned, 15-minute volume counts][FifteenMinuteVehicle] from STARneXt/JAMAR
+//!   - ecocounter_15minutebicycle/ - for
+//!     [pre-binned, 15-minute bicycle counts][FifteenMinuteBicycle] from Eco-Counter
+//!   - ecocounter_15minutepedestrian/ - for
+//!     [pre-binned, 15-minute pedestrian counts][FifteenMinutePedestrian] from Eco-Counter
 //!
 //! When a file is found, the program verifies that it contains the correct/expected kind of data,
 //! derives the appropriate counts from it, and then inserts these into our database and removes
@@ -764,6 +770,96 @@ fn main() {
                         Err(e) => {
                             log_msg(recordnum1, &import_log, Level::Error, &format!("Error committing class-hourly volume data into database ({table} table): {e}"), &conn);
 
+                            cleanup(CleanMethod::Move, path, &import_log);
+                            continue;
+                        }
+                    }
+                }
+                InputCount::IndividualBicycle => {
+                    // Ensure that the count type is correct in the database.
+                    // (It's previously been mostly incorrect.)
+                    match conn.query_row_as::<String>(
+                        "select type from tc_header where recordnum = :1",
+                        &[&recordnum1],
+                    ) {
+                        Ok(v) => {
+                            if v != "Bicycle 5" {
+                                log_msg(
+                                    recordnum1, &import_log, Level::Error, &format!("{recordnum1} not processed: type in database is incorrect, should be 'Bicycle 5'"), &conn,
+                                );
+                                cleanup(CleanMethod::Move, path, &import_log);
+                                continue;
+                            }
+                        }
+                        Err(e) => {
+                            log_msg(
+                                    recordnum1, &import_log, Level::Error, &format!("{recordnum1} not processed: error checking type in database: {e}"), &conn,
+                                );
+                            cleanup(CleanMethod::Move, path, &import_log);
+                            continue;
+                        }
+                    }
+
+                    // Extract data from CSV/text file.
+                    let counts = match IndividualBicycle::extract(path) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            log_msg(
+                                recordnum1,
+                                &import_log,
+                                Level::Error,
+                                &format!("Not processed: {e}"),
+                                &conn,
+                            );
+                            cleanup(CleanMethod::Move, path, &import_log);
+                            continue;
+                        }
+                    };
+
+                    // Create aggregated 15-minute bicycle count from this.
+                    let fifteen_min_volcount = create_binned_bicycle_vol_count(
+                        TimeInterval::FifteenMin,
+                        recordnum1,
+                        &directions1,
+                        counts,
+                    );
+
+                    // Delete existing records from db.
+                    FifteenMinuteBicycle::delete(&conn, recordnum1).unwrap();
+
+                    // Create prepared statements and use them to insert counts.
+                    let mut prepared = FifteenMinuteBicycle::prepare_insert(&conn).unwrap();
+                    for count in fifteen_min_volcount {
+                        if let Err(e) = count.insert(&mut prepared) {
+                            log_msg(recordnum1,  &import_log, Level::Error, &format!("Error inserting count {count:?}: {e}; further processing has been abandoned"), &conn);
+                            cleanup(CleanMethod::Move, path, &import_log);
+                            continue 'paths_loop;
+                        }
+                    }
+                    let table = <FifteenMinuteBicycle as Crud>::COUNT_TABLE;
+
+                    match conn.commit() {
+                        Ok(()) => {
+                            log_msg(
+                                recordnum1,
+                                &import_log,
+                                Level::Info,
+                                &format!(
+                                "Successfully committed data insert to database ({table} table)"
+                            ),
+                                &conn,
+                            );
+                        }
+                        Err(e) => {
+                            log_msg(
+                                recordnum1,
+                                &import_log,
+                                Level::Error,
+                                &format!(
+                                    "Error committing data insert to database ({table} table): {e}"
+                                ),
+                                &conn,
+                            );
                             cleanup(CleanMethod::Move, path, &import_log);
                             continue;
                         }

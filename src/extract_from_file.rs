@@ -37,6 +37,10 @@ pub enum InputCount {
     ///
     /// See [`IndividualVehicle`], the corresponding type.
     IndividualVehicle,
+    /// Individual bicycles from StarNext/JAMAR prior to any binning.
+    ///
+    /// See [`IndividualBicycle`], the corresponding type.
+    IndividualBicycle,
     /// Individual vehicles and individual bicycles from StarNext/JAMAR prior to any binning.
     ///
     /// See [`IndividualVehicle`] and [`IndividualBicycle`], the corresponding types.
@@ -58,10 +62,11 @@ impl InputCount {
             .ok_or(CountError::BadPath(path.to_owned()))?;
 
         match parent {
-            "15minutebicycle" => Ok(InputCount::FifteenMinuteBicycle),
-            "15minutepedestrian" => Ok(InputCount::FifteenMinutePedestrian),
-            "15minutevehicle" => Ok(InputCount::FifteenMinuteVehicle),
-            "vehicle_only" => Ok(InputCount::IndividualVehicle),
+            "ecocounter_15minutebicycle" => Ok(InputCount::FifteenMinuteBicycle),
+            "ecocounter_15minutepedestrian" => Ok(InputCount::FifteenMinutePedestrian),
+            "jamar_15minutevehicle" => Ok(InputCount::FifteenMinuteVehicle),
+            "jamar_vehicle" => Ok(InputCount::IndividualVehicle),
+            "jamar_bicycle" => Ok(InputCount::IndividualBicycle),
             "vehicle_and_bicycle" => Ok(InputCount::IndividualVehicleAndIndividualBicycle),
             _ => Err(CountError::BadLocation(parent.to_string())),
         }
@@ -478,14 +483,14 @@ mod tests {
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts() {
-        let path = Path::new("test_files/vehicle_only/166905.txt");
+        let path = Path::new("test_files/jamar_vehicle/166905.txt");
         let counted_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
         assert_eq!(counted_vehicles.len(), 8706);
     }
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts_by_lane() {
-        let path = Path::new("test_files/vehicle_only/101.csv");
+        let path = Path::new("test_files/jamar_vehicle/101.csv");
         let counted_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
         assert_eq!(counted_vehicles.len(), 227);
 
@@ -511,7 +516,7 @@ mod tests {
     /// been separated into two different counts due to limitations of previous import program.
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_168193() {
-        let path = Path::new("test_files/15minutevehicle/168193.txt");
+        let path = Path::new("test_files/jamar_15minutevehicle/168193.txt");
         let directions = Directions::new(LaneDirection::East, Some(LaneDirection::West), None);
         let fifteen_min_volcount =
             FifteenMinuteVehicle::extract(path, 168193, &directions).unwrap();
@@ -520,7 +525,7 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_102() {
-        let path = Path::new("test_files/15minutevehicle/102.csv");
+        let path = Path::new("test_files/jamar_15minutevehicle/102.csv");
         let directions = Directions::new(
             LaneDirection::West,
             Some(LaneDirection::West),
@@ -547,7 +552,7 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_vehicle_errs_when_dirs_mismatch_in_filename_and_data_103() {
-        let path = Path::new("test_files/15minutevehicle/103.csv");
+        let path = Path::new("test_files/jamar_15minutevehicle/103.csv");
         let directions = Directions::new(
             LaneDirection::South,
             Some(LaneDirection::South),
@@ -562,7 +567,7 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_bicycle_gets_correct_number_of_counts_167607() {
-        let path = Path::new("test_files/15minutebicycle/167607.csv");
+        let path = Path::new("test_files/ecocounter_15minutebicycle/167607.csv");
         let directions = Directions {
             direction1: LaneDirection::North,
             direction2: Some(LaneDirection::South),
@@ -588,7 +593,7 @@ mod tests {
 
     #[test]
     fn extract_fifteen_min_pedestrian_gets_correct_number_of_counts167297() {
-        let path = Path::new("test_files/15minutepedestrian/167297.csv");
+        let path = Path::new("test_files/ecocounter_15minutepedestrian/167297.csv");
         let directions = Directions {
             direction1: LaneDirection::North,
             direction2: Some(LaneDirection::South),
@@ -615,28 +620,31 @@ mod tests {
     #[test]
     fn count_type_from_location_correct_ind_veh() {
         let count_type =
-            InputCount::from_parent_dir(Path::new("/vehicle_only/count_data.csv")).unwrap();
+            InputCount::from_parent_dir(Path::new("/jamar_vehicle/count_data.csv")).unwrap();
         assert_eq!(count_type, InputCount::IndividualVehicle)
     }
 
     #[test]
     fn count_type_from_location_correct_15min_veh() {
         let count_type =
-            InputCount::from_parent_dir(Path::new("/15minutevehicle/count_data.csv")).unwrap();
+            InputCount::from_parent_dir(Path::new("/jamar_15minutevehicle/count_data.csv"))
+                .unwrap();
         assert_eq!(count_type, InputCount::FifteenMinuteVehicle)
     }
 
     #[test]
     fn count_type_from_location_correct_15min_bicycle() {
         let count_type =
-            InputCount::from_parent_dir(Path::new("/15minutebicycle/count_data.csv")).unwrap();
+            InputCount::from_parent_dir(Path::new("/ecocounter_15minutebicycle/count_data.csv"))
+                .unwrap();
         assert_eq!(count_type, InputCount::FifteenMinuteBicycle)
     }
 
     #[test]
     fn count_type_from_location_correct_15min_ped() {
         let count_type =
-            InputCount::from_parent_dir(Path::new("/15minutepedestrian/count_data.csv")).unwrap();
+            InputCount::from_parent_dir(Path::new("/ecocounter_15minutepedestrian/count_data.csv"))
+                .unwrap();
         assert_eq!(count_type, InputCount::FifteenMinutePedestrian)
     }
 
@@ -648,25 +656,25 @@ mod tests {
 
     #[test]
     fn num_nondata_rows_correct_15min_veh_sample() {
-        let path = Path::new("test_files/15minutevehicle/168193.txt");
+        let path = Path::new("test_files/jamar_15minutevehicle/168193.txt");
         assert_eq!(num_nondata_rows(path).unwrap(), 5);
     }
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_ind_veh_sample() {
-        let path = Path::new("test_files/vehicle_only/166905.txt");
+        let path = Path::new("test_files/jamar_vehicle/166905.txt");
         assert_eq!(num_nondata_rows(path).unwrap(), 4);
     }
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_15min_bicycle_sample() {
-        let path = Path::new("test_files/15minutebicycle/167607.csv");
+        let path = Path::new("test_files/ecocounter_15minutebicycle/167607.csv");
         assert_eq!(num_nondata_rows(path).unwrap(), 3);
     }
 
     #[test]
     fn count_type_and_num_nondata_rows_correct_15min_pedestrian_sample() {
-        let path = Path::new("test_files/15minutepedestrian/167297.csv");
+        let path = Path::new("test_files/ecocounter_15minutepedestrian/167297.csv");
         assert_eq!(num_nondata_rows(path).unwrap(), 3);
     }
 
@@ -681,7 +689,7 @@ mod tests {
 
     #[test]
     fn num_nondata_rows_correct() {
-        let path = Path::new("test_files/vehicle_only/166905.txt");
+        let path = Path::new("test_files/jamar_vehicle/166905.txt");
         let num_rows = num_nondata_rows(path).unwrap();
         assert_eq!(num_rows, 4);
     }

@@ -89,7 +89,7 @@ fn speed_binning_is_correct() {
 
 #[test]
 fn empty_periods_created_correctly_166905() {
-    let path = Path::new("test_files/vehicle_only/166905.txt");
+    let path = Path::new("test_files/jamar_vehicle/166905.txt");
     let (username, password) = db::get_creds();
     let pool = db::create_pool(username, password).unwrap();
     let conn = pool.get().unwrap();
@@ -167,7 +167,7 @@ fn counts_created_correctly_165367() {
     let (username, password) = db::get_creds();
     let pool = db::create_pool(username, password).unwrap();
     let conn = pool.get().unwrap();
-    let path = Path::new("test_files/vehicle_only/165367.txt");
+    let path = Path::new("test_files/jamar_vehicle/165367.txt");
     let directions = Directions::from_db(165367, &conn).unwrap();
     let individual_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
 
@@ -247,7 +247,8 @@ fn counts_created_correctly_165367() {
 #[test]
 fn counts_created_correctly_101() {
     // This file was made up, based on another, but with just over an hour of counts.
-    let path = Path::new("test_files/vehicle_only/101.csv");
+    let path = Path::new("test_files/jamar_vehicle/101.csv");
+
     let directions = Directions::new(
         LaneDirection::East,
         Some(LaneDirection::East),
