@@ -67,7 +67,7 @@ impl InputCount {
             "jamar_15minutevehicle" => Ok(InputCount::FifteenMinuteVehicle),
             "jamar_vehicle" => Ok(InputCount::IndividualVehicle),
             "jamar_bicycle" => Ok(InputCount::IndividualBicycle),
-            "vehicle_and_bicycle" => Ok(InputCount::IndividualVehicleAndIndividualBicycle),
+            "jamar_vehicle_and_bicycle" => Ok(InputCount::IndividualVehicleAndIndividualBicycle),
             _ => Err(CountError::BadLocation(parent.to_string())),
         }
     }
