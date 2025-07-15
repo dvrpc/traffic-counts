@@ -637,7 +637,7 @@ impl Display for RoadDirection {
             RoadDirection::West => "west".to_string(),
             RoadDirection::Both => "both".to_string(),
         };
-        write!(f, "{}", dir)
+        write!(f, "{dir}")
     }
 }
 /// The direction of a lane.
@@ -671,7 +671,7 @@ impl Display for LaneDirection {
             LaneDirection::South => "south".to_string(),
             LaneDirection::West => "west".to_string(),
         };
-        write!(f, "{}", dir)
+        write!(f, "{dir}")
     }
 }
 
@@ -1067,7 +1067,14 @@ pub fn create_binned_bicycle_vol_count(
         // Create a key for the Hashmap for time intervals
         let direction = match count.lane {
             1 => directions.direction1,
-            2 => directions.direction2.unwrap(),
+            2 => {
+                // If there is no 2nd direction in the metata, this is an instance of someone
+                // going in the wrong direction. Use direction1 so that it's not missed.
+                match directions.direction2 {
+                    Some(v) => v,
+                    None => directions.direction1,
+                }
+            }
             _ => {
                 error!("Unable to determine lane/direction.");
                 continue;
