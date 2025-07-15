@@ -180,3 +180,37 @@ fn counts_correct_178959() {
 
     assert_eq!(&last, bikes15min.iter().last().unwrap())
 }
+
+#[test]
+fn wrong_way_gets_added_to_direction1_181261() {
+    let path = Path::new("test_files/jamar_bicycle/181261_include_wrong_way.txt");
+    let directions = Directions {
+        direction1: LaneDirection::West,
+        direction2: None,
+        direction3: None,
+    };
+
+    let individual_bicycles = IndividualBicycle::extract(path).unwrap();
+
+    // There are 10 records in the test file, but one is class 15 (not a bicycle)
+    assert_eq!(individual_bicycles.len(), 9);
+
+    // 1st should be in lane 2, 2nd in lane 2.
+    assert_eq!(individual_bicycles[0].lane, 2);
+    assert_eq!(individual_bicycles[1].lane, 1);
+
+    let bikes15min = create_binned_bicycle_vol_count(
+        TimeInterval::FifteenMin,
+        181261,
+        &directions,
+        individual_bicycles,
+    );
+
+    // Total number of periods.
+    assert_eq!(bikes15min.len(), 2);
+
+    // All (both) periods should only have cntdir of West (direction1 above).
+    for count in bikes15min {
+        assert_eq!(count.cntdir, LaneDirection::West)
+    }
+}
