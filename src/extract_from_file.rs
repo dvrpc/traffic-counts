@@ -466,7 +466,7 @@ fn parse_date(s: &str) -> Result<NaiveDate, CountError> {
 fn parse_datetime(s: &str) -> Result<NaiveDateTime, CountError> {
     let mut err = ParseErrorKind::Invalid;
 
-    for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"] {
+    for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%-m/%-d/%Y %-H:%M"] {
         match NaiveDateTime::parse_from_str(s, fmt) {
             Ok(v) => return Ok(v),
             Err(e) => err = e.kind(),
@@ -741,5 +741,6 @@ mod tests {
     fn parse_datetime_correct() {
         assert!(parse_datetime("2025-03-07 23:15:00").is_ok());
         assert!(parse_datetime("2025-03-07 23:15").is_ok());
+        assert!(parse_datetime("8/1/2025 1:15").is_ok());
     }
 }
