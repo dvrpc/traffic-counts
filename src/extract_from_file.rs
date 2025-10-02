@@ -415,6 +415,10 @@ pub fn num_nondata_rows(path: &Path) -> Result<usize, CountError> {
     let mut num_rows = 0;
     let contents = fs::read_to_string(path)?;
     for line in contents.lines().take(50) {
+        // Ignore empty lines, as they will get ignored during creation of CSV reader.
+        if line.trim().is_empty() {
+            continue;
+        }
         num_rows += 1;
         let line = line.replace(['"', ' '], "");
         if line.starts_with(FIFTEEN_MINUTE_BIKE_OR_PED_HEADER)
@@ -452,7 +456,7 @@ fn parse_time(s: &str) -> Result<NaiveTime, CountError> {
 fn parse_date(s: &str) -> Result<NaiveDate, CountError> {
     let mut err = ParseErrorKind::Invalid;
 
-    for fmt in ["%-m/%-d/%Y", "%-m-%-d-%Y", "%Y-%m-%d"] {
+    for fmt in ["%-m/%-d/%Y", "%-m-%-d-%Y", "%Y-%m-%d", "%b %-d, %Y"] {
         match NaiveDate::parse_from_str(s, fmt) {
             Ok(v) => return Ok(v),
             Err(e) => err = e.kind(),
@@ -466,7 +470,13 @@ fn parse_date(s: &str) -> Result<NaiveDate, CountError> {
 fn parse_datetime(s: &str) -> Result<NaiveDateTime, CountError> {
     let mut err = ParseErrorKind::Invalid;
 
-    for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%-m/%-d/%Y %-H:%M"] {
+    for fmt in [
+        "%b %-d, %Y %-I:%M %p",
+        "%b %-d, %Y %-I:%M %P",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%-m/%-d/%Y %-H:%M",
+    ] {
         match NaiveDateTime::parse_from_str(s, fmt) {
             Ok(v) => return Ok(v),
             Err(e) => err = e.kind(),
@@ -735,6 +745,7 @@ mod tests {
         assert!(parse_date("03-05-2025").is_ok());
         assert!(parse_date("03-5-2025").is_ok());
         assert!(parse_date("2025-03-05").is_ok());
+        assert!(parse_date("Mar 5, 2025").is_ok());
     }
 
     #[test]
@@ -742,5 +753,9 @@ mod tests {
         assert!(parse_datetime("2025-03-07 23:15:00").is_ok());
         assert!(parse_datetime("2025-03-07 23:15").is_ok());
         assert!(parse_datetime("8/1/2025 1:15").is_ok());
+        assert!(parse_datetime("Mar 5, 2025 10:30 AM").is_ok());
+        assert!(parse_datetime("Mar 5, 2025 10:30 PM").is_ok());
+        assert!(parse_datetime("Mar 5, 2025 1:30 am").is_ok());
+        assert!(parse_datetime("Mar 5, 2025 1:30 pm").is_ok());
     }
 }
