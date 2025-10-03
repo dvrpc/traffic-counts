@@ -301,26 +301,42 @@ impl FifteenMinuteBicycle {
                 }
             };
 
-            // Direction1/indir
-            match FifteenMinuteBicycle::new(
-                recordnum,
-                datetime,
-                row.get(2).ok_or(CountError::MissingDataColumn)?.parse()?,
-                directions.direction1,
-            ) {
-                Ok(v) => counts.push(v),
-                Err(e) => {
-                    error!("{e}");
-                    continue;
+            // If there is a direction2, get the two directions separately.
+            if let Some(dir2) = directions.direction2 {
+                // Direction1/indir.
+                match FifteenMinuteBicycle::new(
+                    recordnum,
+                    datetime,
+                    row.get(2).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    directions.direction1,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
                 }
-            }
-            // Optionally direction2/outdir
-            if let Some(v) = directions.direction2 {
+                // Direction2/outdir.
                 match FifteenMinuteBicycle::new(
                     recordnum,
                     datetime,
                     row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
-                    v,
+                    dir2,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
+                }
+            // Otherwise, this was a unidirectional count. However, there's a chance that
+            // bicycles can go the wrong way, so use the total (both directions).
+            } else {
+                match FifteenMinuteBicycle::new(
+                    recordnum,
+                    datetime,
+                    row.get(1).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    directions.direction1,
                 ) {
                     Ok(v) => counts.push(v),
                     Err(e) => {
@@ -362,26 +378,42 @@ impl FifteenMinutePedestrian {
                 }
             };
 
-            // Direction1/indir
-            match FifteenMinutePedestrian::new(
-                recordnum,
-                datetime,
-                row.get(2).ok_or(CountError::MissingDataColumn)?.parse()?,
-                directions.direction1,
-            ) {
-                Ok(v) => counts.push(v),
-                Err(e) => {
-                    error!("{e}");
-                    continue;
+            // If there is a direction2, get the two directions separately.
+            if let Some(dir2) = directions.direction2 {
+                // Direction1/indir.
+                match FifteenMinutePedestrian::new(
+                    recordnum,
+                    datetime,
+                    row.get(2).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    directions.direction1,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
                 }
-            }
-            // Optionally direction2/outdir
-            if let Some(v) = directions.direction2 {
+                // Direction2/outdir.
                 match FifteenMinutePedestrian::new(
                     recordnum,
                     datetime,
                     row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
-                    v,
+                    dir2,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
+                }
+            // Otherwise, this was a unidirectional count. However, there's a chance that
+            // pedestrians can go the wrong way, so use the total (both directions).
+            } else {
+                match FifteenMinutePedestrian::new(
+                    recordnum,
+                    datetime,
+                    row.get(1).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    directions.direction1,
                 ) {
                     Ok(v) => counts.push(v),
                     Err(e) => {
@@ -599,6 +631,32 @@ mod tests {
             .sum::<u16>();
         assert_eq!(north_sum, 491);
         assert_eq!(south_sum, 20);
+    }
+
+    #[test]
+    fn extract_fifteen_min_bicycle_gets_correct_number_of_counts_179847() {
+        let path = Path::new("test_files/ecocounter_15minutebicycle/179847.csv");
+        let directions = Directions {
+            direction1: LaneDirection::North,
+            direction2: None,
+            direction3: None,
+        };
+
+        let num_skipped_rows = num_nondata_rows(path).unwrap();
+        dbg!(&num_skipped_rows);
+        let fifteen_min_volcount =
+            FifteenMinuteBicycle::extract(path, 179847, &directions).unwrap();
+
+        dbg!(fifteen_min_volcount.first());
+        dbg!(fifteen_min_volcount.last());
+        assert_eq!(fifteen_min_volcount.len(), 2400);
+
+        let north_sum = fifteen_min_volcount
+            .iter()
+            .filter(|count| count.cntdir == LaneDirection::North)
+            .map(|count| count.volume)
+            .sum::<u16>();
+        assert_eq!(north_sum, 1057);
     }
 
     #[test]
