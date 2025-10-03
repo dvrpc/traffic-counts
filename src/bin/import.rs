@@ -95,7 +95,13 @@
 //!   - By default the visualization is set to *Curve*; change it to *Table*.
 //!   - Select **Options** and ensure that *Total per site* and *Directions* are
 //!     both toggled on and that both directions (in/out) are included.
-//!   - click on the **Download** (⤓) button, choosing *Spreadsheet (CSV)* as the format, comma   //!     as the delimiter, and save locally.
+//!   - click on the **Download** (⤓) button, choosing *Spreadsheet (CSV)* as the format, comma   
+//!     as the delimiter, and save locally.
+//!
+//! There should be four columns in the resulting CSV file, in this order: datetime, total, in, out.
+//!
+//! NOTE: In one-way bike/ped counts from Eco-Counter, the total column from the file is imported
+//! into the database, capturing any bicycles/pedestrians that went the wrong way.
 
 use std::env;
 use std::fs::{self, OpenOptions};
