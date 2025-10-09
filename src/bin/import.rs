@@ -18,8 +18,13 @@
 //! derives the appropriate counts from it, and then inserts these into our database and removes
 //! the file.
 //!
-//! **NOTE**: The direction(s) of the count (cldir1 at a minimum, and possibly cldir2 and cldir3)
-//! need to be set in the database prior to the import.
+//! **NOTE**:
+//!   - The direction(s) of the count ("cldir1" at a minimum, and possibly "cldir2" and "cldir3")
+//!     need to be set in the database prior to the import.
+//!   - EcoCounter bicycle counts can be one-way. However, bicycles sometimes go the wrong
+//!     direction and we want to include those that do in the count. **Make sure the field
+//!     "onewaybike" field in the TC_HEADER table is set to true (checked) in this case.** The total
+//!     column from the CSV will be used instead of "in" or "out".
 //!
 //! A [log][`LOG`] of the program's work is kept in the main directory.
 //! The program is able to log most errors and continue its execution,
@@ -100,8 +105,9 @@
 //!
 //! There should be four columns in the resulting CSV file, in this order: datetime, total, in, out.
 //!
-//! NOTE: In one-way bike/ped counts from Eco-Counter, the total column from the file is imported
-//! into the database, capturing any bicycles/pedestrians that went the wrong way.
+//! NOTE: In one-way bike counts from Eco-Counter, the total column from the file is imported
+//!  into the database, capturing any bicycles that went the wrong way, **so long
+//!  as the "onewaybike" field is set to true (checked) in the database**.
 
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -299,6 +305,12 @@ fn main() {
                 }
             };
 
+            /*
+             Determine the recordnums from the file's path. Typically, it will just be a single
+             recordnum. But on ocassion (see condition below), two different types will need to be
+             extracted from one file. Here we get at least the first and optionally the second, to
+             then process simultaneously.
+            */
             let (recordnum1, recordnum2) = match get_recordnum(path) {
                 Ok(v) => v,
                 Err(e) => {

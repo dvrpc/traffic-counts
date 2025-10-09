@@ -14,6 +14,7 @@ fn empty_periods_created_correctly_178955() {
         direction1: LaneDirection::South,
         direction2: None,
         direction3: None,
+        one_way_bicycle: false,
     };
 
     let individual_bicycles = IndividualBicycle::extract(path).unwrap();
@@ -55,6 +56,7 @@ fn counts_correct_178955() {
         direction1: LaneDirection::South,
         direction2: None,
         direction3: None,
+        one_way_bicycle: false,
     };
     let individual_bicycles = IndividualBicycle::extract(path).unwrap();
 
@@ -103,6 +105,7 @@ fn counts_correct_178959() {
         direction1: LaneDirection::East,
         direction2: Some(LaneDirection::West),
         direction3: None,
+        one_way_bicycle: false,
     };
 
     let individual_bicycles = IndividualBicycle::extract(path).unwrap();
@@ -188,6 +191,7 @@ fn wrong_way_gets_added_to_direction1_181261() {
         direction1: LaneDirection::West,
         direction2: None,
         direction3: None,
+        one_way_bicycle: true,
     };
 
     let individual_bicycles = IndividualBicycle::extract(path).unwrap();

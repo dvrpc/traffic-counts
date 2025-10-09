@@ -675,34 +675,34 @@ impl Display for LaneDirection {
     }
 }
 
-/// The [`LaneDirection`]s that a count could contain.
+/// The [`LaneDirection`]s that a count could contain and whether or not one-way bicycle.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Directions {
     pub direction1: LaneDirection,
     pub direction2: Option<LaneDirection>,
     pub direction3: Option<LaneDirection>,
+    pub one_way_bicycle: bool,
 }
 
 impl Directions {
-    pub fn new(
-        direction1: LaneDirection,
-        direction2: Option<LaneDirection>,
-        direction3: Option<LaneDirection>,
-    ) -> Self {
-        Self {
-            direction1,
-            direction2,
-            direction3,
-        }
-    }
-
     /// Get lane directions for a particular count from the database.
     pub fn from_db(recordnum: u32, conn: &Connection) -> Result<Directions, CountError> {
-        let (dir1, dir2, dir3) = conn
-            .query_row_as::<(Option<String>, Option<String>, Option<String>)>(
-                "select cldir1, cldir2, cldir3 from tc_header where recordnum = :1",
-                &[&recordnum],
-            )?;
+        let (dir1, dir2, dir3, one_way_bicycle) = conn.query_row_as::<(
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>(
+            "select cldir1, cldir2, cldir3, onewaybike from tc_header where recordnum = :1",
+            &[&recordnum],
+        )?;
+
+        // Convert onewaybike field to boolean, letting null be false.
+        let one_way_bicycle = if let Some(v) = one_way_bicycle {
+            matches!(v.as_str(), "t" | "yes")
+        } else {
+            false
+        };
 
         let direction1 = if let Some(v) = dir1 {
             LaneDirection::from_str(&v)?
@@ -724,6 +724,7 @@ impl Directions {
             direction1,
             direction2,
             direction3,
+            one_way_bicycle,
         })
     }
 }

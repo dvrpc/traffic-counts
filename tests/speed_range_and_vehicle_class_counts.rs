@@ -249,11 +249,12 @@ fn counts_created_correctly_101() {
     // This file was made up, based on another, but with just over an hour of counts.
     let path = Path::new("test_files/jamar_vehicle/101.csv");
 
-    let directions = Directions::new(
-        LaneDirection::East,
-        Some(LaneDirection::East),
-        Some(LaneDirection::East),
-    );
+    let directions = Directions {
+        direction1: LaneDirection::East,
+        direction2: Some(LaneDirection::East),
+        direction3: Some(LaneDirection::East),
+        one_way_bicycle: false,
+    };
     let individual_vehicles = IndividualVehicle::extract(path, Bicycles::Without).unwrap();
 
     let (mut speed_range_count, mut vehicle_class_count) = create_speed_and_class_count(

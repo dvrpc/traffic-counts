@@ -301,8 +301,23 @@ impl FifteenMinuteBicycle {
                 }
             };
 
-            // If there is a direction2, get the two directions separately.
-            if let Some(dir2) = directions.direction2 {
+            // If this is a one-way, use the total rather than in direction. (Bicycles can go
+            // the wrong way, and we want to capture all of them in this case.)
+            if directions.one_way_bicycle {
+                match FifteenMinuteBicycle::new(
+                    recordnum,
+                    datetime,
+                    row.get(1).ok_or(CountError::MissingDataColumn)?.parse()?,
+                    directions.direction1,
+                ) {
+                    Ok(v) => counts.push(v),
+                    Err(e) => {
+                        error!("{e}");
+                        continue;
+                    }
+                }
+            // Not a one-way, use individual directions.
+            } else {
                 // Direction1/indir.
                 match FifteenMinuteBicycle::new(
                     recordnum,
@@ -316,32 +331,19 @@ impl FifteenMinuteBicycle {
                         continue;
                     }
                 }
-                // Direction2/outdir.
-                match FifteenMinuteBicycle::new(
-                    recordnum,
-                    datetime,
-                    row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
-                    dir2,
-                ) {
-                    Ok(v) => counts.push(v),
-                    Err(e) => {
-                        error!("{e}");
-                        continue;
-                    }
-                }
-            // Otherwise, this was a unidirectional count. However, there's a chance that
-            // bicycles can go the wrong way, so use the total (both directions).
-            } else {
-                match FifteenMinuteBicycle::new(
-                    recordnum,
-                    datetime,
-                    row.get(1).ok_or(CountError::MissingDataColumn)?.parse()?,
-                    directions.direction1,
-                ) {
-                    Ok(v) => counts.push(v),
-                    Err(e) => {
-                        error!("{e}");
-                        continue;
+                // Optionally direction2/outdir.
+                if let Some(dir2) = directions.direction2 {
+                    match FifteenMinuteBicycle::new(
+                        recordnum,
+                        datetime,
+                        row.get(3).ok_or(CountError::MissingDataColumn)?.parse()?,
+                        dir2,
+                    ) {
+                        Ok(v) => counts.push(v),
+                        Err(e) => {
+                            error!("{e}");
+                            continue;
+                        }
                     }
                 }
             }
@@ -559,7 +561,12 @@ mod tests {
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_168193() {
         let path = Path::new("test_files/jamar_15minutevehicle/168193.txt");
-        let directions = Directions::new(LaneDirection::East, Some(LaneDirection::West), None);
+        let directions = Directions {
+            direction1: LaneDirection::East,
+            direction2: Some(LaneDirection::West),
+            direction3: None,
+            one_way_bicycle: false,
+        };
         let fifteen_min_volcount =
             FifteenMinuteVehicle::extract(path, 168193, &directions).unwrap();
         assert_eq!(fifteen_min_volcount.len(), 384)
@@ -568,11 +575,12 @@ mod tests {
     #[test]
     fn extract_fifteen_min_vehicle_gets_correct_number_of_counts_102() {
         let path = Path::new("test_files/jamar_15minutevehicle/102.csv");
-        let directions = Directions::new(
-            LaneDirection::West,
-            Some(LaneDirection::West),
-            Some(LaneDirection::West),
-        );
+        let directions = Directions {
+            direction1: LaneDirection::West,
+            direction2: Some(LaneDirection::West),
+            direction3: Some(LaneDirection::West),
+            one_way_bicycle: false,
+        };
         let mut fifteen_min_volcount =
             FifteenMinuteVehicle::extract(path, 102, &directions).unwrap();
         fifteen_min_volcount.sort_unstable_by_key(|count| (count.date, count.time, count.lane));
@@ -595,11 +603,12 @@ mod tests {
     #[test]
     fn extract_fifteen_min_vehicle_errs_when_dirs_mismatch_in_filename_and_data_103() {
         let path = Path::new("test_files/jamar_15minutevehicle/103.csv");
-        let directions = Directions::new(
-            LaneDirection::South,
-            Some(LaneDirection::South),
-            Some(LaneDirection::South),
-        );
+        let directions = Directions {
+            direction1: LaneDirection::South,
+            direction2: Some(LaneDirection::South),
+            direction3: Some(LaneDirection::South),
+            one_way_bicycle: false,
+        };
 
         assert!(matches!(
             FifteenMinuteVehicle::extract(path, 103, &directions),
@@ -614,6 +623,7 @@ mod tests {
             direction1: LaneDirection::North,
             direction2: Some(LaneDirection::South),
             direction3: None,
+            one_way_bicycle: false,
         };
         let fifteen_min_volcount =
             FifteenMinuteBicycle::extract(path, 167607, &directions).unwrap();
@@ -634,12 +644,13 @@ mod tests {
     }
 
     #[test]
-    fn extract_fifteen_min_bicycle_gets_correct_number_of_counts_179847() {
+    fn extract_fifteen_min_bicycle_gets_correct_number_of_counts_in_one_way_bicycle_179847() {
         let path = Path::new("test_files/ecocounter_15minutebicycle/179847.csv");
         let directions = Directions {
             direction1: LaneDirection::North,
             direction2: None,
             direction3: None,
+            one_way_bicycle: true,
         };
 
         let num_skipped_rows = num_nondata_rows(path).unwrap();
@@ -666,6 +677,7 @@ mod tests {
             direction1: LaneDirection::North,
             direction2: Some(LaneDirection::South),
             direction3: None,
+            one_way_bicycle: false,
         };
         let fifteen_min_volcount =
             FifteenMinutePedestrian::extract(path, 167297, &directions).unwrap();
