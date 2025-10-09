@@ -99,15 +99,22 @@
 //! A visualization will then appear in the main area of the site. Do the following:
 //!   - By default the visualization is set to *Curve*; change it to *Table*.
 //!   - Select **Options** and ensure that *Total per site* and *Directions* are
-//!     both toggled on and that both directions (in/out) are included.
+//!     both toggled on and that both directions (in/out) are included (see note below).
 //!   - click on the **Download** (⤓) button, choosing *Spreadsheet (CSV)* as the format, comma   
 //!     as the delimiter, and save locally.
 //!
-//! There should be four columns in the resulting CSV file, in this order: datetime, total, in, out.
+//! There should typically be four columns in the resulting CSV file, in this order: datetime,
+//! total, in, out.
 //!
-//! NOTE: In one-way bike counts from Eco-Counter, the total column from the file is imported
-//!  into the database, capturing any bicycles that went the wrong way, **so long
-//!  as the "onewaybike" field is set to true (checked) in the database**.
+//! NOTE:
+//!   - In one-way bike counts from Eco-Counter, the total column from the file is imported
+//!     into the database, capturing any bicycles that went the wrong way, **so long
+//!     as the "onewaybike" field is set to true (checked) in the database**.
+//!   - On rare occasions, we may need to extract the data from a single count in Eco-Counter into
+//!     two different recordnums (as a result of how they were requested/set up in database). Here,
+//!     you use only total/in or total/out for the directions, which will result in a CSV with three
+//!     columns. So long as the "onewaybike" field in the TC_HEADER table is false, the total will
+//!     just be ignored and the in or out direction used.
 
 use std::env;
 use std::fs::{self, OpenOptions};
