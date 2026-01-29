@@ -1,6 +1,12 @@
 //! Extract count data from files.
 //!
-//! See the [Extract trait implementors](Extract#implementors) for kinds of counts.
+//! The `extract` functions are documented with each of their types; see:
+//! - [FifteenMinuteBicycle::extract]
+//! - [FifteenMinutePedestrian::extract]
+//! - [FifteenMinuteVehicle::extract]
+//! - [IndividualBicycle::extract]
+//! - [IndividualVehicle::extract]
+
 use std::fs::{self, File};
 use std::path::Path;
 
@@ -55,7 +61,7 @@ impl InputCount {
             .parent()
             .ok_or(CountError::BadPath(path.to_owned()))?
             .components()
-            .last()
+            .next_back()
             .ok_or(CountError::BadPath(path.to_owned()))?
             .as_os_str()
             .to_str()
@@ -166,7 +172,7 @@ impl FifteenMinuteVehicle {
     }
 }
 
-/// The number for unknown class depends on which schema is usededj
+/// The number for unknown class depends on which schema is used.
 pub enum Bicycles {
     Without, // Modified Schema F
     With,    // Modified Schema F - With Bikes
