@@ -1277,6 +1277,7 @@ fn cleanup(method: CleanMethod, path: &PathBuf, log: impl Log) {
     }
 }
 
+/// Get a single or possibly two recordnums from a Path.
 fn get_recordnum(path: &Path) -> Result<(u32, Option<u32>), CountError> {
     let stem = path
         .file_stem()
@@ -1319,5 +1320,16 @@ fn get_recordnum(path: &Path) -> Result<(u32, Option<u32>), CountError> {
                 path: path.to_owned(),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn record_num_fails_with_two_underscores() {
+        let path = Path::new("123_456_789.csv");
+        assert!(matches!(get_recordnum(path), Err(CountError::BadPath(_))))
     }
 }
