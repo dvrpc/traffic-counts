@@ -33,6 +33,7 @@ use chrono::prelude::*;
 use crossbeam::channel;
 use csv::StringRecord;
 use log::{debug, error, info, LevelFilter};
+use oracle::pool::PoolBuilder;
 use simplelog::*;
 
 use traffic_counts::{
@@ -198,20 +199,21 @@ fn main() {
         }
     };
 
-    let mut pool = match db::create_pool(username, password, 5) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Unable to get db connection pool: {e}.");
-            return;
-        }
-    };
-
-    pool.set_get_mode(&oracle::pool::GetMode::TimedWait(
-        std::time::Duration::from_millis(5000),
-    ))
-    .unwrap();
-
-    pool.set_timeout(std::time::Duration::from_millis(15000))
+    // let mut pool = match db::create_pool(username, password, 5) {
+    //     Ok(v) => v,
+    //     Err(e) => {
+    //         error!("Unable to get db connection pool: {e}.");
+    //         return;
+    //     }
+    // };
+    let pool = PoolBuilder::new(username, password, "dvrpcprod_tp_tls")
+        .max_connections(5)
+        .get_mode(oracle::pool::GetMode::TimedWait(
+            std::time::Duration::from_millis(5000),
+        ))
+        .timeout(std::time::Duration::from_millis(15000))
+        .unwrap()
+        .build()
         .unwrap();
 
     'mainloop: loop {
