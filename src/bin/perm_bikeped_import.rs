@@ -615,7 +615,17 @@ fn main() {
         for _ in 0..NUM_THREADS {
             let num_deletes = num_deletes.clone();
             let receiver = rx.clone();
-            let conn = pool.get().unwrap();
+            let conn = match pool.get() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Unable to get db connection: {e}.");
+                    dbg!("pool timeout: {:?}", pool.timeout().unwrap());
+                    dbg!("pool ping interval: {:?}", pool.ping_interval().unwrap());
+                    dbg!("pool open count: {:?}", pool.open_count().unwrap());
+                    dbg!("pool busy count: {:?}", pool.busy_count().unwrap());
+                    return;
+                }
+            };
 
             receiver_thread_handles.push(thread::spawn(move || {
                 while let Ok(date) = receiver.recv() {
