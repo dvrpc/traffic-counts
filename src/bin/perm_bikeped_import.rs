@@ -198,7 +198,7 @@ fn main() {
         }
     };
 
-    let mut pool = match db::create_pool(username, password, 10) {
+    let mut pool = match db::create_pool(username, password, 5) {
         Ok(v) => v,
         Err(e) => {
             error!("Unable to get db connection pool: {e}.");
@@ -626,7 +626,7 @@ fn main() {
                     dbg!("pool ping interval: {:?}", pool.ping_interval().unwrap());
                     dbg!("pool open count: {:?}", pool.open_count().unwrap());
                     dbg!("pool busy count: {:?}", pool.busy_count().unwrap());
-                    return;
+                    continue 'mainloop;
                 }
             };
 
