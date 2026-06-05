@@ -1,18 +1,18 @@
 //! Basic CRUD db operations on count data tables.
-//!
-//! See the [Crud trait implementors][Crud#implementors] for kinds of counts and associated tables.
 
-use oracle::{Connection, Statement};
+use oracle::{sql_type::Timestamp, Connection, Statement};
 
-use chrono::NaiveDateTime;
+use chrono::{Datelike, NaiveDateTime, Timelike};
 
-use crate::{
-    CountError, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
-    HourlyAvgSpeed, HourlyVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
+use crate::non_perm::{
+    FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle, HourlyAvgSpeed,
+    HourlyVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount,
 };
+use crate::perm_bikeped::{AggregatedPermBikePedCount, PermBikePedCount};
+use crate::CountError;
 
-/// A trait for handling basic CRUD db operations on count data tables.
-pub trait Crud {
+/// A trait for handling basic CRUD db operations on non-permanent count data tables.
+pub trait NonPermCrud {
     /// The name of the table in the database that this count type corresponds to.
     const COUNT_TABLE: &'static str; // associated constant
 
@@ -46,7 +46,7 @@ pub trait Crud {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error>;
 }
 
-impl Crud for TimeBinnedVehicleClassCount {
+impl NonPermCrud for TimeBinnedVehicleClassCount {
     const COUNT_TABLE: &'static str = "tc_clacount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -86,7 +86,8 @@ impl Crud for TimeBinnedVehicleClassCount {
         ])
     }
 }
-impl Crud for TimeBinnedSpeedRangeCount {
+
+impl NonPermCrud for TimeBinnedSpeedRangeCount {
     const COUNT_TABLE: &'static str = "tc_specount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -127,7 +128,7 @@ impl Crud for TimeBinnedSpeedRangeCount {
     }
 }
 
-impl Crud for HourlyAvgSpeed {
+impl NonPermCrud for HourlyAvgSpeed {
     const COUNT_TABLE: &'static str = "tc_spesum_new";
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
         let sql = &format!(
@@ -150,7 +151,7 @@ impl Crud for HourlyAvgSpeed {
     }
 }
 
-impl Crud for FifteenMinuteVehicle {
+impl NonPermCrud for FifteenMinuteVehicle {
     const COUNT_TABLE: &'static str = "tc_15minvolcount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -174,7 +175,7 @@ impl Crud for FifteenMinuteVehicle {
     }
 }
 
-impl Crud for HourlyVehicle {
+impl NonPermCrud for HourlyVehicle {
     const COUNT_TABLE: &'static str = "tc_volcount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -198,7 +199,7 @@ impl Crud for HourlyVehicle {
     }
 }
 
-impl Crud for FifteenMinuteBicycle {
+impl NonPermCrud for FifteenMinuteBicycle {
     const COUNT_TABLE: &'static str = "tc_bikecount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -216,7 +217,7 @@ impl Crud for FifteenMinuteBicycle {
     }
 }
 
-impl Crud for FifteenMinutePedestrian {
+impl NonPermCrud for FifteenMinutePedestrian {
     const COUNT_TABLE: &'static str = "tc_pedcount_new";
 
     fn prepare_insert(conn: &Connection) -> Result<Statement, oracle::Error> {
@@ -232,4 +233,74 @@ impl Crud for FifteenMinutePedestrian {
     fn insert(&self, stmt: &mut Statement) -> Result<(), oracle::Error> {
         stmt.execute(&[&self.recordnum, &self.datetime, &self.volume, &self.cntdir])
     }
+}
+
+/// Insert individual permanent bikeped count into database.
+pub fn insert_perm_bikeped_count(
+    conn: &Connection,
+    count: PermBikePedCount,
+) -> Result<Statement, oracle::Error> {
+    // convert datetime to date
+    // the COUNTDATE field needs to be date only, allowing the database to set the default time
+    // because existing programs rely on that to do daily/hourly aggregation
+    let oracle_date = Timestamp::new(
+        count.datetime.year(),
+        count.datetime.month(),
+        count.datetime.day(),
+        0,
+        0,
+        0,
+        0,
+    )?;
+
+    // COUNTTIME is ok to be full datetime
+    let oracle_dt = Timestamp::new(
+        count.datetime.year(),
+        count.datetime.month(),
+        count.datetime.day(),
+        count.datetime.hour(),
+        count.datetime.minute(),
+        count.datetime.second(),
+        0,
+    )?;
+
+    conn.execute("insert into TBLCOUNTDATA (locationid, countdate, total, pedin, pedout, bikein, bikeout, counttime) values (:1, :2, :3, :4, :5, :6, :7, :8)",
+        &[
+            &count.location_id,
+            &oracle_date,
+            &count.total,
+            &count.ped_in,
+            &count.ped_out,
+            &count.bike_in,
+            &count.bike_out,
+            &oracle_dt,
+        ],
+    )
+}
+
+/// Insert aggregated permanent bikeped count into database.
+pub fn insert_aggregated_bikeped_count(
+    conn: &Connection,
+    count: AggregatedPermBikePedCount,
+) -> Result<Statement, oracle::Error> {
+    // convert datetime
+    let oracle_dt = Timestamp::new(
+        count.date.year(),
+        count.date.month(),
+        count.date.day(),
+        0,
+        0,
+        0,
+        0,
+    )?;
+
+    conn.execute("insert into TBLHEADER (locationid, countdate, totalped, totalbike, total) values (:1, :2, :3, :4, :5)",
+        &[
+            &count.location_id,
+            &oracle_dt,
+            &count.total_ped,
+            &count.total_bike,
+            &count.total,
+        ],
+    )
 }

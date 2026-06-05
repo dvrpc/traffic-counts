@@ -22,25 +22,28 @@ use oracle::{
 };
 use serde::Serialize;
 
-use crate::{CountError, CountKind, Metadata};
+use crate::{
+    non_perm::{Metadata, NonPermCountKind},
+    CountError,
+};
 
 /// The maximum number of empty metadata records allowed to be created.
 pub const RECORD_CREATION_LIMIT: u32 = 50;
 
 /// Get database credentials from environment variable.
-pub fn get_creds() -> (String, String) {
+pub fn get_non_perm_creds() -> (String, String) {
     dotenvy::dotenv().expect("Unable to load .env file.");
 
     (
-        env::var("DB_USERNAME").unwrap(),
-        env::var("DB_PASSWORD").unwrap(),
+        env::var("NON_PERM_DB_USERNAME").unwrap(),
+        env::var("NON_PERM_DB_PASSWORD").unwrap(),
     )
 }
 
 /// Create a connection pool.
-pub fn create_pool(username: String, password: String) -> Result<Pool, OracleError> {
+pub fn create_pool(username: String, password: String, max_conn: u32) -> Result<Pool, OracleError> {
     PoolBuilder::new(username, password, "dvrpcprod_tp_tls")
-        .max_connections(5)
+        .max_connections(max_conn)
         .build()
 }
 
@@ -284,8 +287,11 @@ pub fn insert_metadata_from_existing(
 }
 
 /// Get the type of count for a given record number.
-pub fn get_count_kind(conn: &Connection, recordnum: u32) -> Result<Option<CountKind>, CountError> {
-    match conn.query_row_as::<Option<CountKind>>(
+pub fn get_count_kind(
+    conn: &Connection,
+    recordnum: u32,
+) -> Result<Option<NonPermCountKind>, CountError> {
+    match conn.query_row_as::<Option<NonPermCountKind>>(
         "select type from tc_header where recordnum = :1",
         &[&recordnum],
     ) {
@@ -301,13 +307,13 @@ mod tests {
     #[test]
     fn create_pool_succeeds() {
         let (username, password) = get_creds();
-        assert!(create_pool(username, password).is_ok())
+        assert!(create_pool(username, password, 1).is_ok())
     }
 
     #[test]
     fn select_type_correct() {
         let (username, password) = get_creds();
-        let pool = create_pool(username, password).unwrap();
+        let pool = create_pool(username, password, 1).unwrap();
         let conn = pool.get().unwrap();
 
         let count_type = conn

@@ -6,12 +6,12 @@
 //!
 //! HashMap Key + HashMap Value = Vec
 //!
-//! [`BinnedCountKey`] + [`VehicleClassCount`] = [`crate::TimeBinnedVehicleClassCount`].
+//! [`BinnedCountKey`] + [`VehicleClassCount`] = [`TimeBinnedVehicleClassCount`](crate::non_perm::TimeBinnedVehicleClassCount).
 //!
-//! [`BinnedCountKey`] + [`SpeedRangeCount`] = [`crate::TimeBinnedSpeedRangeCount`].
+//! [`BinnedCountKey`] + [`SpeedRangeCount`] = [`TimeBinnedSpeedRangeCount`](crate::non_perm::TimeBinnedSpeedRangeCount).
 use chrono::{NaiveDate, NaiveDateTime};
 
-use crate::{LaneDirection, VehicleClass};
+use crate::non_perm::{LaneDirection, VehicleClass};
 
 /// The key for records of the TC_SPECOUNT and TC_CLACOUNT tables.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]

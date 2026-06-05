@@ -1,4 +1,4 @@
-use traffic_counts::*;
+use traffic_counts::non_perm::*;
 
 #[test]
 fn vehicle_class_from_bad_num_errs() {
