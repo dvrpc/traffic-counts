@@ -37,13 +37,13 @@ use oracle::pool::PoolBuilder;
 use simplelog::*;
 
 use traffic_counts::{
-    db::{self, crud},
+    db::crud,
     perm_bikeped::{AggregatedPermBikePedCount, PermBikePedCount},
 };
 
 // Threads are limited to this number in order to limit number of concurrent connections to
 // database, otherwise this could easily triple to improve performance.
-const NUM_THREADS: usize = 3;
+const NUM_THREADS: usize = 10;
 
 const EXPECTED_HEADER: &[&str] = &[
     "Time",
@@ -199,15 +199,8 @@ fn main() {
         }
     };
 
-    // let mut pool = match db::create_pool(username, password, 5) {
-    //     Ok(v) => v,
-    //     Err(e) => {
-    //         error!("Unable to get db connection pool: {e}.");
-    //         return;
-    //     }
-    // };
     let pool = PoolBuilder::new(username, password, "dvrpcprod_tp_tls")
-        .max_connections(5)
+        .max_connections(10)
         .get_mode(oracle::pool::GetMode::TimedWait(
             std::time::Duration::from_millis(5000),
         ))
