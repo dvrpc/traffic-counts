@@ -198,13 +198,16 @@ fn main() {
         }
     };
 
-    let pool = match db::create_pool(username, password, 10) {
+    let mut pool = match db::create_pool(username, password, 10) {
         Ok(v) => v,
         Err(e) => {
             error!("Unable to get db connection pool: {e}.");
             return;
         }
     };
+
+    pool.set_timeout(std::time::Duration::from_millis(3000))
+        .unwrap();
 
     'mainloop: loop {
         // Open CSV file and create reader over it, or wait and try again.
