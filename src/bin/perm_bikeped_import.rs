@@ -206,6 +206,11 @@ fn main() {
         }
     };
 
+    pool.set_get_mode(&oracle::pool::GetMode::TimedWait(
+        std::time::Duration::from_millis(5000),
+    ))
+    .unwrap();
+
     pool.set_timeout(std::time::Duration::from_millis(15000))
         .unwrap();
 
@@ -626,7 +631,7 @@ fn main() {
                     dbg!("pool ping interval: {:?}", pool.ping_interval().unwrap());
                     dbg!("pool open count: {:?}", pool.open_count().unwrap());
                     dbg!("pool busy count: {:?}", pool.busy_count().unwrap());
-                    continue;
+                    return;
                 }
             };
 
