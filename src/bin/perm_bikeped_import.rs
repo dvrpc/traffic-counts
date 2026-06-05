@@ -206,7 +206,7 @@ fn main() {
         }
     };
 
-    pool.set_timeout(std::time::Duration::from_millis(3000))
+    pool.set_timeout(std::time::Duration::from_millis(15000))
         .unwrap();
 
     'mainloop: loop {
