@@ -8,11 +8,15 @@ use oracle::{
     Connection, Error as OracleError, RowValue, SqlValue,
 };
 
-use crate::{db::ImportLogEntry, CountError, CountKind, LaneDirection, RoadDirection};
+use crate::{
+    db::ImportLogEntry,
+    non_perm::{LaneDirection, NonPermCountKind, RoadDirection},
+    CountError,
+};
 
-impl FromSql for CountKind {
+impl FromSql for NonPermCountKind {
     fn from_sql(val: &SqlValue<'_>) -> oracle::Result<Self> {
-        match CountKind::from_str(&val.to_string()) {
+        match NonPermCountKind::from_str(&val.to_string()) {
             Ok(v) => Ok(v),
             Err(CountError::UnknownCountType(_)) => Err(OracleError::NullValue),
             Err(e) => Err(OracleError::ParseError(Box::new(e))),
@@ -83,7 +87,7 @@ impl ToSqlNull for RoadDirection {
     }
 }
 
-impl ToSql for CountKind {
+impl ToSql for NonPermCountKind {
     fn oratype(&self, _conn: &Connection) -> oracle::Result<OracleType> {
         Ok(OracleType::NVarchar2(format!("{self}").len() as u32))
     }
@@ -92,7 +96,7 @@ impl ToSql for CountKind {
     }
 }
 
-impl ToSqlNull for CountKind {
+impl ToSqlNull for NonPermCountKind {
     fn oratype_for_null(_conn: &Connection) -> oracle::Result<OracleType> {
         Ok(OracleType::NVarchar2(0))
     }

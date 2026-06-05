@@ -1,4 +1,4 @@
-//! Import traffic counts to our database from files.
+//! Import non-permanent traffic counts to our database from files.
 //! This program watches a directory for files to be uploaded to one of the following
 //! subdirectories:
 //!   - jamar_vehicle/ - for raw, unbinned class and speed counts of [vehicles][IndividualVehicle],
@@ -130,13 +130,16 @@ use simplelog::{
 };
 
 use traffic_counts::{
-    check_data::check,
-    create_binned_bicycle_vol_count, create_speed_and_class_count,
-    db::{self, crud::Crud},
-    extract_from_file::{Bicycles, InputCount},
-    log_msg, CountError, Directions, FifteenMinuteBicycle, FifteenMinutePedestrian,
-    FifteenMinuteVehicle, FileNameProblem, HourlyAvgSpeed, HourlyVehicle, IndividualBicycle,
-    IndividualVehicle, TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount, TimeInterval,
+    db::{self, crud::NonPermCrud},
+    non_perm::{
+        check_data::check,
+        create_binned_bicycle_vol_count, create_speed_and_class_count,
+        extract_from_file::{Bicycles, InputCount},
+        log_msg, Directions, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
+        HourlyAvgSpeed, HourlyVehicle, IndividualBicycle, IndividualVehicle,
+        TimeBinnedSpeedRangeCount, TimeBinnedVehicleClassCount, TimeInterval,
+    },
+    CountError, FileNameProblem,
 };
 
 const LOG: &str = "import.log";
@@ -154,10 +157,11 @@ fn main() {
 
     // Get env var for path where CSVs will be, panic if it doesn't exist.
     let data_dir =
-        env::var("DATA_DIR").expect("Unable to load data directory path from .env file.");
+        env::var("NON_PERM_DATA_DIR").expect("Unable to load data directory path from .env file.");
 
     // Get env var for path where log will be, panic if it doesn't exist.
-    let log_dir = env::var("LOG_DIR").expect("Unable to load log directory path from .env file.");
+    let log_dir =
+        env::var("NON_PERM_LOG_DIR").expect("Unable to load log directory path from .env file.");
 
     // Set up logging, panic if it fails.
     let import_config = ConfigBuilder::new().set_time_format_rfc3339().build();
@@ -181,7 +185,7 @@ fn main() {
 
     // The database env vars aren't needed for a while, but if they aren't available, return
     // early before doing any work.
-    let username = match env::var("DB_USERNAME") {
+    let username = match env::var("NON_PERM_DB_USERNAME") {
         Ok(v) => v,
         Err(e) => {
             import_log.log(
@@ -193,7 +197,7 @@ fn main() {
             return;
         }
     };
-    let password = match env::var("DB_PASSWORD") {
+    let password = match env::var("NON_PERM_DB_PASSWORD") {
         Ok(v) => v,
         Err(e) => {
             import_log.log(
@@ -205,7 +209,7 @@ fn main() {
             return;
         }
     };
-    let pool = match db::create_pool(username, password) {
+    let pool = match db::create_pool(username, password, 5) {
         Ok(v) => v,
         Err(e) => {
             import_log.log(
@@ -497,7 +501,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <TimeBinnedVehicleClassCount as Crud>::COUNT_TABLE;
+                    let table = <TimeBinnedVehicleClassCount as NonPermCrud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             log_msg(
@@ -518,7 +522,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <TimeBinnedSpeedRangeCount as Crud>::COUNT_TABLE;
+                    let table = <TimeBinnedSpeedRangeCount as NonPermCrud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             log_msg(recordnum1, &import_log, Level::Info, &format!("Successfully committed speed range data insert to database ({table} table)"), &conn);
@@ -554,7 +558,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <HourlyVehicle as Crud>::COUNT_TABLE;
+                    let table = <HourlyVehicle as NonPermCrud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             log_msg(recordnum1, &import_log, Level::Info, &format!("Successfully committed hourly volume data into database ({table} table)"), &conn);
@@ -580,7 +584,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <HourlyAvgSpeed as Crud>::COUNT_TABLE;
+                    let table = <HourlyAvgSpeed as NonPermCrud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             log_msg(recordnum1, &import_log, Level::Info, &format!("Successfully committed hourly speed averages into database ({table} table)"), &conn);
@@ -673,7 +677,7 @@ fn main() {
                                 continue 'paths_loop;
                             }
                         }
-                        let table = <FifteenMinuteBicycle as Crud>::COUNT_TABLE;
+                        let table = <FifteenMinuteBicycle as NonPermCrud>::COUNT_TABLE;
 
                         match conn.commit() {
                             Ok(()) => {
@@ -732,7 +736,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <FifteenMinuteVehicle as Crud>::COUNT_TABLE;
+                    let table = <FifteenMinuteVehicle as NonPermCrud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             log_msg(
@@ -787,7 +791,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <HourlyVehicle as Crud>::COUNT_TABLE;
+                    let table = <HourlyVehicle as NonPermCrud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             log_msg(recordnum1, &import_log, Level::Info, &format!("Successfully committed hourly volume data into database ({table} table)"), &conn);
@@ -861,7 +865,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <FifteenMinuteBicycle as Crud>::COUNT_TABLE;
+                    let table = <FifteenMinuteBicycle as NonPermCrud>::COUNT_TABLE;
 
                     match conn.commit() {
                         Ok(()) => {
@@ -919,7 +923,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <FifteenMinuteBicycle as Crud>::COUNT_TABLE;
+                    let table = <FifteenMinuteBicycle as NonPermCrud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             log_msg(
@@ -982,7 +986,7 @@ fn main() {
                             continue 'paths_loop;
                         }
                     }
-                    let table = <FifteenMinutePedestrian as Crud>::COUNT_TABLE;
+                    let table = <FifteenMinutePedestrian as NonPermCrud>::COUNT_TABLE;
                     match conn.commit() {
                         Ok(()) => {
                             log_msg(

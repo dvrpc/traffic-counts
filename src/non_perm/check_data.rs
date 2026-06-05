@@ -1,9 +1,8 @@
 //! Checks on data integrity/validity.
-use std::collections::HashMap;
 use std::env;
 use std::fmt::Write;
 use std::fs::OpenOptions;
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use chrono::{NaiveDate, NaiveDateTime};
 use log::{Level, LevelFilter};
@@ -12,7 +11,11 @@ use simplelog::{
     ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
 };
 
-use crate::{db, log_msg, CountError, CountKind, LaneDirection};
+use crate::{
+    db,
+    non_perm::{log_msg, LaneDirection, NonPermCountKind},
+    CountError,
+};
 
 // If a count is bidirectional, the totals for both directions should be relatively proportional.
 // One direction having less than this level is considered abnormal.
@@ -44,7 +47,8 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
     dotenvy::dotenv().expect("Unable to load .env file.");
 
     // Get env var for path where log will be, panic if it doesn't exist.
-    let log_dir = env::var("LOG_DIR").expect("Unable to load log directory path from .env file.");
+    let log_dir =
+        env::var("NON_PERM_LOG_DIR").expect("Unable to load log directory path from .env file.");
     // Set up logging, panic if it fails.
     let check_config = ConfigBuilder::new().set_time_format_rfc3339().build();
     let data_check_log = CombinedLogger::new(vec![
@@ -80,7 +84,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
 
     // Run checks according to kind of count.
     match count_kind {
-        CountKind::Class => {
+        NonPermCountKind::Class => {
             match check_share_unclassed_vehicles(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
@@ -106,7 +110,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                 _ => (),
             }
         }
-        CountKind::Volume => {
+        NonPermCountKind::Volume => {
             match check_vehicle_dir_proportionality(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
@@ -120,7 +124,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                 _ => (),
             }
         }
-        CountKind::FifteenMinVolume => {
+        NonPermCountKind::FifteenMinVolume => {
             match check_vehicle_dir_proportionality(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
@@ -134,12 +138,12 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
                 _ => (),
             }
         }
-        CountKind::Bicycle1
-        | CountKind::Bicycle2
-        | CountKind::Bicycle3
-        | CountKind::Bicycle4
-        | CountKind::Bicycle5
-        | CountKind::Bicycle6 => {
+        NonPermCountKind::Bicycle1
+        | NonPermCountKind::Bicycle2
+        | NonPermCountKind::Bicycle3
+        | NonPermCountKind::Bicycle4
+        | NonPermCountKind::Bicycle5
+        | NonPermCountKind::Bicycle6 => {
             match check_bike_dir_proportionality(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
@@ -332,7 +336,7 @@ fn check_bike_dir_proportionality(
 /// The table the data is pulled from depends on what kind of count it is.
 fn check_0_hours(
     recordnum: u32,
-    count_kind: &CountKind,
+    count_kind: &NonPermCountKind,
     conn: &Connection,
 ) -> Result<CheckResult, CountError> {
     let start_hour = 4;
@@ -343,15 +347,15 @@ fn check_0_hours(
     format!("select trunc(countdatetime, 'HH24'), cntdir, sum(volume) from {table} where recordnum = :1 and to_char(countdatetime, 'hh24') >= '{start_hour:02}' and to_char(countdatetime, 'hh24') <= '{end_hour}' group by trunc(countdatetime, 'hh24'), cntdir order by cntdir, trunc(countdatetime, 'hh24')")}).collect::<Vec<_>>();
 
     let results = match count_kind {
-        CountKind::Bicycle1
-        | CountKind::Bicycle2
-        | CountKind::Bicycle3
-        | CountKind::Bicycle4
-        | CountKind::Bicycle5
-        | CountKind::Bicycle6 => {
+        NonPermCountKind::Bicycle1
+        | NonPermCountKind::Bicycle2
+        | NonPermCountKind::Bicycle3
+        | NonPermCountKind::Bicycle4
+        | NonPermCountKind::Bicycle5
+        | NonPermCountKind::Bicycle6 => {
             conn.query_as::<(NaiveDateTime, String, u32)>(&queries[0], &[&recordnum])?
         }
-        CountKind::Class | CountKind::Volume | CountKind::FifteenMinVolume => {
+        NonPermCountKind::Class | NonPermCountKind::Volume | NonPermCountKind::FifteenMinVolume => {
             conn.query_as::<(NaiveDateTime, String, u32)>(&queries[1], &[&recordnum])?
         }
         _ => {
@@ -458,8 +462,8 @@ mod test {
 
     #[test]
     fn fifteen_min_bicycle_disproportionate_direction_found() {
-        let (username, password) = db::get_creds();
-        let pool = db::create_pool(username, password).unwrap();
+        let (username, password) = db::get_non_perm_creds();
+        let pool = db::create_pool(username, password, 1).unwrap();
         let conn = pool.get().unwrap();
 
         let result = check_bike_dir_proportionality(158971, &conn).unwrap();
@@ -467,9 +471,9 @@ mod test {
     }
 
     #[test]
-    fn fifteen_min_bicycle_exessive() {
-        let (username, password) = db::get_creds();
-        let pool = db::create_pool(username, password).unwrap();
+    fn fifteen_min_bicycle_excessive() {
+        let (username, password) = db::get_non_perm_creds();
+        let pool = db::create_pool(username, password, 1).unwrap();
         let conn = pool.get().unwrap();
 
         let result = check_excessive_bicycles(111722, &conn).unwrap();
@@ -478,10 +482,10 @@ mod test {
 
     #[test]
     fn bicycle_consecutive_0_hours_found() {
-        let (username, password) = db::get_creds();
-        let pool = db::create_pool(username, password).unwrap();
+        let (username, password) = db::get_non_perm_creds();
+        let pool = db::create_pool(username, password, 1).unwrap();
         let conn = pool.get().unwrap();
-        let result = check_0_hours(167607, &CountKind::Bicycle2, &conn);
+        let result = check_0_hours(167607, &NonPermCountKind::Bicycle2, &conn);
         let result = result.unwrap();
         assert!(matches!(result.level, Level::Warn))
     }

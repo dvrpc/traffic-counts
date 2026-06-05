@@ -2,7 +2,7 @@ use std::path::Path;
 
 use chrono::{NaiveDate, NaiveDateTime};
 
-use traffic_counts::{
+use traffic_counts::non_perm::{
     create_binned_bicycle_vol_count, Directions, FifteenMinuteBicycle, IndividualBicycle,
     LaneDirection, TimeInterval,
 };

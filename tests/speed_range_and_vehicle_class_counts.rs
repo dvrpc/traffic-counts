@@ -5,7 +5,10 @@ use std::path::Path;
 
 use chrono::NaiveDateTime;
 
-use traffic_counts::{extract_from_file::Bicycles, intermediate::*, *};
+use traffic_counts::{
+    non_perm::{extract_from_file::Bicycles, intermediate::*, *},
+    *,
+};
 
 #[test]
 fn speed_binning_is_correct() {
@@ -90,8 +93,8 @@ fn speed_binning_is_correct() {
 #[test]
 fn empty_periods_created_correctly_166905() {
     let path = Path::new("test_files/jamar_vehicle/166905.txt");
-    let (username, password) = db::get_creds();
-    let pool = db::create_pool(username, password).unwrap();
+    let (username, password) = db::get_non_perm_creds();
+    let pool = db::create_pool(username, password, 1).unwrap();
     let conn = pool.get().unwrap();
 
     let directions = Directions::from_db(166905, &conn).unwrap();
@@ -164,8 +167,8 @@ fn empty_periods_created_correctly_166905() {
 
 #[test]
 fn counts_created_correctly_165367() {
-    let (username, password) = db::get_creds();
-    let pool = db::create_pool(username, password).unwrap();
+    let (username, password) = db::get_non_perm_creds();
+    let pool = db::create_pool(username, password, 1).unwrap();
     let conn = pool.get().unwrap();
     let path = Path::new("test_files/jamar_vehicle/165367.txt");
     let directions = Directions::from_db(165367, &conn).unwrap();

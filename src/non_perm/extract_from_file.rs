@@ -15,8 +15,11 @@ use csv::{Reader, ReaderBuilder};
 use log::error;
 
 use crate::{
-    CountError, Directions, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
-    IndividualBicycle, IndividualVehicle,
+    non_perm::{
+        Directions, FifteenMinuteBicycle, FifteenMinutePedestrian, FifteenMinuteVehicle,
+        IndividualBicycle, IndividualVehicle,
+    },
+    CountError,
 };
 
 // Headers stripped of double quotes and spaces.
@@ -529,7 +532,7 @@ fn parse_datetime(s: &str) -> Result<NaiveDateTime, CountError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::LaneDirection;
+    use crate::non_perm::LaneDirection;
 
     #[test]
     fn extract_ind_vehicle_gets_correct_number_of_counts() {
