@@ -626,7 +626,7 @@ fn main() {
                     dbg!("pool ping interval: {:?}", pool.ping_interval().unwrap());
                     dbg!("pool open count: {:?}", pool.open_count().unwrap());
                     dbg!("pool busy count: {:?}", pool.busy_count().unwrap());
-                    continue 'mainloop;
+                    continue;
                 }
             };
 
