@@ -33,7 +33,7 @@ use chrono::prelude::*;
 use crossbeam::channel;
 use csv::StringRecord;
 use log::{debug, error, info, LevelFilter};
-use oracle::pool::PoolBuilder;
+use oracle::pool::{CloseMode, GetMode, PoolBuilder};
 use simplelog::*;
 
 use traffic_counts::{
@@ -199,16 +199,6 @@ fn main() {
         }
     };
 
-    let pool = PoolBuilder::new(username, password, "dvrpcprod_tp_tls")
-        .max_connections(10)
-        .get_mode(oracle::pool::GetMode::TimedWait(
-            std::time::Duration::from_millis(5000),
-        ))
-        .timeout(std::time::Duration::from_millis(15000))
-        .unwrap()
-        .build()
-        .unwrap();
-
     'mainloop: loop {
         // Open CSV file and create reader over it, or wait and try again.
         let data_file = match File::open(format!("{storage_path}/export.csv")) {
@@ -219,6 +209,14 @@ fn main() {
                 continue 'mainloop;
             }
         };
+
+        let pool = PoolBuilder::new(username.clone(), password.clone(), "dvrpcprod_tp_tls")
+            .max_connections(10)
+            .get_mode(GetMode::TimedWait(std::time::Duration::from_millis(5000)))
+            .timeout(std::time::Duration::from_millis(15000))
+            .unwrap()
+            .build()
+            .unwrap();
 
         // Elapsed time will be logged.
         let start = time::Instant::now();
@@ -833,6 +831,8 @@ fn main() {
 
         // Remove the csv
         remove_csv();
+
+        pool.close(&CloseMode::Force).unwrap();
 
         // Wait to try again
         thread::sleep(time::Duration::from_secs(TIME_BETWEEN_LOOPS));
