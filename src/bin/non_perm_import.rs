@@ -294,7 +294,7 @@ fn main() {
             }
         };
 
-        // Iterate through all paths, extacting the data from the files, transforming it into the
+        // Iterate through all paths, extracting the data from the files, transforming it into the
         // desired shape, and inserting it into the database.
         // Exactly how the data is processed depends on what `InputCount` it is.
         'paths_loop: for path in paths {
@@ -1016,6 +1016,10 @@ fn main() {
                 }
             }
 
+            // Initiate variable that determines whether the file will be moved or deleted
+            // following the remainder of the program.
+            let mut move_file = false;
+
             // Update metadata table in db.
             match conn.execute(
                 "update tc_header SET
@@ -1040,6 +1044,7 @@ fn main() {
                             &format!("Error committing metadata (tc_header table) update: {e}"),
                             &conn,
                         );
+                        move_file = true;
                     }
                 },
                 Err(e) => {
@@ -1050,6 +1055,7 @@ fn main() {
                         &format!("Error updating metadata (tc_header table): {e}"),
                         &conn,
                     );
+                    move_file = true;
                 }
             }
             if let Some(v) = recordnum2 {
@@ -1076,6 +1082,7 @@ fn main() {
                                 &format!("Error committing metadata (tc_header table) update: {e}"),
                                 &conn,
                             );
+                            move_file = true;
                         }
                     },
                     Err(e) => {
@@ -1086,6 +1093,7 @@ fn main() {
                             &format!("Error updating metadata (tc_header table): {e}"),
                             &conn,
                         );
+                        move_file = true;
                     }
                 }
             }
@@ -1109,6 +1117,7 @@ fn main() {
                         &format!("Failed to update intermediate table TC_COUNTDATE: {e}"),
                         &conn,
                     );
+                    move_file = true;
                 }
             }
             if let Some(v) = recordnum2 {
@@ -1130,6 +1139,7 @@ fn main() {
                             &format!("Failed to update intermediate table TC_COUNTDATE: {e}"),
                             &conn,
                         );
+                        move_file = true;
                     }
                 }
             }
@@ -1153,6 +1163,7 @@ fn main() {
                         &format!("Failed to update field SETDATE: {e}"),
                         &conn,
                     );
+                    move_file = true;
                 }
             }
             if let Some(v) = recordnum2 {
@@ -1168,6 +1179,7 @@ fn main() {
                             &format!("Failed to update field SETDATE: {e}"),
                             &conn,
                         );
+                        move_file = true;
                     }
                 }
             }
@@ -1193,24 +1205,59 @@ fn main() {
                             &format!("Failed to calculate/insert AADV: {e}"),
                             &conn,
                         );
+                        move_file = true;
                     }
                 }
             }
 
             // Check for potential issues with data, after it has been inserted into the database,
             // and log them for review.
-            log_msg(recordnum1, &import_log, Level::Info, "Checking data", &conn);
-            if let Err(e) = check(recordnum1, &conn) {
-                log_msg(recordnum1,  &import_log, Level::Error, &format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect."), &conn);
-            }
-            if let Some(v) = recordnum2 {
-                log_msg(v, &import_log, Level::Info, "Checking data", &conn);
-                if let Err(e) = check(v, &conn) {
-                    log_msg(v,  &import_log, Level::Error, &format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect."), &conn);
+
+            log_msg(
+                recordnum1,
+                &import_log,
+                Level::Info,
+                &format!("Checking data ({recordnum1})"),
+                &conn,
+            );
+
+            match check(recordnum1, &conn) {
+                Ok(Level::Warn) => {
+                    move_file = true;
                 }
+                Err(e) => {
+                    log_msg(recordnum1,  &import_log, Level::Error, &format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect."), &conn);
+                    move_file = true;
+                }
+                Ok(_) => (),
+            };
+
+            if let Some(v) = recordnum2 {
+                log_msg(
+                    v,
+                    &import_log,
+                    Level::Info,
+                    &format!("Checking data ({v})"),
+                    &conn,
+                );
+                match check(v, &conn) {
+                    Ok(Level::Warn) => {
+                        move_file = true;
+                    }
+                    Err(e) => {
+                        log_msg(recordnum1,  &import_log, Level::Error, &format!("An error occurred while checking data: {e}; warnings likely to be incomplete or incorrect."), &conn);
+                        move_file = true;
+                    }
+                    Ok(_) => (),
+                };
             }
 
-            cleanup(CleanMethod::Delete, path, &import_log);
+            // Move or delete the file.
+            if move_file {
+                cleanup(CleanMethod::Move, path, &import_log);
+            } else {
+                cleanup(CleanMethod::Delete, path, &import_log);
+            }
         }
         // Wait to try again
         thread::sleep(time::Duration::from_secs(TIME_BETWEEN_LOOPS));

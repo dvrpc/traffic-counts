@@ -42,7 +42,10 @@ pub struct ClassCountCheck {
 }
 
 /// Apply various data checks and log any issues found.
-pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
+pub fn check(recordnum: u32, conn: &Connection) -> Result<Level, CountError> {
+    // Initiate variable that reports if any warnings generated from data.
+    let mut level = Level::Info;
+
     // Load file containing environment variables, panic if it doesn't exist.
     dotenvy::dotenv().expect("Unable to load .env file.");
 
@@ -88,24 +91,28 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
             match check_share_unclassed_vehicles(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
             match check_share_class2_vehicles(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
             match check_vehicle_dir_proportionality(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
             match check_0_hours(recordnum, &count_kind, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
@@ -114,12 +121,14 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
             match check_vehicle_dir_proportionality(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
             match check_0_hours(recordnum, &count_kind, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
@@ -128,12 +137,14 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
             match check_vehicle_dir_proportionality(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
             match check_0_hours(recordnum, &count_kind, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
@@ -147,18 +158,21 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
             match check_bike_dir_proportionality(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
             match check_excessive_bicycles(recordnum, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
             match check_0_hours(recordnum, &count_kind, conn) {
                 Ok(v) if v.level == Level::Warn => {
                     log_msg(recordnum, &data_check_log, Level::Warn, &v.message, conn);
+                    level = Level::Warn;
                 }
                 _ => (),
             }
@@ -166,7 +180,7 @@ pub fn check(recordnum: u32, conn: &Connection) -> Result<(), CountError> {
         _ => (),
     }
 
-    Ok(())
+    Ok(level)
 }
 
 /// Check if share of class 2 vehicles is too low.
